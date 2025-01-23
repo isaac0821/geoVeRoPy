@@ -66,6 +66,7 @@ def solveCETSP(
     if (endLoc == None):
         raise MissingParameterError("ERROR: Missing end location.")
 
+    # Check required for neighbor options =====================================
     if (neighbor in ['Circle', 'Poly', 'CircleLatLon', 'PolyLatLon']):
         if (neighbor == 'Circle'):
             if ('radius' not in kwargs and 'radiusFieldName' not in kwargs):
@@ -84,7 +85,35 @@ def solveCETSP(
     else:
         raise UnsupportedInputError("ERROR: Neighborhood type is not supported")
 
+    # Check required information for different solution approach ==============
+    if (algo == 'Exact'):
+        # Add cut configuration after submitting paper
+        pass
+    elif (algo == 'Metaheuristic'):
+        if ('method' not in kwargs):
+            warnings.warn("WARNING: A specific metaheuristic approach needs to be assigned by 'method'. Set to be default as 'GA'")
+            kwargs['method'] == 'GA'
+        if (kwargs['method'] == 'GA' or kwargs['method'] == 'GeneticAlgorithm'):
+            if ('popSize' not in kwargs):
+                raise MissingParameterError("ERROR: Need to specify the size of population in GA by 'popSize'.")
+            if ('neighRatio' not in kwargs):
+                warnings.warn("WARNING: Missing ratios of each local search operator, set to be default.")
+                kwargs['neighRatio'] = {
+                    'crossover': 0.4,
+                    'swap': 0.05,
+                    'exchange': 0.05,
+                    'rotate': 0.03
+                }
+            if ('stop' not in kwargs):
+                warnings.warn("WARNING: Missing stopping criteria, set to be default.")
+                kwargs['stop'] = {
+                    'runtime': 120
+                }
+    else:
+        raise UnsupportedInputError("ERROR: Options for `algo` includes ['Exact', 'Metaheuristic']")
+
     cetsp = None
+    # CETSP by different approach =============================================
     if (algo == 'Exact'):
         if (neighbor == 'Circle'):
             cetsp = _solveCETSPGBDCircle(
@@ -130,26 +159,45 @@ def solveCETSP(
 
     elif (algo == 'Metaheuristic'):
         if (kwargs['method'] == 'GA' or kwargs['method'] == 'GeneticAlgorithm'):
-            if ('popSize' not in kwargs):
-                raise MissingParameterError("ERROR: Need to specify the size of population in GA by 'popSize'.")
-            if ('neighRatio' not in kwargs):
-                warnings.warn("WARNING: Missing ratios of each local search operator, set to be default.")
-                kwargs['neighRatio'] = {
-                    'crossover': 0.4,
-                    'swap': 0.05,
-                    'exchange': 0.05,
-                    'rotate': 0.03
-                }
-            if ('stop' not in kwargs):
-                warnings.warn("WARNING: Missing stopping criteria, set to be default.")
-                kwargs['stop'] = {
-                    'runtime': 120
-                }
             if (neighbor == 'Circle'):
                 cetsp = _solveCETSPGACircle(
                     startLoc = startLoc,
                     endLoc = endLoc,
                     nodes = nodes,
+                    radius = kwargs['radius'] if 'radius' in kwargs else None,
+                    radiusFieldName = kwargs['radiusFieldName'] if 'radiusFieldName' in kwargs else None,
+                    popSize = kwargs['popSize'],
+                    neighRatio = kwargs['neighRatio'],
+                    stop = kwargs['stop'])
+            elif (neighbor == 'Poly'):
+                pass
+            elif (neighbor == 'CircleLatLon'):
+                polyXYMercator = {}
+                for i in nodes:
+                    polyLatLon = circleByCenterLatLon(
+                        center = nodes[i]['loc'],
+                        radius = kwargs['radiusMeter'] if 'radiusMeter' in kwargs else nodes[i][kwargs['radiusFieldName']],
+                        lod = 240)
+                    polyXY = polyLatLon2XYMercator(polyLatLon)
+                    polyXYMercator[i] = [pt for pt in polyXY]
+                cetsp = _solveCETSPGALatLon(
+                    startLocMercator = ptLatLon2XYMercator(startLoc),
+                    endLocMercator = ptLatLon2XYMercator(endLoc),
+                    nodes = nodes,
+                    polyXYMercator = polyXYMercator,
+                    popSize = kwargs['popSize'],
+                    neighRatio = kwargs['neighRatio'],
+                    stop = kwargs['stop'])
+            elif (neighbor == 'PolyLatLon'):
+                polyXYMercator = {}
+                for i in nodes:
+                    polyXY = polyLatLon2XYMercator(nodes[i][kwargs['polyFieldName']])
+                    polyXYMercator[i] = [pt for pt in polyXY]
+                cetsp = _solveCETSPGALatLon(
+                    startLocMercator = ptLatLon2XYMercator(startLoc),
+                    endLocMercator = ptLatLon2XYMercator(endLoc),
+                    nodes = nodes,
+                    polyXYMercator = polyXYMercator,
                     popSize = kwargs['popSize'],
                     neighRatio = kwargs['neighRatio'],
                     stop = kwargs['stop'])
@@ -953,6 +1001,8 @@ def _solveCETSPGACircle(
     popSize: int,
     neighRatio: dict = {},
     stop: dict = {},
+    radius: float | None = None,
+    radiusFieldName: str = 'radius',
     **kwargs
     ) -> dict | None:
 
@@ -980,6 +1030,7 @@ def _solveCETSPGACircle(
 
             # 转折点列表
             self.turning = []
+            self.aggTurning = []
             # 穿越点列表
             self.trespass = []
             # 未访问点及距离，暂存用，最终需要为空
@@ -996,7 +1047,7 @@ def _solveCETSPGACircle(
             for i in range(1, len(seqTra) - 1):
                 circles.append({
                     'center': self.nodes[seqTra[i]]['loc'],
-                    'radius': self.nodes[seqTra[i]]['radius']
+                    'radius': radius if radius != None else self.nodes[seqTra[i]][radiusFieldName]
                 })
             c2c = circle2CirclePath(
                 startPt = self.startLoc,
@@ -1008,10 +1059,12 @@ def _solveCETSPGACircle(
             # 找turn point/trespass point
             # NOTE: 这里的trespass point不完整，足够避免重复计算了
             self.turning = []
+            self.aggTurning = []
             self.trespass = []
             for i in range(len(degen['aggNodeList'])):
                 if (degen['removedFlag'][i] == False):
                     self.turning.extend([seqTra[k] for k in degen['aggNodeList'][i]])
+                    self.aggTurning.append([seqTra[k] for k in degen['aggNodeList'][i]])
             self.path = degen['newSeq']
             self.dist = c2c['dist']
 
@@ -1036,7 +1089,7 @@ def _solveCETSPGACircle(
                     for i in range(1, len(self.turning) - 1):
                         circles.append({
                             'center': self.nodes[self.turning[i]]['loc'],
-                            'radius': self.nodes[self.turning[i]]['radius']
+                            'radius': radius if radius != None else self.nodes[seqTra[i]][radiusFieldName]
                         })
                     # 得到seq对应路径
                     c2c = circle2CirclePath(
@@ -1057,9 +1110,9 @@ def _solveCETSPGACircle(
                         res = distPt2Seq(
                             pt = self.nodes[i]['loc'], 
                             seq = degen['newSeq'],
-                            closedFlag = True,
+                            closedFlag = False,
                             detailFlag = True)
-                        if (res['dist'] <= self.nodes[i]['radius']):
+                        if (res['dist'] <=  radius if radius != None else self.nodes[i][radiusFieldName]):
                             self.trespass.append(i)
                         else:
                             self.dist2NotInclude[i] = res
@@ -1073,8 +1126,12 @@ def _solveCETSPGACircle(
                     for i in self.dist2NotInclude:
                         if (self.dist2NotInclude[i]['dist'] < closestDist):
                             closestIdx = i
+                            closestDist = self.dist2NotInclude[i]['dist']
                             closestInsertID = self.dist2NotInclude[i]['nearestIdx'][1]
-                    self.turning.insert(closestInsertID, closestIdx)
+                    self.aggTurning.insert(closestInsertID, [closestIdx])
+                    self.turning = []
+                    for k in range(len(self.aggTurning)):
+                        self.turning.extend(self.aggTurning[k])
 
             # 更新seq为新的turning point
             self.seq = Ring()
@@ -1170,10 +1227,8 @@ def _solveCETSPGACircle(
             dashboard['bestChromo'] = chromo
 
     contFlag = True
-
     iterTotal = 0
     iterNoImp = 0
-
     while (contFlag):
         # Crossover and create offspring
         while (len(popObj) <= (int)((1 + neighRatio['crossover']) * popSize)):
@@ -1226,6 +1281,338 @@ def _solveCETSPGACircle(
             popObj[rnd] = rotate(popObj[rnd], idxI, idxJ)
 
         # Tournament
+        while (len(popObj) > popSize):
+            # Randomly select two genes
+            rnd1 = None
+            rnd2 = None
+            while (rnd1 == None or rnd2 == None or rnd1 == rnd2):
+                rnd1 = random.randint(0, len(popObj) - 1)
+                rnd2 = random.randint(0, len(popObj) - 1)
+            # kill the loser
+            if (popObj[rnd1].dist > popObj[rnd2].dist):
+                del popObj[rnd1]
+            else:
+                del popObj[rnd2]
+
+        # Update dashboard
+        newOfvFound = False
+        for chromo in popObj:
+            if (chromo.dist < dashboard['bestOfv']):
+                newOfvFound = True
+                dashboard['bestOfv'] = chromo.dist
+                dashboard['bestSeq'] = [i.key for i in chromo.seq.traverse()]
+                dashboard['bestChromo'] = chromo
+        print(hyphenStr())
+        print("Iter: ", iterTotal, "\nRuntime: ", round((datetime.datetime.now() - startTime).total_seconds(), 2), "[s]\nOFV: ", dashboard['bestOfv'])
+        if (newOfvFound):
+            iterNoImp = 0
+        else:
+            iterNoImp += 1
+        iterTotal += 1
+
+        convergence.append(dashboard)
+
+        # Check stopping criteria
+        if ('numNoImproveIter' in stop):
+            if (iterNoImp > stop['numNoImproveIter']):
+                contFlag = False
+                break
+        if ('numIter' in stop):
+            if (iterTotal > stop['numIter']):
+                contFlag = False
+                break
+        if ('runtime' in stop):
+            if ((datetime.datetime.now() - startTime).total_seconds() > stop['runtime']):
+                contFlag = False
+                break
+
+    return {
+        'ofv': dashboard['bestOfv'],
+        'seq': dashboard['bestSeq'],
+        'chromo': dashboard['bestChromo'],
+        'path': dashboard['bestChromo'].path,
+        'runtime': runtime,
+        'convergence': convergence,
+    }
+
+def _solveCETSPGALatLon(
+    startLocMercator: pt,
+    endLocMercator: pt,
+    nodes: dict, # Index from 1
+    polyXYMercator: dict,
+    popSize: int,
+    neighRatio: dict = {},
+    stop: dict = {},
+    **kwargs
+    ) -> dict | None:
+
+    class chromosomeCETSP:
+        def __init__(self, startLocMercator, endLocMercator, nodes, polyXYMercator, seq):
+            # NOTE: seq以depotID开始和结束
+            # NOTE: 每个seq都需要补全为一条合法的cetsp路径
+            # Complete logic:
+            # STEP 1: 记录得到所有的转折点
+            # STEP 2: 记录所有未经过的点，计算距离，若没有未经过点，结束
+            # STEP 3: 将最近的未经过点插入，转入STEP 2
+            
+            # 记录nodes的信息
+            self.startLocMercator = startLocMercator
+            self.endLocMercator = endLocMercator
+            self.nodes = nodes
+            self.polyXYMercator = polyXYMercator
+            self.initSeq = [i for i in seq]
+
+            # 原始输入的seq
+            self.seq = Ring()
+            for i in seq:
+                n = RingNode(i)
+                self.seq.append(n)
+            self.seq.rehead(0)
+
+            # 转折点列表
+            self.turning = []
+            # 穿越点列表
+            self.trespass = []
+            # 未访问点及距离，暂存用，最终需要为空
+            self.dist2NotInclude = {}
+
+            # 补全
+            self.seq2Path()
+
+        def seq2Path(self):
+            # 需要先得到一组turn point
+            polys = []
+            seqTra = [n.key for n in self.seq.traverse()]
+            seqTra.append(0)
+            for i in range(1, len(seqTra) - 1):
+                polys.append(self.polyXYMercator[i])
+            p2p = poly2PolyPath(startPt = self.startLocMercator, endPt = self.endLocMercator, polys = polys)
+            degen = seqRemoveDegen(seq = p2p['path'])
+
+            # 找turn point/trespass point
+            # NOTE: 这里的trespass point不完整，足够避免重复计算了
+            self.turning = []
+            self.trespass = []
+            for i in range(len(degen['aggNodeList'])):
+                if (degen['removedFlag'][i] == False):
+                    self.turning.extend([seqTra[k] for k in degen['aggNodeList'][i]])
+            self.path = degen['newSeq']
+            self.dist = p2p['dist']
+
+            # 少进行一次circle2CirclePath()
+            initPathFlag = True
+
+            completeFlag = False
+            # 快速判断当前的seq是否已经覆盖，如果已经覆盖，则要求seq长度为self.nodes + 1
+            if (len(seqTra) == len(self.nodes) + 1):
+                completeFlag = True
+
+            # 现在开始补齐        
+            while (not completeFlag):
+                completeFlag = True
+                
+                # 先按照turnpoint构造一个路径
+                if (initPathFlag):
+                    # 如果是第一次循环，使用之前计算的p2p和degen，不重复计算
+                    initPathFlag = False
+                else:
+                    polys = []
+                    for i in (1, len(self.turning) - 1):
+                        polys.append(self.polyXYMercator[i])
+                    p2p = poly2PolyPath(startPt = self.startLocMercator, endPt = self.endLocMercator, polys = polys)
+                    degen = seqRemoveDegen(seq = p2p['path'])
+  
+                    self.trespass = []
+                    self.path = degen['newSeq']
+                    self.dist = p2p['dist']
+
+                # 判断剩余的点是否为trespass点
+                self.dist2NotInclude = {}
+                for i in self.nodes:
+                    if (i not in self.turning):
+                        # 先判断seq和poly是不是相交
+                        inteFlag = isSeqIntPoly(
+                            seq = degen['newSeq'],
+                            poly = polyXYMercator[i], 
+                            interiorOnly = True)
+                        # 如果相交，直接确定为trespass
+                        if (inteFlag):
+                            self.trespass.append(i)
+                        # 如果不相交，计算poly加入到seq的最短距离
+                        else:
+                            calEach = []
+                            for k in range(len(degen['newSeq']) - 1):
+                                oriDist = distEuclideanXY(degen['newSeq'][k], degen['newSeq'][k + 1])
+                                newDist = poly2PolyPath(
+                                    startPt = degen['newSeq'][k],
+                                    endPt = degen['newSeq'][k + 1],
+                                    polys = [polyXYMercator[i]])['dist']
+                                calEach.append({'deltaDist': newDist - oriDist, 'nearestIdx': [k, k + 1]})
+                            self.dist2NotInclude[i] = min(calEach, key = lambda x: x['deltaDist'])
+                            completeFlag = False
+
+                # 将一个最近的点加入turn point
+                if (not completeFlag):
+                    closestIdx = None
+                    closestDist = float('inf')
+                    closestInsertID = None
+                    for i in self.dist2NotInclude:
+                        if (self.dist2NotInclude[i]['deltaDist'] < closestDist):
+                            closestIdx = i
+                            closestInsertID = self.dist2NotInclude[i]['nearestIdx'][1]
+                    self.turning.insert(closestInsertID, closestIdx)
+
+            # 更新seq为新的turning point
+            self.seq = Ring()
+            for i in range(len(self.turning) - 1):
+                n = RingNode(self.turning[i])
+                self.seq.append(n)
+            self.seq.rehead(0)
+
+    def swap(chromo, idxI):
+        seq = [i.key for i in chromo.seq.traverse()]
+        if (idxI < len(seq) - 1):
+            seq[idxI], seq[idxI + 1] = seq[idxI + 1], seq[idxI]
+        else:
+            seq[idxI], seq[0] = seq[0], seq[idxI]
+        return chromosomeCETSP(startLocMercator, endLocMercator, nodes, polyXYMercator, seq)
+
+    def exchange(chromo, idxI, idxJ):
+        seq = [i.key for i in chromo.seq.traverse()]
+        seq[idxI], seq[idxJ] = seq[idxJ], seq[idxI]
+        return chromosomeCETSP(startLocMercator, endLocMercator, nodes, polyXYMercator, seq)
+
+    def rotate(chromo, idxI, idxJ):
+        seq = [i.key for i in chromo.seq.traverse()]
+        if (idxI > idxJ):
+            idxI, idxJ = idxJ, idxI
+        newSeq = [seq[i] for i in range(idxI)]
+        newSeq.extend([seq[idxJ - i] for i in range(idxJ - idxI + 1)])
+        newSeq.extend([seq[i] for i in range(idxJ + 1, len(seq))])
+        return chromosomeCETSP(startLoc, endLoc, nodes, newSeq)
+    
+    def crossover(chromo1, chromo2, idx1I, idx1J, idx2I, idx2J):
+        # 原始序列
+        seq1 = [i.key for i in chromo1.seq.traverse()]
+        seq2 = [i.key for i in chromo2.seq.traverse()]
+
+        # 把idxI和idxJ排个序换一下，保证idxI在前面
+        if (idx1I > idx1J):
+            idx1I, idx1J = idx1J, idx1I
+        if (idx2I > idx2J):
+            idx2I, idx2J = idx2J, idx2I
+        # Before:
+        # = = = idx1I.prev idx1I - - - idx1J idx1J.next = = =
+        # = = = idx2I.prev idx2I - - - idx2J idx2J.next = = =
+        # After:
+        # = = = idx1I.prev idx2I - - - idx2J idx1J.next = = =
+        # = = = idx2I.prev idx1I - - - idx1J idx2J.next = = =
+        
+        # 构造新序列
+        newSeq1 = [seq2[i] for i in range(idx2I, idx2J)]
+        for i in range(idx1J, len(seq1)):
+            if (seq1[i] not in newSeq1):
+                newSeq1.append(seq1[i])
+        for i in range(idx1I):
+            if (seq1[i] not in newSeq1):
+                newSeq1.append(seq1[i])
+        if (0 not in newSeq1):
+            newSeq1.append(0)
+
+        newSeq2 = [seq1[i] for i in range(idx1I, idx1J)]
+        for i in range(idx2J, len(seq2)):
+            if (seq2[i] not in newSeq2):
+                newSeq2.append(seq2[i])
+        for i in range(idx2I):
+            if (seq2[i] not in newSeq2):
+                newSeq2.append(seq2[i])
+        if (0 not in newSeq2):
+            newSeq2.append(0)
+
+        newChromo1 = chromosomeCETSP(startLocMercator, endLocMercator, nodes, polyXYMercator, newSeq1)
+        newChromo2 = chromosomeCETSP(startLocMercator, endLocMercator, nodes, polyXYMercator, newSeq2)
+        return newChromo1, newChromo2
+
+    # Initialize ==============================================================
+    dashboard = {
+        'bestOfv': float('inf'),
+        'bestChromo': None
+    }
+    startTime = datetime.datetime.now()
+    convergence = []
+
+    # Initialize population by randomization ==================================
+    popObj = []
+    for k in range(popSize):
+        seq = [i for i in nodes]
+        seq.append(0)
+        random.shuffle(seq)
+        popObj.append(chromosomeCETSP(startLocMercator, endLocMercator, nodes, polyXYMercator, seq))
+
+    for chromo in popObj:
+        if (chromo.dist < dashboard['bestOfv']):
+            dashboard['bestOfv'] = chromo.dist
+            dashboard['bestSeq'] = [i.key for i in chromo.seq.traverse()]
+            dashboard['bestChromo'] = chromo
+
+    contFlag = True
+
+    iterTotal = 0
+    iterNoImp = 0
+    # Main GA iterations ======================================================
+    while (contFlag):
+        # Crossover and create offspring --------------------------------------
+        while (len(popObj) <= (int)((1 + neighRatio['crossover']) * popSize)):
+            # Randomly select two genes, the better gene has better chance to have offspring            
+            rnd1 = None
+            rnd2 = None
+            while (rnd1 == None or rnd2 == None or rnd1 == rnd2):
+                coeff = []
+                for i in range(len(popObj)):
+                    coeff.append(1 / (popObj[i].dist - 0.8 * dashboard['bestOfv']))
+                rnd1 = rndPick(coeff)
+                rnd2 = rndPick(coeff)
+            # Randomly select a window from the first chromo and the second chromo
+            [idx1I, idx1J] = random.sample([i for i in range(popObj[rnd1].seq.count)], 2)
+            [idx2I, idx2J] = random.sample([i for i in range(popObj[rnd2].seq.count)], 2)
+            newSeq1, newSeq2 = crossover(popObj[rnd1], popObj[rnd2], idx1I, idx1J, idx2I, idx2J)
+
+            popObj.append(newSeq1)
+            popObj.append(newSeq2)
+
+        # Mutation ------------------------------------------------------------
+        # NOTE: will always keep the worse outcome
+        # swap
+        numSwap = (int)(neighRatio['swap'] * popSize)
+        for k in range(numSwap):
+            rnd = random.randint(0, len(popObj) - 1)            
+            idx = random.randint(0, popObj[rnd].seq.count - 1)
+            popObj[rnd] = swap(popObj[rnd], idx)
+
+        # exchange ------------------------------------------------------------
+        numExchange = (int)(neighRatio['exchange'] * popSize)
+        for k in range(numExchange):
+            rnd = random.randint(0, len(popObj) - 1)
+            [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
+            while (abs(idxJ - idxI) <= 2
+                or idxI == 0 and idxJ == popObj[rnd].seq.count - 1
+                or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
+                [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
+            popObj[rnd] = exchange(popObj[rnd], idxI, idxJ)
+
+        # rotate --------------------------------------------------------------
+        numRotate = (int)(neighRatio['rotate'] * popSize)
+        for k in range(numRotate):
+            rnd = random.randint(0, len(popObj) - 1)
+            [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
+            while (abs(idxJ - idxI) <= 2
+                or idxI == 0 and idxJ == popObj[rnd].seq.count - 1
+                or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
+                [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
+            popObj[rnd] = rotate(popObj[rnd], idxI, idxJ)
+
+        # tournament ----------------------------------------------------------
+        # NOTE: Decrease the population size to popSize
         while (len(popObj) > popSize):
             # Randomly select two genes
             rnd1 = None

@@ -13,7 +13,11 @@ from .province import *
 from .geometry import *
 from .travel import *
 
-def findFigSize(boundingBox, width = None, height = None, latLonFlag = False):
+def findFigSize(
+    boundingBox, 
+    width = None, 
+    height = None, 
+    latLonFlag = False):
     """
     Given a bounding box, a width(or height), returns the height(or width) of the figure
 

@@ -224,7 +224,7 @@ def rndNodes(
     nodes: dict, optional
         A nodes dictionary, if given, new locations will be append into this dictionary
     distr: string, optional, default as 'UniformSquareXY'
-        See `distr` docstring in :func:`~vrpSolver.instance.rndLocs()`
+        See `distr` docstring in :func:`~geoVeRoPy.instance.rndLocs()`
     locFieldName: str, optional, default as 'loc'
         The key in nodes dictionary to indicate the locations
     **kwargs: optional
@@ -891,7 +891,7 @@ def rndArcNeighbors(
             startLoc = arcs[i][arcFieldName][0]
             endLoc = arcs[i][arcFieldName][1]
 
-            heading = vrpSolver.headingXY(startLoc, endLoc)
+            heading = headingXY(startLoc, endLoc)
 
             radius = kwargs['radius']
             arcs[i]['neiBtw'] = [[
@@ -956,9 +956,9 @@ def rndPolys(
     polyIDs: list[int|str]|None, optional, default as None
         A list of ids for the polygons to be created, an alternative option for `P`
     distr: str, optional, default as 'UniformSquareXY'
-        Anchor locations of each polygon. Options and required additional information are referred to :func:`~vrpSolver.instance.rndLocs()`.
+        Anchor locations of each polygon. Options and required additional information are referred to :func:`~geoVeRoPy.instance.rndLocs()`.
     shape: str, optional, default as 'Circle',
-        Shape of the polygons. Options and required additional information are referred to :func:`~vrpSolver.instance.rndNodeNeighbors()`.
+        Shape of the polygons. Options and required additional information are referred to :func:`~geoVeRoPy.instance.rndNodeNeighbors()`.
     anchorFieldName: str, optional, default as 'anchor'
         The key value of the anchor location
     polyFieldName: str, optional, default as 'poly',

@@ -115,6 +115,7 @@ def solveTSP(
         or (nodeIDs == 'All' and depotID not in nodes)):
         raise OutOfRangeError("ERROR: Cannot find `depotID` in given `nodes`/`nodeIDs`")
 
+    # Check if detail information is needed ===================================
     if (detailFlag == True):
         # For animation propose
         if (vehicles == None):
@@ -122,6 +123,7 @@ def solveTSP(
         if (vehicleID not in vehicles):
             raise MissingParameterError("ERROR: Cannot find `vehicleID` in `vehicles`.")
 
+    # Check required information for different solution approach ==============
     if (algo == 'Exact'):
         if ('solver' not in kwargs and 'fml' not in kwargs):
             kwargs['solver'] = 'Gurobi'
