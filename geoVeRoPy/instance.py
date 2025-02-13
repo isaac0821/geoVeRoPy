@@ -674,11 +674,98 @@ def rndNodeNeighbors(
             height = random.uniform(kwargs['minLen'], kwargs['maxLen'])
 
             nodes[n][neighborFieldName] = [
-                [nodes[n][loc][0] - width / 2, nodes[n][loc][1] - height / 2], 
-                [nodes[n][loc][0] + width / 2, nodes[n][loc][1] - height / 2], 
-                [nodes[n][loc][0] + width / 2, nodes[n][loc][1] + height / 2], 
-                [nodes[n][loc][0] - width / 2, nodes[n][loc][1] + height / 2]
+                [nodes[n][locFieldName][0] - width / 2, nodes[n][locFieldName][1] - height / 2], 
+                [nodes[n][locFieldName][0] + width / 2, nodes[n][locFieldName][1] - height / 2], 
+                [nodes[n][locFieldName][0] + width / 2, nodes[n][locFieldName][1] + height / 2], 
+                [nodes[n][locFieldName][0] - width / 2, nodes[n][locFieldName][1] + height / 2]
             ]
+
+    elif (shape == 'RndRectangle'):
+        for n in nodeIDs:
+            if ('minWidth' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'minWidth'")
+            if ('maxWidth' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'maxWidth'")
+            if ('minLength' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'minLength'")
+            if ('maxLength' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'maxLength'")
+            if (kwargs['minWidth'] > kwargs['maxWidth']):
+                warnings.warn("WARNING: 'minWidth' is greater than 'maxWidth', will be swapped")
+                kwargs['maxWidth'], kwargs['minWidth'] = kwargs['minWidth'], kwargs['maxWidth']
+            if (kwargs['minLength'] > kwargs['maxLength']):
+                warnings.warn("WARNING: 'minLength' is greater than 'maxLength', will be swapped")
+                kwargs['maxLength'], kwargs['minLength'] = kwargs['minLength'], kwargs['maxLength']
+
+            nodes[n]['neiShape'] = 'Poly'
+            width = random.uniform(kwargs['minWidth'], kwargs['maxWidth'])
+            height = random.uniform(kwargs['minLength'], kwargs['maxLength'])
+
+            nodes[n][neighborFieldName] = [
+                [nodes[n][locFieldName][0] - width / 2, nodes[n][locFieldName][1] - height / 2], 
+                [nodes[n][locFieldName][0] + width / 2, nodes[n][locFieldName][1] - height / 2], 
+                [nodes[n][locFieldName][0] + width / 2, nodes[n][locFieldName][1] + height / 2], 
+                [nodes[n][locFieldName][0] - width / 2, nodes[n][locFieldName][1] + height / 2]
+            ]
+
+    elif (shape == 'RndRectangleBounded'):
+        for n in nodeIDs:
+            if ('minWidth' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'minWidth'")
+            if ('maxWidth' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'maxWidth'")
+            if ('minLength' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'minLength'")
+            if ('maxLength' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'maxLength'")
+            if (kwargs['minWidth'] > kwargs['maxWidth']):
+                warnings.warn("WARNING: 'minWidth' is greater than 'maxWidth', will be swapped")
+                kwargs['maxWidth'], kwargs['minWidth'] = kwargs['minWidth'], kwargs['maxWidth']
+            if (kwargs['minLength'] > kwargs['maxLength']):
+                warnings.warn("WARNING: 'minLength' is greater than 'maxLength', will be swapped")
+                kwargs['maxLength'], kwargs['minLength'] = kwargs['minLength'], kwargs['maxLength']
+
+            nodes[n]['neiShape'] = 'Poly'
+            width = random.uniform(kwargs['minWidth'], kwargs['maxWidth'])
+            height = random.uniform(kwargs['minLength'], kwargs['maxLength'])
+
+            # 先生成bounding的矩形
+            bounding = [
+                [-width / 2, -height / 2], 
+                [+width / 2, -height / 2], 
+                [+width / 2, +height / 2], 
+                [-width / 2, +height / 2]
+            ]
+            # 在矩形的边缘上和内部随机取点
+            if ('numIntePt' not in kwargs):
+                kwargs['numIntePt'] = 10
+            if ('numEdgePt' not in kwargs):
+                kwargs['numEdgePt'] = 5
+            polyPts = []
+            # Interior
+            for i in range(kwargs['numIntePt']):
+                polyPts.append(_rndPtUniformPolyXY(bounding))
+            # Edge
+            edge = [
+                [-width / 2, -height / 2], 
+                [+width / 2, -height / 2], 
+                [+width / 2, +height / 2], 
+                [-width / 2, +height / 2],
+                [-width / 2, -height / 2]
+            ]
+            totalMileage = 2 * width + 2 * height
+            for i in range(kwargs['numEdgePt']):
+                polyPts.append(ptInSeqMileage(edge, random.random() * totalMileage))
+
+            # 取Convex hull
+            polyShapely = shapely.convex_hull(shapely.MultiPoint(points = polyPts))
+            polyB4Rot = [i for i in mapping(polyShapely)['coordinates'][0]]
+
+            direction = random.random() * 180
+            u = math.cos(math.radians(direction))
+            v = math.sin(math.radians(direction))
+            poly = [(nodes[n][locFieldName][0] + u * pt[0] + v * pt[1], nodes[n][locFieldName][1] + -v * pt[0] + u * pt[1]) for pt in polyB4Rot]
+            nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
 
     elif (shape == 'RndCurvy'):
         for n in nodeIDs:

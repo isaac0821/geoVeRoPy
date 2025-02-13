@@ -973,46 +973,29 @@ class RedBlackTree(BSTree):
             x.color = 'B'
         return
 
-class IntervalTreeNode(RedBlackTreeNode):
-    def __init__(self, lower:float, upper:float, value, parent: 'IntervalTreeNode'=None, left: 'IntervalTreeNode' = None, right: 'IntervalTreeNode' = None):
-        if (upper < lower):
-            raise UnsupportedInputError("ERROR: `upper` should not be less than `lower`")
-        super().__init__(key=1, value=value)
-        self.key = (lower, upper)
-        self.lower = lower
-        self.upper = upper
-        self.parent = parent if parent != None else IntervalTreeNilNode()
-        self.left = left if left != None else IntervalTreeNilNode()
-        self.right = right if right != None else IntervalTreeNilNode()
+class TimeWindowNode(RedBlackTreeNode):
+    def __init__(self, lower, upper, value, parent=None, left=None, right=None, color=None, childUpper=None):
+        self.key = lower
+        self.value = value
+        self.lower = lower # float('-inf') represents infinite
+        self.upper = upper # float('inf') represents infinite
+        self.parent = parent
+        self.left = left
+        self.right = right
+        self.color = color  # RedBlackTree
 
-    def __repr__(self):
-        s =("{lower: " + str(self.lower) + ", "
-            + "upper: " + str(self.upper) + ", "
-            + "value: " + str(self.value) + ", "
-            + "parent: " + (str(self.parent.key) if (not self.parent.isNil) else "None") + ", "
-            + "left: " + (str(self.left.key) if (not self.left.isNil) else "None") + ", "
-            + "right: " + (str(self.right.key) if (not self.right.isNil) else "None") + "}")
-        return s
+    def print(self):
+        print("Key: ", self.key, 
+            "\tValue: ", self.value, 
+            "\tInterval: [", self.lower, ", ", self.upper, "]",
+            "\tParent: ", self.parent.key if self.parent != None else 'None',
+            "\tLeft: ", self.left.key if self.left != None else 'None',
+            "\tRight: ", self.right.key if self.right != None else 'None')
+        return
 
-    @property
-    def max(self):
-        return max(self.upper if self.upper != None else -float('inf'), 
-            self.left.upper if self.left.upper != None else -float('inf'),
-            self.right.upper if self.right.upper != None else -float('inf'))    
-
-class IntervalTreeNilNode(IntervalTreeNode):
+class NonOverlapTimeWindows(RedBlackTree):
     def __init__(self):
-        self.lower = None
-        self.upper = None
-        self.color = 'B'
-
-    @property
-    def isNil(self):
-        return True
-
-class SimpleTimeWindowsTree(RedBlackTree):
-    def __init__(self):
-        self.nil = IntervalTreeNode(None, None, None, color='B')
+        self.nil = TimeWindowNode(None, None, None, color='B')
         self.root = self.nil
 
     @property    
@@ -1055,59 +1038,21 @@ class SimpleTimeWindowsTree(RedBlackTree):
             return i.lower, i
         elif (t < visited[-1].lower):
             return visited[-1].lower, visited[-1]
-    
-class IntervalTree(RedBlackTree):
-    def __init__(self):
-        self.nil = IntervalTreeNilNode()
-        self.root = self.nil
 
-    def querySingular(self, t) -> list[IntervalTreeNode]:
-        return
-
-    def queryInterval(self, ts, te) -> list[IntervalTreeNode]:
-        return
-
-    def earliestNextInterval(self, t) -> IntervalTreeNode:
-        return
-
-    def earliestNextAvailable(self, t) -> float:
-        return
-
-    def _search(self, n, t):
-        if (n == self.nil):
-            return self.nil
-        elif (n.lower <= t and t <= n.upper):
-            return n
-        elif (t < n.lower):
-            return self._search(n.left, t)
-        elif (t > n.upper):
-            return self._search(n.right, t)
-
-class Job(object):
-    def __init__(self, length):
-        self.length = length
-
-class JobTimeWindowed(Job):
-    def __init__(self, key, twTree):
-        self.key = key
-        self.twTree = twTree
-        
 class JobNode(object):
-    def __init__(self, key, job, value=None, ts=None, te=None, prev=None, succ=None):
-        self.key = key
-        self.job = job
-        self.value = value
+    def __init__(self, key, value=None, ts=None, te=None, prev=None, succ=None):
+        self.key = key      # Job ID, or key
         self.ts = ts
         self.te = te
-        self.prev = prev
-        self.succ = succ
+        self.prev = prev    # pointer to the previous job, None if this is the head of Linked List
+        self.succ = succ    # pointer to the next job, None if no job after
 
-class ScheduleList(object):
-    def __init__(self, tabuTWs = None):
+class JobSeq(object):
+    def __init__(self, jobs: dict):
+        self.jobs = jobs         # Customer information
         self.head = None
         self.tail = None         # tail要单独处理, 只有一个元素的时候tail是head的复制
-        self.tabuTWs = tabuTWs   # 禁止时间窗
-
+        
     @property
     def makespan(self):
         if (self.tail != None):
@@ -1129,13 +1074,13 @@ class ScheduleList(object):
         return n
 
     def clone(self):
-        c = ScheduleList(self.tabuTWs)
+        c = JobSeq(self.jobs)
         tr = self.traverse()
         tc = []
         for i in range(len(tr)):
             tc.append(JobNode(
                 key = tr[i].key,
-                value = tr[i].value,
+                value = tr[i].key,
                 ts = tr[i].ts,
                 te = tr[i].te,
                 prev = tc[i - 1] if i >= 1 else None))
@@ -1168,11 +1113,15 @@ class ScheduleList(object):
         traverse.append(n.key)
         return traverse
 
-    def append(self, key, job):
+    def append(self, key):
         # NOTE: Does not need to update time windows
-        n = JobNode(key, job)
-        n.ts = self.te
-        n.te = self.te + n.job.length
+        n = JobNode(key)
+        # interval will not be None since the last interval is to inf
+        # self.jobs[key]['twTree'].print()
+        (t, interval) = self.jobs[key]['twTree'].earlisetAvail(self.makespan)  # O(log I)
+        # print(t, interval.value, key, self.makespan)
+        n.ts = t
+        n.te = t + interval.value
         n.prev = self.tail
         n.succ = None
 
@@ -1216,19 +1165,19 @@ class ScheduleList(object):
                 self.tail = n.prev           
         return
 
-    def insert(self, key, newJID):
-        # insert newJID right BEFORE key, if key == None, append to the linked list
+    def insert(self, key, newKey):
+        # insert newKey right BEFORE key, if key == None, append to the linked list
         # Old:  = = =  p   n s = =
         # New:  = = p newN n s = =
         if (self.head == None):
             raise KeyNotExistError("%s does not exist" % key)
         if (key == None):
-            self.append(newJID)
+            self.append(newKey)
         elif (self.head != None and self.head.succ == None):
             if (self.head.key == key):
                 n = self.head
-                newN = JobNode(newJID)
-                (t, interval) = self.jobs[newJID]['twTree'].earlisetAvail(0)
+                newN = JobNode(newKey)
+                (t, interval) = self.jobs[newKey]['twTree'].earlisetAvail(0)
                 newN.ts = t
                 newN.te = t + interval.value
                 newN.succ = n
@@ -1243,9 +1192,9 @@ class ScheduleList(object):
         elif (self.head != None and self.head.succ != None):
             # Find key
             n = self.query(key)
-            # Create a newJID node
-            newN = JobNode(newJID)
-            (t, interval) = self.jobs[newJID]['twTree'].earlisetAvail(n.prev.te if n.prev != None else 0)  # O(log I)
+            # Create a newKey node
+            newN = JobNode(newKey)
+            (t, interval) = self.jobs[newKey]['twTree'].earlisetAvail(n.prev.te if n.prev != None else 0)  # O(log I)
             newN.ts = t
             newN.te = t + interval.value
             # Insert newN between n and n.succ
@@ -1283,7 +1232,7 @@ class ScheduleList(object):
         pos = n.key
         while(n != None):
             insert = n.succ.key if n.succ != None else None
-            self.exchange(key, pos)
+            self.swap(key, pos)
             # print("Step 2", pos)
             # self.print()
             if (self.makespan < bestMakespan):
@@ -1309,14 +1258,14 @@ class ScheduleList(object):
             pass
         return
 
-    def replace(self, oldJID, newJID):
+    def replace(self, oldKey, newKey):
         if (self.head == None):
             raise KeyNotExistError("%s does not exist" % key)
         elif (self.head != None and self.head.succ == None):
-            if (self.head.key == oldJID):
-                n = JobNode(newJID)
+            if (self.head.key == oldKey):
+                n = JobNode(newKey)
                 # interval will not be None since the last interval is to inf
-                (t, interval) = self.jobs[newJID]['twTree'].earlisetAvail(0)  # O(log I)
+                (t, interval) = self.jobs[newKey]['twTree'].earlisetAvail(0)  # O(log I)
                 n.ts = t
                 n.te = t + interval.value
                 n.prev = None
@@ -1324,14 +1273,14 @@ class ScheduleList(object):
                 self.head = n
                 self.tail = n
             else:
-                raise KeyNotExistError("%s does not exist" % oldJID)
+                raise KeyNotExistError("%s does not exist" % oldKey)
         # At lease there are more than one node
         elif (self.head != None and self.head.succ != None):
             # Find key
-            n = self.query(oldJID)
-            # Create a newJID node
-            newN = JobNode(newJID)
-            (t, interval) = self.jobs[newJID]['twTree'].earlisetAvail(n.prev.te if n.prev != None else 0)  # O(log I)
+            n = self.query(oldKey)
+            # Create a newKey node
+            newN = JobNode(newKey)
+            (t, interval) = self.jobs[newKey]['twTree'].earlisetAvail(n.prev.te if n.prev != None else 0)  # O(log I)
             newN.ts = t
             newN.te = t + interval.value
             # Replace
@@ -1351,7 +1300,7 @@ class ScheduleList(object):
                 self.updateFromNode(newN.succ)
         return
 
-    def exchange(self, keyI, keyJ):
+    def swap(self, keyI, keyJ):
         if (self.head == None):
             raise KeyNotExistError("%s and %s does not exist." % (keyI, keyJ))
         # Find nI and nJ
@@ -1440,11 +1389,10 @@ class ScheduleList(object):
             (t, interval) = self.jobs[n.key]['twTree'].earlisetAvail(n.prev.te if n.prev != None else 0)
             newTs = t
             newTe = t + interval.value
-            if (abs(newTs - n.ts) < 0.001 and abs(newTe - n.te) < 0.001):
+            if (abs(newTs - n.ts) < CONST_EPSILON and abs(newTe - n.te) < CONST_EPSILON):
                 break
             else:
                 n.ts = newTs
                 n.te = newTe
                 n = n.succ
         return
-

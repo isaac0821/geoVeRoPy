@@ -649,6 +649,216 @@ def plotArcs(
 
     return fig, ax
 
+def plotCurveArcs(
+    curveArcs: dict,
+    lineColor: str = 'Random',
+    lineWidth: float = 1.0,
+    lineStyle: str = 'solid',
+    lineDashes: tuple = (5, 2),
+    arrowFlag: bool = True,
+    lod: int = 30,
+    fig = None,
+    ax = None,
+    figSize = (None, 5), 
+    boundingBox = (None, None, None, None),
+    showAxis: bool = True,
+    saveFigPath: str|None = None,
+    showFig: bool = True
+    ):
+
+    for a in curveArcs:
+        # 计算夹角和拆分出来的边数
+        deltaDeg = curveArcs[a]['endDeg'] - curveArcs[a]['startDeg']
+        numInsert = max(2, int(lod * deltaDeg / 360))
+        dg = deltaDeg / (numInsert)
+
+        # 生成曲线
+        curve = []
+        curve.append(ptInDistXY(
+            pt = curveArcs[a]['center'], 
+            direction = curveArcs[a]['startDeg'], 
+            dist = curveArcs[a]['radius']))
+        for i in range(numInsert):
+            curve.append(ptInDistXY(
+                pt = curveArcs[a]['center'], 
+                direction = curveArcs[a]['startDeg'] + dg * i, 
+                dist = curveArcs[a]['radius']))
+        curve.append(ptInDistXY(
+            pt = curveArcs[a]['center'], 
+            direction = curveArcs[a]['endDeg'], 
+            dist = curveArcs[a]['radius']))    
+
+        fig, ax = plotLocSeq(
+            fig = fig,
+            ax = ax,
+            locSeq = curve,
+            lineColor = lineColor,
+            lineWidth = lineWidth,
+            lineStyle = lineStyle,
+            lineDashes = lineDashes,
+            nodeMarkerSize = 0,
+            arrowFlag = False,
+            figSize = figSize, 
+            boundingBox = boundingBox,
+            showAxis = showAxis,
+            showFig = False
+            )
+    return fig, ax
+
+def plotPathCover(
+    locSeq: list[pt],
+    radius: float,
+    edgeColor: str = 'Random',
+    edgeWidth: float = 1.0,
+    edgeStyle: str = 'solid',
+    edgeDashes: tuple = (5, 2),
+    fillColor: str|None = None,
+    fillStyle: str = "///",
+    opacity: float = 0.5,
+    lod: int = 30,
+    fig = None,
+    ax = None,
+    figSize = (None, 5), 
+    boundingBox = (None, None, None, None),
+    showAxis: bool = True,
+    saveFigPath: str|None = None,
+    showFig: bool = True
+    ):
+
+    # curveArcs = {}
+    # # NOTE: 先记录每个segment的角度
+    # for i in range(1, len(locSeq) - 2):
+    #     dir2Next = headingXY(locSeq[i], locSeq[i + 1])
+    #     dir2Prev = headingXY(locSeq[i], locSeq[i - 1])
+    fig, ax = plotCircle(
+        fig = fig,
+        ax = ax,
+        lod = lod,
+        center = locSeq[0],
+        radius = radius,
+        edgeWidth = 0.1,
+        edgeColor = 'gray',
+        fillColor = 'gray',
+        fillStyle = '///',
+        opacity = 0.3)
+
+    for i in range(1, len(locSeq) - 1):
+        # 分别看看和上一个点、下一个点的距离，会不会让圆相交
+        # dist2Prev = distEuclideanXY(locSeq[i], locSeq[i - 1])
+        dist2Next = distEuclideanXY(locSeq[i], locSeq[i + 1])
+
+        # 如果分别到上一个和下一个都大于R，完整圆
+        if (dist2Next > 2 * radius):
+            fig, ax = plotCircle(
+                fig = fig,
+                ax = ax,
+                lod = lod,
+                center = locSeq[i],
+                radius = radius,
+                edgeWidth = 0.1,
+                edgeColor = 'gray',
+                fillColor = 'gray',
+                fillStyle = '///',
+                opacity = 0.3)
+        # 如果没有大于L
+        else:
+            cir = circleByCenterXY(locSeq[i], radius, lod)
+            cirNext = circleByCenterXY(locSeq[i + 1], radius, lod)
+            subCir = polysSubtract(polys = [cir], subPolys = [cirNext])[0]
+            fig, ax = plotPoly(
+                fig = fig,
+                ax = ax,
+                poly = subCir,
+                edgeWidth = 0.1,
+                edgeColor = 'gray',
+                fillColor = 'gray',
+                fillStyle = '///',
+                opacity = 0.3)
+
+    for i in range(len(locSeq) - 1):
+        deg = headingXY(locSeq[i], locSeq[i + 1])
+        pt1 = ptInDistXY(locSeq[i], deg + 90, radius)
+        pt2 = ptInDistXY(locSeq[i + 1], deg + 90, radius)
+        pt3 = ptInDistXY(locSeq[i + 1], deg - 90, radius)
+        pt4 = ptInDistXY(locSeq[i], deg - 90, radius)
+
+        # Case 1: L > 2R
+        L = distEuclideanXY(locSeq[i], locSeq[i + 1])
+        if (L > 2 * radius):
+            poly = [pt1, pt2, pt3, pt4]
+            c1 = circleByCenterXY(locSeq[i], radius, lod)
+            c2 = circleByCenterXY(locSeq[i + 1], radius, lod)
+            poly = polysSubtract(polys = [poly], subPolys = [c1])[0]
+            poly = polysSubtract(polys = [poly], subPolys = [c2])[0]
+            fig, ax = plotPoly(
+                fig = fig,
+                ax = ax,
+                poly = poly,
+                edgeWidth = 0.1,
+                edgeColor = 'gray',
+                fillColor = 'gray',
+                fillStyle = '///',
+                opacity = 0.3)
+        # Case 2: L <= 2R
+        elif (L > radius):
+            poly = [pt1, pt2, pt3, pt4]
+            c1 = circleByCenterXY(locSeq[i], radius, lod)
+            c2 = circleByCenterXY(locSeq[i + 1], radius, lod)
+            poly = polysSubtract(polys = [poly], subPolys = [c1])[0]
+            polys = polysSubtract(polys = [poly], subPolys = [c2])
+            poly1 = polys[0]
+            poly2 = polys[1]
+
+            fig, ax = plotPoly(
+                fig = fig,
+                ax = ax,
+                poly = poly1,
+                edgeWidth = 0.1,
+                edgeColor = 'gray',
+                fillColor = 'gray',
+                fillStyle = '///',
+                opacity = 0.3)
+            fig, ax = plotPoly(
+                fig = fig,
+                ax = ax,
+                poly = poly2,
+                edgeWidth = 0.1,
+                edgeColor = 'gray',
+                fillColor = 'gray',
+                fillStyle = '///',
+                opacity = 0.3)
+        # Case 3: L < R
+        elif (L < radius):
+            poly = [pt1, pt2, pt3, pt4]
+            c1 = circleByCenterXY(locSeq[i], radius, lod)
+            c2 = circleByCenterXY(locSeq[i + 1], radius, lod)
+            polys = polysSubtract(polys = [poly], subPolys = [c1])
+            poly1 = polys[0]
+            poly2 = polys[1]
+            poly1 = polysSubtract(polys = [poly1], subPolys = [c2])[0]
+            poly2 = polysSubtract(polys = [poly2], subPolys = [c2])[0]
+
+            fig, ax = plotPoly(
+                fig = fig,
+                ax = ax,
+                poly = poly1,
+                edgeWidth = 0.1,
+                edgeColor = 'gray',
+                fillColor = 'gray',
+                fillStyle = '///',
+                opacity = 0.3)
+            fig, ax = plotPoly(
+                fig = fig,
+                ax = ax,
+                poly = poly2,
+                edgeWidth = 0.1,
+                edgeColor = 'gray',
+                fillColor = 'gray',
+                fillStyle = '///',
+                opacity = 0.3)
+
+    return fig, ax
+
 def plotLocSeq(
     locSeq: list[pt],
     lineColor: str = 'Random',

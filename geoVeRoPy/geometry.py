@@ -3,7 +3,9 @@ import heapq
 import math
 import warnings
 import random
+import numpy as np
 import gurobipy as grb
+import sys
 
 import shapely
 from shapely.geometry import mapping
@@ -2145,12 +2147,12 @@ def isPolyIntPoly(poly1: poly=None, poly2: poly=None, poly1Shapely: shapely.Poly
         return False
 
 def isPolyLegal(poly: poly):
-    for i in range(-1, len(poly)):
-        for j in range(-1, len(poly)):
+    for i in range(-1, len(poly) - 1):
+        for j in range(-1, len(poly) - 1):
             if (i != j):
                 segI = [poly[i], poly[i + 1]]
                 segJ = [poly[j], poly[j + 1]]
-                if (isSegIntSeg(segI, segJ)):
+                if (isSegIntSeg(segI, segJ, interiorOnly=True)):
                     return False
     return True
 
@@ -2661,6 +2663,12 @@ def ptInSeqMileage(seq: list[pt], dist: int|float, dimension: str = 'XY') -> pt:
     y = nextLoc[1] + (remainDist / segDist) * (preLoc[1] - nextLoc[1])
     return (x, y)
 
+def ptMid(seg) -> pt:
+    return [
+        (seg[0][0] + (seg[1][0] - seg[0][0]) / 2), 
+        (seg[0][1] + (seg[1][1] - seg[0][1]) / 2)
+    ]
+
 def ptPolyCenter(poly: poly=None, polyShapely: shapely.Polygon=None) -> pt:
     """
     Given a poly, returns the centroid of the poly
@@ -2687,6 +2695,79 @@ def ptPolyCenter(poly: poly=None, polyShapely: shapely.Polygon=None) -> pt:
     ptShapely = shapely.centroid(polyShapely)
     center = (ptShapely.x, ptShapely.y)
     return center
+
+def minBoundingRect(poly):
+    # NOTE: The following codes are copied from
+    # https://github.com/dbworth/minimum-area-bounding-rectangle/blob/master/python/min_bounding_rect.py
+
+    hull_points_2d = np.array(poly)
+
+    # Compute edges (x2-x1,y2-y1)
+    edges = np.zeros((len(hull_points_2d)-1,2)) # empty 2 column array
+    for i in range(len(edges)):
+        edge_x = hull_points_2d[i+1,0] - hull_points_2d[i,0]
+        edge_y = hull_points_2d[i+1,1] - hull_points_2d[i,1]
+        edges[i] = [edge_x,edge_y]
+
+    # Calculate edge angles   atan2(y/x)
+    edge_angles = np.zeros((len(edges))) # empty 1 column array
+    for i in range(len(edge_angles)):
+        edge_angles[i] = math.atan2(edges[i,1], edges[i,0])
+
+    # Check for angles in 1st quadrant
+    for i in range(len(edge_angles)):
+        edge_angles[i] = abs(edge_angles[i] % (math.pi/2)) # want strictly positive answers
+
+    # Remove duplicate angles
+    edge_angles = np.unique(edge_angles)
+
+    # Test each angle to find bounding box with smallest area
+    min_bbox = (0, sys.maxsize, 0, 0, 0, 0, 0, 0) # rot_angle, area, width, height, min_x, max_x, min_y, max_y
+    for i in range(len(edge_angles)):
+        # Create rotation matrix to shift points to baseline
+        # R = [cos(theta)      , cos(theta-PI/2)
+        #       cos(theta+PI/2) , cos(theta)    ]
+        R = np.array([[math.cos(edge_angles[i]), math.cos(edge_angles[i]-(math.pi/2))], [math.cos(edge_angles[i]+(math.pi/2)), math.cos(edge_angles[i])]])
+
+        # Apply this rotation to convex hull points
+        rot_points = np.dot(R, np.transpose(hull_points_2d)) # 2x2 * 2xn
+
+        # Find min/max x,y points
+        min_x = np.nanmin(rot_points[0], axis=0)
+        max_x = np.nanmax(rot_points[0], axis=0)
+        min_y = np.nanmin(rot_points[1], axis=0)
+        max_y = np.nanmax(rot_points[1], axis=0)
+
+        # Calculate height/width/area of this bounding rectangle
+        width = max_x - min_x
+        height = max_y - min_y
+        area = width*height
+
+        # Store the smallest rect found first (a simple convex hull might have 2 answers with same area)
+        if (area < min_bbox[1]):
+            min_bbox = (edge_angles[i], area, width, height, min_x, max_x, min_y, max_y)
+
+    # Re-create rotation matrix for smallest rect
+    angle = min_bbox[0]   
+    R = np.array([[math.cos(angle), math.cos(angle-(math.pi/2))], [math.cos(angle+(math.pi/2)), math.cos(angle)]])
+
+    # Project convex hull points onto rotated frame
+    proj_points = np.dot(R, np.transpose(hull_points_2d)) # 2x2 * 2xn
+
+    # min/max x,y points are against baseline
+    min_x = min_bbox[4]
+    max_x = min_bbox[5]
+    min_y = min_bbox[6]
+    max_y = min_bbox[7]
+
+    # Calculate corner points and project onto rotated frame
+    corner_points = [
+        list(np.dot([max_x, min_y], R)),
+        list(np.dot([min_x, min_y], R)),
+        list(np.dot([min_x, max_y], R)),
+        list(np.dot([max_x, max_y], R)),
+    ]
+    return corner_points
 
 # Vectors =====================================================================
 def rndVec(norm: float = 1):
@@ -2763,19 +2844,24 @@ def polysSubtract(polys:polys=None, polysShapely:list[shapely.Polygon]=None, sub
         raise MissingParameterError("ERROR: Missing required field 'polys' or 'polysShapely'.")
     if (subPolys == None and subPolysShapely == None):
         raise MissingParameterError("ERROR: Missing required field 'subPolys' or 'subPolysShapely'.")
+    unionAll = None
     if (polysShapely == None):
         polysShapely = []
         for p in polys:
-            polysShapely.append(shapely.Polygon(p))
-    unionAll = shapely.union_all(polysShapely)
-
+            if (unionAll == None):
+                unionAll = shapely.Polygon(p)
+                unionAll = unionAll.buffer(0.01)
+            else:
+                unionAll = shapely.union(unionAll, shapely.Polygon(p))
+                unionAll = unionAll.buffer(0.01)
+    
+    diffShapely = unionAll
     if (subPolysShapely == None):
         subPolysShapely = []
         for p in subPolys:
-            subPolysShapely.append(shapely.Polygon(p))
-    unionSub = shapely.union_all(subPolysShapely)
+            diffShapely = shapely.difference(unionAll, shapely.Polygon(p))
+            diffShapely = diffShapely.buffer(0.01)
 
-    diffShapely = shapely.difference(unionAll, unionSub)
     if (returnShaplelyObj):
         return diffShapely
 
