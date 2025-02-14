@@ -37,9 +37,12 @@ polys = list[list[list[float]]] | list[list[tuple[float, float]]]
 circle = tuple[pt, float]
 line = list[pt]
 
-DEBUG_WRITE_LOG = False
-DEBUG_PRINT_LOG = True
-DEBUG_LOG_PATH = "log.log"
+DEBUG = {
+    'DEBUG_WRITE_LOG': False,
+    'DEBUG_PRINT_LOG': True,
+    'DEBUG_LOG_PATH': "log.log"
+}
+
 
 class UnsupportedInputError(Exception):
     pass
@@ -182,14 +185,20 @@ def splitList(inputList, binNum):
         acc += sizePerBin[i]
     return bins
 
+def setLog(param, value):
+    global DEBUG
+    if (param in DEBUG):
+        DEBUG[param] = value
+    return
+
 def writeLog(string, logPath = None):
-    if (DEBUG_WRITE_LOG):
+    if (DEBUG['DEBUG_WRITE_LOG']):
         if (logPath == None):
-            logPath = DEBUG_LOG_PATH
+            logPath = DEBUG['DEBUG_LOG_PATH']
         f = open(logPath, "a")
         f.write(string + "\n")
         f.close()
-    if (DEBUG_PRINT_LOG):
+    if (DEBUG['DEBUG_PRINT_LOG']):
         print(string)
     return
 

@@ -50,8 +50,6 @@ def solveGCEOP(
             # 未访问点及距离，暂存用，这里保存的是距离
             self.dist2NotInclude = {}
             # 补全
-            self.historySeq = []
-            self.lastLegalSeq = []
             self.seq2Path()
 
         def getPath(self):
@@ -66,15 +64,12 @@ def solveGCEOP(
                     'center': self.nodes[nodeID]['loc'],
                     'radius': radiusList[radiusIdx] if radiusList != None else self.nodes[nodeID][radiusListFieldName][radiusIdx]
                 })
-            try:
-                c2c = circle2CirclePath(
-                    startPt = self.startLoc,
-                    endPt = self.endLoc,
-                    circles = circles,
-                    algo = 'SOCP')
-                degen = seqRemoveDegen(seq = c2c['path'])
-            except:
-                print(self.seq.traverse())
+            c2c = circle2CirclePath(
+                startPt = self.startLoc,
+                endPt = self.endLoc,
+                circles = circles,
+                algo = 'SOCP')
+            degen = seqRemoveDegen(seq = c2c['path'])
 
             # 找turn point
             self.turning = []
@@ -137,35 +132,14 @@ def solveGCEOP(
                 canAddFlag = False
                 needRemoveFlag = False
 
-                # repeatedFlag = False
-                # if (tuple(self.turning) in self.historySeq):
-                #     print("Found Repeat, early stop.")
-                #     self.turning = [i for i in self.lastLegalSeq]
-                #     repeatedFlag = True
-                
-                # print(self.turning)
-                # if (not repeatedFlag):
-                self.historySeq.append(tuple(self.turning))
-
                 # 先按照turnpoint构造一个路径
                 if (pathCalFlag):
                     pathCalFlag = False
                 else:
                     self.getPath()
 
-                # print(hyphenStr())
-                # print("Turning: ", self.turning)
-                # print("Trespass: ", self.trespass)
-                # print("Dist: ", self.dist)
-                # print("Score: ", self.score)
-                # print("History Iter Num: ", len(self.historySeq))
-                # print("Last legal: ", self.lastLegalSeq)
-                # print("Last time added: ", self.historySeq[-1])
-                # print("\n")
-
                 # 判断距离是否有富余，判断是否能够添加turning，或者更改半径增加
                 if (self.dist <= self.maxLength):
-                    self.lastLegalSeq = [i for i in self.turning]
                     candi = []
                     coeff = []
 
@@ -331,7 +305,6 @@ def solveGCEOP(
                             for i in range(len(self.turning)):
                                 if (self.turning[i][0] == insertCandi[1]):
                                     self.turning[i][1] = insertCandi[2]
-                        # print("Add to turning: ", insertCandi)
                         canAddFlag = True
 
                 # 距离如果大于maxLength，从现有的turning中试图逐个扩大圈移除，或者扩大访问领域的半径，按照分值加权随机移除
@@ -367,7 +340,6 @@ def solveGCEOP(
                         for i in range(len(self.turning)):
                             if (self.turning[i][0] == removeCandi[1]):
                                 self.turning[i][1] = removeCandi[2]
-                    # print("Remove from turning: ", removeCandi)
                     needRemoveFlag = True
 
                 # 更新seq为新的turning point
@@ -376,11 +348,6 @@ def solveGCEOP(
                     n = RingNode(key = self.turning[i][0], value = self.turning[i][1])
                     self.seq.append(n)
                 self.seq.rehead(0)
-                # print("Final: ", [[i.key, i.value] for i in self.seq.traverse()])
-                # print("Turing: ", self.turning)
-                # print("Trespass: ", self.trespass)
-                # print("Not include: ", self.dist2NotInclude.keys())
-                # print("\n")
 
     def intraSwap(chromo):
         # 每个点随机重新选择邻域圈层
@@ -487,7 +454,7 @@ def solveGCEOP(
         seq.append([0, 0])
         random.shuffle(seq) # 没事，会rehead
         popObj.append(chromosomeGCEOP(startLoc, endLoc, nodes, seq, maxLength))
-        print("New Pop: ", popObj[-1].score, popObj[-1].dist)
+        writeLog("New Pop - Score: " + str(popObj[-1].score) + "\tDist: " + str(popObj[-1].dist))
 
     for chromo in popObj:
         if (chromo.score > dashboard['bestScore'] and chromo.dist <= maxLength):
@@ -517,57 +484,61 @@ def solveGCEOP(
             newSeq1, newSeq2 = crossover(popObj[rnd1], popObj[rnd2], idx1I, idx1J, idx2I, idx2J)
             popObj.append(newSeq1)
             popObj.append(newSeq2)
-            print("Create offspring: ", newSeq1.score, newSeq1.dist)
-            print("Create offspring: ", newSeq2.score, newSeq2.dist)
+            writeLog("Create offspring - Score: " + str(newSeq1.score) + "\tDist: " + str(newSeq1.dist))
+            writeLog("Create offspring - Score: " + str(newSeq2.score) + "\tDist: " + str(newSeq2.dist))
 
-        # random destroy and recreate
-        numIntraSwap = (int)(neighRatio['intraSwap'] * popSize)
-        for k in range(numIntraSwap):
-            rnd = random.randint(0, len(popObj) - 1)
-            popObj[rnd] = intraSwap(popObj[rnd])
-            print("IntraSwap: ", popObj[rnd].score, popObj[rnd].dist)
+        # intraSwap
+        if ('intraSwap' in neighRatio):
+            numIntraSwap = (int)(neighRatio['intraSwap'] * popSize)
+            for k in range(numIntraSwap):
+                rnd = random.randint(0, len(popObj) - 1)
+                popObj[rnd] = intraSwap(popObj[rnd])
+                writeLog("IntraSwap - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
-        # Mutation
         # interSwap
-        numInterSwap = (int)(neighRatio['interSwap'] * popSize)
-        for k in range(numInterSwap):
-            rnd = random.randint(0, len(popObj) - 1)            
-            idx = random.randint(0, popObj[rnd].seq.count - 1)
-            popObj[rnd] = interSwap(popObj[rnd], idx)
-            print("InterSwap: ", popObj[rnd].score, popObj[rnd].dist)
+        if ('interSwap' in neighRatio):
+            numInterSwap = (int)(neighRatio['interSwap'] * popSize)
+            for k in range(numInterSwap):
+                rnd = random.randint(0, len(popObj) - 1)            
+                idx = random.randint(0, popObj[rnd].seq.count - 1)
+                popObj[rnd] = interSwap(popObj[rnd], idx)
+                writeLog("InterSwap - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
         # exchange
-        numExchange = (int)(neighRatio['exchange'] * popSize)
-        for k in range(numExchange):
-            rnd = random.randint(0, len(popObj) - 1)
-            if (popObj[rnd].seq.count > 4):
-                [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
-                while (abs(idxJ - idxI) <= 2
-                    or idxI == 0 and idxJ == popObj[rnd].seq.count - 1
-                    or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
+        if ('exchange' in neighRatio):
+            numExchange = (int)(neighRatio['exchange'] * popSize)
+            for k in range(numExchange):
+                rnd = random.randint(0, len(popObj) - 1)
+                if (popObj[rnd].seq.count > 4):
                     [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
-                popObj[rnd] = exchange(popObj[rnd], idxI, idxJ)
-                print("Exchange: ", popObj[rnd].score, popObj[rnd].dist)
+                    while (abs(idxJ - idxI) <= 2
+                        or idxI == 0 and idxJ == popObj[rnd].seq.count - 1
+                        or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
+                        [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
+                    popObj[rnd] = exchange(popObj[rnd], idxI, idxJ)
+                    writeLog("Exchange - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
         # rotate
-        numRotate = (int)(neighRatio['rotate'] * popSize)
-        for k in range(numRotate):
-            rnd = random.randint(0, len(popObj) - 1)
-            if (popObj[rnd].seq.count > 4):
-                [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
-                while (abs(idxJ - idxI) <= 2
-                    or idxI == 0 and idxJ == popObj[rnd].seq.count - 1
-                    or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
+        if ('rotate' in neighRatio):
+            numRotate = (int)(neighRatio['rotate'] * popSize)
+            for k in range(numRotate):
+                rnd = random.randint(0, len(popObj) - 1)
+                if (popObj[rnd].seq.count > 4):
                     [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
-                popObj[rnd] = rotate(popObj[rnd], idxI, idxJ)
-                print("Rotate: ", popObj[rnd].score, popObj[rnd].dist)
+                    while (abs(idxJ - idxI) <= 2
+                        or idxI == 0 and idxJ == popObj[rnd].seq.count - 1
+                        or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
+                        [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
+                    popObj[rnd] = rotate(popObj[rnd], idxI, idxJ)
+                    writeLog("Rotate - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
         # random destroy and recreate
-        numRndDestory = (int)(neighRatio['rndDestroy'] * popSize)
-        for k in range(numRndDestory):
-            rnd = random.randint(0, len(popObj) - 1)
-            popObj[rnd] = rndDestroy(popObj[rnd])
-            print("Random destroy: ", popObj[rnd].score, popObj[rnd].dist)
+        if ('rndDestroy' in neighRatio):
+            numRndDestory = (int)(neighRatio['rndDestroy'] * popSize)
+            for k in range(numRndDestory):
+                rnd = random.randint(0, len(popObj) - 1)
+                popObj[rnd] = rndDestroy(popObj[rnd])
+                writeLog("Random R&R - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
         # Tournament
         while (len(popObj) > popSize):
@@ -579,10 +550,10 @@ def solveGCEOP(
                 rnd2 = random.randint(0, len(popObj) - 1)
             # kill the loser
             if (popObj[rnd1].score < popObj[rnd2].score):
-                print("Remove: ", popObj[rnd1].score, popObj[rnd1].dist)
+                writeLog("Remove - Score: " + str(popObj[rnd1].score) + "\tDist: " + str(popObj[rnd1].dist))
                 del popObj[rnd1]
             else:
-                print("Remove: ", popObj[rnd2].score, popObj[rnd2].dist)
+                writeLog("Remove - Score: " + str(popObj[rnd2].score) + "\tDist: " + str(popObj[rnd2].dist))
                 del popObj[rnd2]
 
         # Update dashboard
@@ -594,13 +565,11 @@ def solveGCEOP(
                 dashboard['bestDist'] = chromo.dist
                 dashboard['bestSeq'] = [[i.key, i.value] for i in chromo.seq.traverse()]
                 dashboard['bestChromo'] = chromo
-        print(hyphenStr())
-        print("Iter: ", iterTotal, 
-            "\nRuntime [s]: ", round((datetime.datetime.now() - startTime).total_seconds(), 2), 
-            "\nTurning", dashboard['bestChromo'].turning,
-            "\nTrespass", dashboard['bestChromo'].trespass,
-            "\nDist: ", dashboard['bestDist'],
-            "\nScore: ", dashboard['bestScore'])
+        writeLog(hyphenStr())
+        writeLog("Iter: " + str(iterTotal) + 
+            "\nRuntime [s]: " + str(round((datetime.datetime.now() - startTime).total_seconds(), 2)) + 
+            "\nDist: " + str(dashboard['bestDist']) + 
+            "\nScore: " + str(dashboard['bestScore']))
         if (newOfvFound):
             iterNoImp = 0
         else:
@@ -608,11 +577,11 @@ def solveGCEOP(
         iterTotal += 1
 
         convergence.append({
-                'score': dashboard['bestScore'],
-                'dist': dashboard['bestDist'],
-                'seq': dashboard['bestSeq'],
-                'path': dashboard['bestChromo'].path
-            })
+            'score': dashboard['bestScore'],
+            'dist': dashboard['bestDist'],
+            'seq': dashboard['bestSeq'],
+            'path': dashboard['bestChromo'].path
+        })
 
         # Check stopping criteria
         if ('numNoImproveIter' in stop):

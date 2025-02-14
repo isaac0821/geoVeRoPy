@@ -49,8 +49,6 @@ def solveCEOP(
             # 未访问点及距离，暂存用
             self.dist2NotInclude = {}
             # 补全
-            self.historySeq = []
-            self.lastLegalSeq = []
             self.seq2Path()
 
         def getPath(self):
@@ -106,17 +104,10 @@ def solveCEOP(
             # 现在开始补齐，多退少补
             canAddFlag = True
             needRemoveFlag = True
+            tabuOpt = []
             while (canAddFlag or needRemoveFlag):
                 canAddFlag = False
                 needRemoveFlag = False
-
-                repeatedFlag = False
-                if (tuple(self.turning) in self.historySeq):
-                    self.turning = [i for i in self.lastLegalSeq]
-                    repeatedFlag = True
-                
-                # print(self.turning)
-                self.historySeq.append(tuple(self.turning))
 
                 # 先按照turnpoint构造一个路径
                 if (pathCalFlag):
@@ -124,109 +115,104 @@ def solveCEOP(
                 else:
                     self.getPath()                
 
-                # 如果这条序列合法
+                # print(hyphenStr())
+                # print("UUID: ", self.chromoID)
+                # print("Turning: ", self.turning)
+                # print("Trespass: ", self.trespass)
+                # print("Dist: ", self.dist)
+                # print("Score: ", self.score)
+                # print("\n")
+
+                # 判断距离是否有富裕，判断是否能够添加turning
                 if (self.dist <= self.maxLength):
-                    self.lastLegalSeq = [i for i in self.turning]
+                    candi = []
+                    coeff = []
 
-                if (not repeatedFlag):
-                    # print(hyphenStr())
-                    # print("UUID: ", self.chromoID)
-                    # print("Turning: ", self.turning)
-                    # print("Trespass: ", self.trespass)
-                    # print("Dist: ", self.dist)
-                    # print("Score: ", self.score)
-                    # print("History Iter Num: ", len(self.historySeq))
-                    # print("Last legal: ", self.lastLegalSeq)
-                    # print("Last time added: ", self.historySeq[-1])
-                    # print("\n")
+                    # DP用来加速
+                    projTo = {}
+                    for i in self.dist2NotInclude:
 
-                    # 判断距离是否有富裕，判断是否能够添加turning
-                    if (self.dist <= self.maxLength):
-                        candi = []
-                        coeff = []
+                        # 上一个点和下一个点的位置，使用DP尽量减少一些计算
+                        if (self.dist2NotInclude[i]['nearestIdx'][0] not in projTo):
+                            projTo[self.dist2NotInclude[i]['nearestIdx'][0]] = {
+                                'prevLoc': self.dist2NotInclude[i]['nearestSeg'][0],
+                                'nextLoc': self.dist2NotInclude[i]['nearestSeg'][1],
+                                'distPrevNext': distEuclideanXY(
+                                    self.dist2NotInclude[i]['nearestSeg'][0], 
+                                    self.dist2NotInclude[i]['nearestSeg'][1])
+                            }
+                        prevLoc = projTo[self.dist2NotInclude[i]['nearestIdx'][0]]['prevLoc']
+                        nextLoc = projTo[self.dist2NotInclude[i]['nearestIdx'][0]]['nextLoc']
+                        distPrevNext = projTo[self.dist2NotInclude[i]['nearestIdx'][0]]['distPrevNext']
 
-                        # DP用来加速
-                        projTo = {}
-                        for i in self.dist2NotInclude:
+                        worthTryFlag = None
 
-                            # 上一个点和下一个点的位置，使用DP尽量减少一些计算
-                            if (self.dist2NotInclude[i]['nearestIdx'][0] not in projTo):
-                                projTo[self.dist2NotInclude[i]['nearestIdx'][0]] = {
-                                    'prevLoc': self.dist2NotInclude[i]['nearestSeg'][0],
-                                    'nextLoc': self.dist2NotInclude[i]['nearestSeg'][1],
-                                    'distPrevNext': distEuclideanXY(
-                                        self.dist2NotInclude[i]['nearestSeg'][0], 
-                                        self.dist2NotInclude[i]['nearestSeg'][1])
-                                }
-                            prevLoc = projTo[self.dist2NotInclude[i]['nearestIdx'][0]]['prevLoc']
-                            nextLoc = projTo[self.dist2NotInclude[i]['nearestIdx'][0]]['nextLoc']
-                            distPrevNext = projTo[self.dist2NotInclude[i]['nearestIdx'][0]]['distPrevNext']
+                        # 先计算最保守上界估计， 如果加上来还可以满足，那肯定可以试试
+                        deltaLength  = distEuclideanXY(prevLoc, nodes[i]['loc'])
+                        deltaLength += distEuclideanXY(nextLoc, nodes[i]['loc'])
+                        deltaLength -= distPrevNext
+                        if (self.dist + deltaLength <= self.maxLength):
+                            worthTryFlag = True
 
-                            worthTryFlag = None
+                        # 如果最保守的上界超标了，最保守的下界也超标了，那肯定不必要再去算一轮精确点的
+                        if (worthTryFlag == None and deltaLength - 2 * nodes[i]['radius'] >= self.maxLength):
+                            worthTryFlag = False
 
-                            # 先计算最保守上界估计， 如果加上来还可以满足，那肯定可以试试
-                            deltaLength  = distEuclideanXY(prevLoc, nodes[i]['loc'])
-                            deltaLength += distEuclideanXY(nextLoc, nodes[i]['loc'])
+                        # 如果最保守的上界和下届都不能用来判断，那就给个更精确的估计
+                        # NOTE: 用circle2CirclePath测试太昂贵了
+                        if (worthTryFlag == None):
+                            pt1 = ptInDistXY(
+                                pt = nodes[i]['loc'],
+                                direction = headingXY(nodes[i]['loc'], prevLoc),
+                                dist = nodes[i]['radius'])
+                            pt2 = ptInDistXY(
+                                pt = nodes[i]['loc'],
+                                direction = headingXY(nodes[i]['loc'], nextLoc),
+                                dist = nodes[i]['radius'])
+                            midLoc = ptMid([pt1, pt2])
+                            edgeLoc = ptInDistXY(
+                                pt = nodes[i]['loc'],
+                                direction = headingXY(nodes[i]['loc'], midLoc),
+                                dist = nodes[i]['radius'])
+                            deltaLength  = distEuclideanXY(prevLoc, edgeLoc)
+                            deltaLength += distEuclideanXY(nextLoc, edgeLoc)
                             deltaLength -= distPrevNext
-                            if (self.dist + deltaLength <= self.maxLength):
+                            # NOTE: 0.98 is a magic number, 用来修正估计值
+                            if ((self.dist + deltaLength) * 0.98 <= self.maxLength):
                                 worthTryFlag = True
-
-                            # 如果最保守的上界超标了，最保守的下界也超标了，那肯定不必要再去算一轮精确点的
-                            if (worthTryFlag == None and deltaLength - 2 * nodes[i]['radius'] >= self.maxLength):
+                            else:
                                 worthTryFlag = False
 
-                            # 如果最保守的上界和下届都不能用来判断，那就给个更精确的估计
-                            # NOTE: 用circle2CirclePath测试太昂贵了
-                            if (worthTryFlag == None):
-                                pt1 = ptInDistXY(
-                                    pt = nodes[i]['loc'],
-                                    direction = headingXY(nodes[i]['loc'], prevLoc),
-                                    dist = nodes[i]['radius'])
-                                pt2 = ptInDistXY(
-                                    pt = nodes[i]['loc'],
-                                    direction = headingXY(nodes[i]['loc'], nextLoc),
-                                    dist = nodes[i]['radius'])
-                                midLoc = ptMid([pt1, pt2])
-                                edgeLoc = ptInDistXY(
-                                    pt = nodes[i]['loc'],
-                                    direction = headingXY(nodes[i]['loc'], midLoc),
-                                    dist = nodes[i]['radius'])
-                                deltaLength  = distEuclideanXY(prevLoc, edgeLoc)
-                                deltaLength += distEuclideanXY(nextLoc, edgeLoc)
-                                deltaLength -= distPrevNext
-                                # NOTE: 0.98 is a magic number, 用来修正估计值
-                                if ((self.dist + deltaLength) * 0.98 <= self.maxLength):
-                                    worthTryFlag = True
-                                else:
-                                    worthTryFlag = False
-
-                            if (worthTryFlag):
-                                candi.append((i, self.dist2NotInclude[i]['nearestIdx']))
+                        if (worthTryFlag):
+                            opt = (i, self.dist2NotInclude[i]['nearestIdx'])
+                            if (opt not in tabuOpt):
+                                candi.append(opt)
+                                tabuOpt.append(opt)
                                 coeff.append(self.nodes[i]['score'] / deltaLength)
 
-                        # 如果找到可以加入的candidate，按照性价比抽样，性价比越高的被选中概率越大
-                        if (len(candi) > 0):
-                            # 随机抽一个
-                            insertCandi = candi[rndPick(coeff)]
-                            self.aggTurning.insert(insertCandi[1][1], [insertCandi[0]])
-                            self.turning = []
-                            for k in range(len(self.aggTurning)):
-                                self.turning.extend(self.aggTurning[k])
-                            # print("Add to turning: ", insertCandi)
-                            canAddFlag = True
+                    # 如果找到可以加入的candidate，按照性价比抽样，性价比越高的被选中概率越大
+                    if (len(candi) > 0):
+                        # 随机抽一个
+                        insertCandi = candi[rndPick(coeff)]
+                        self.aggTurning.insert(insertCandi[1][1], [insertCandi[0]])
+                        self.turning = []
+                        for k in range(len(self.aggTurning)):
+                            self.turning.extend(self.aggTurning[k])
+                        # print("Add to turning: ", insertCandi)
+                        canAddFlag = True
 
-                    # 距离如果大于maxLength，从现有的turning中移除，按照分值加权随机移除
-                    else:
-                        coeff = []
-                        for i in self.turning:
-                            if (i != 0):
-                                coeff.append(1.0 / nodes[i]['score'])
-                            else:
-                                coeff.append(0)
-                        removeID = self.turning[rndPick(coeff)]
-                        self.turning.remove(removeID)
-                        # print("Remove from turning: ", removeID)
-                        needRemoveFlag = True
+                # 距离如果大于maxLength，从现有的turning中移除，按照分值加权随机移除
+                else:
+                    coeff = []
+                    for i in self.turning:
+                        if (i != 0):
+                            coeff.append(1.0 / nodes[i]['score'])
+                        else:
+                            coeff.append(0)
+                    removeID = self.turning[rndPick(coeff)]
+                    self.turning.remove(removeID)
+                    # print("Remove from turning: ", removeID)
+                    needRemoveFlag = True
 
                 # 更新seq为新的turning point
                 self.seq = Ring()
@@ -324,6 +310,7 @@ def solveCEOP(
         seq.append(0)
         random.shuffle(seq)
         popObj.append(chromosomeCEOP(startLoc, endLoc, nodes, seq, maxLength))
+        writeLog("New Pop - Score: " + str(popObj[-1].score) + "\tDist: " + str(popObj[-1].dist))
 
     for chromo in popObj:
         if (chromo.score > dashboard['bestScore'] and chromo.dist <= maxLength):
@@ -353,8 +340,8 @@ def solveCEOP(
             newSeq1, newSeq2 = crossover(popObj[rnd1], popObj[rnd2], idx1I, idx1J, idx2I, idx2J)
             popObj.append(newSeq1)
             popObj.append(newSeq2)
-            print("Create offspring: ", newSeq1.score, newSeq1.dist)
-            print("Create offspring: ", newSeq2.score, newSeq2.dist)
+            writeLog("Create offspring - Score: " + str(newSeq1.score) + "\tDist: " + str(newSeq1.dist))
+            writeLog("Create offspring - Score: " + str(newSeq2.score) + "\tDist: " + str(newSeq2.dist))
 
         # Mutation
         # swap
@@ -364,8 +351,8 @@ def solveCEOP(
                 rnd = random.randint(0, len(popObj) - 1)            
                 idx = random.randint(0, popObj[rnd].seq.count - 1)
                 popObj[rnd] = swap(popObj[rnd], idx)
-                print("Swap: ", popObj[rnd].score, popObj[rnd].dist)
-
+                writeLog("Swap - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
+        
         # exchange
         if ('exchange' in neighRatio):
             numExchange = (int)(neighRatio['exchange'] * popSize)
@@ -378,7 +365,7 @@ def solveCEOP(
                         or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
                         [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
                     popObj[rnd] = exchange(popObj[rnd], idxI, idxJ)
-                    print("Exchange: ", popObj[rnd].score, popObj[rnd].dist)
+                    writeLog("Exchange - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
         # rotate
         if ('rotate' in neighRatio):
@@ -392,7 +379,7 @@ def solveCEOP(
                         or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
                         [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
                     popObj[rnd] = rotate(popObj[rnd], idxI, idxJ)
-                    print("Rotate: ", popObj[rnd].score, popObj[rnd].dist)
+                    writeLog("Rotate - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
         # random destroy and recreate
         if ('rndDestroy' in neighRatio):
@@ -400,7 +387,7 @@ def solveCEOP(
             for k in range(numRndDestory):
                 rnd = random.randint(0, len(popObj) - 1)
                 popObj[rnd] = rndDestroy(popObj[rnd])
-                print("Random destroy: ", popObj[rnd].score, popObj[rnd].dist)
+                writeLog("Random R&R - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
         # Tournament
         while (len(popObj) > popSize):
@@ -412,10 +399,10 @@ def solveCEOP(
                 rnd2 = random.randint(0, len(popObj) - 1)
             # kill the loser
             if (popObj[rnd1].score < popObj[rnd2].score):
-                print("Remove: ", popObj[rnd1].score, popObj[rnd1].dist)
+                writeLog("Remove - Score: " + str(popObj[rnd1].score) + "\tDist: " + str(popObj[rnd1].dist))
                 del popObj[rnd1]
             else:
-                print("Remove: ", popObj[rnd2].score, popObj[rnd2].dist)
+                writeLog("Remove - Score: " + str(popObj[rnd2].score) + "\tDist: " + str(popObj[rnd2].dist))
                 del popObj[rnd2]
 
         # Update dashboard
@@ -427,13 +414,11 @@ def solveCEOP(
                 dashboard['bestDist'] = chromo.dist
                 dashboard['bestSeq'] = [i.key for i in chromo.seq.traverse()]
                 dashboard['bestChromo'] = chromo
-        print(hyphenStr())
-        print("Iter: ", iterTotal, 
-            "\nRuntime [s]: ", round((datetime.datetime.now() - startTime).total_seconds(), 2), 
-            "\nTurning", dashboard['bestChromo'].turning,
-            "\nTrespass", dashboard['bestChromo'].trespass,
-            "\nDist: ", dashboard['bestDist'],
-            "\nScore: ", dashboard['bestScore'])
+        writeLog(hyphenStr())
+        writeLog("Iter: " + str(iterTotal) + 
+            "\nRuntime [s]: " + str(round((datetime.datetime.now() - startTime).total_seconds(), 2)) + 
+            "\nDist: " + str(dashboard['bestDist']) + 
+            "\nScore: " + str(dashboard['bestScore']))
         if (newOfvFound):
             iterNoImp = 0
         else:
