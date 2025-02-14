@@ -393,18 +393,45 @@ def plotNodes(
                 showAxis = showAxis,
                 fillStyle = neighborFillStyle)
         if ('neiShape' in nodes[n] and nodes[n]['neiShape'] == 'Isochrone'):
-            for poly in nodes[n][neighborFieldName]:
-                fig, ax = plotPoly(
-                    fig = fig,
-                    ax = ax,
-                    poly = poly,
-                    edgeWidth = 1,
-                    edgeColor = 'black',
-                    fillColor = neighborColor,
-                    opacity = neighborOpacity / len(nodes[n][neighborFieldName]),
-                    latLonFlag = latLonFlag,
-                    showAxis = showAxis,
-                    fillStyle = neighborFillStyle)            
+            if ('actLevel' in nodes[n]):
+                for k in range(nodes[n]['actLevel'] + 1):
+                    fig, ax = plotPoly(
+                        fig = fig,
+                        ax = ax,
+                        poly = nodes[n][neighborFieldName][k],
+                        edgeWidth = 1,
+                        edgeColor = 'black',
+                        fillColor = 'red',
+                        opacity = neighborOpacity / len(nodes[n][neighborFieldName]),
+                        latLonFlag = latLonFlag,
+                        showAxis = showAxis,
+                        fillStyle = neighborFillStyle)
+                if (nodes[n]['actLevel'] < len(nodes[n][neighborFieldName])):
+                    for k in range(nodes[n]['actLevel'] + 1, len(nodes[n][neighborFieldName])):
+                        fig, ax = plotPoly(
+                            fig = fig,
+                            ax = ax,
+                            poly = nodes[n][neighborFieldName][k],
+                            edgeWidth = 1,
+                            edgeColor = 'black',
+                            fillColor = neighborColor,
+                            opacity = neighborOpacity / len(nodes[n][neighborFieldName]),
+                            latLonFlag = latLonFlag,
+                            showAxis = showAxis,
+                            fillStyle = neighborFillStyle)
+            else:
+                for k in range(len(nodes[n][neighborFieldName])):
+                    fig, ax = plotPoly(
+                        fig = fig,
+                        ax = ax,
+                        poly = nodes[n][neighborFieldName][k],
+                        edgeWidth = 1,
+                        edgeColor = 'black',
+                        fillColor = neighborColor,
+                        opacity = neighborOpacity / len(nodes[n][neighborFieldName]),
+                        latLonFlag = latLonFlag,
+                        showAxis = showAxis,
+                        fillStyle = neighborFillStyle)            
         if ('neiShape' in nodes[n] and 'radius' in nodes[n] and nodes[n]['neiShape'] == 'Circle'):
             neiPoly = circleByCenterXY(
                 center = nodes[n][locFieldName],

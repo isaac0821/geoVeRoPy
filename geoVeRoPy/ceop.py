@@ -257,6 +257,16 @@ def solveCEOP(
         newSeq.extend([seq[i] for i in range(idxJ + 1, len(seq))])
         return chromosomeCEOP(startLoc, endLoc, nodes, newSeq, maxLength)
     
+    def rndDestroy(chromo):
+        seq = [i.key for i in chromo.seq.traverse()]
+        numRemove = int(len(seq) * random.random() * 0.3)
+        newSeq = [i for i in seq]
+        for i in range(numRemove):
+            newSeq.remove(newSeq[random.randint(0, len(newSeq) - 1)])
+        if (0 not in newSeq):
+            newSeq.append(0)
+        return chromosomeCEOP(startLoc, endLoc, nodes, newSeq, maxLength)
+
     def crossover(chromo1, chromo2, idx1I, idx1J, idx2I, idx2J):
         # 原始序列
         seq1 = [i.key for i in chromo1.seq.traverse()]
@@ -348,38 +358,49 @@ def solveCEOP(
 
         # Mutation
         # swap
-        numSwap = (int)(neighRatio['swap'] * popSize)
-        for k in range(numSwap):
-            rnd = random.randint(0, len(popObj) - 1)            
-            idx = random.randint(0, popObj[rnd].seq.count - 1)
-            popObj[rnd] = swap(popObj[rnd], idx)
-            print("Swap: ", popObj[rnd].score, popObj[rnd].dist)
+        if ('swap' in neighRatio):
+            numSwap = (int)(neighRatio['swap'] * popSize)
+            for k in range(numSwap):
+                rnd = random.randint(0, len(popObj) - 1)            
+                idx = random.randint(0, popObj[rnd].seq.count - 1)
+                popObj[rnd] = swap(popObj[rnd], idx)
+                print("Swap: ", popObj[rnd].score, popObj[rnd].dist)
 
         # exchange
-        numExchange = (int)(neighRatio['exchange'] * popSize)
-        for k in range(numExchange):
-            rnd = random.randint(0, len(popObj) - 1)
-            if (popObj[rnd].seq.count > 4):
-                [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
-                while (abs(idxJ - idxI) <= 2
-                    or idxI == 0 and idxJ == popObj[rnd].seq.count - 1
-                    or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
+        if ('exchange' in neighRatio):
+            numExchange = (int)(neighRatio['exchange'] * popSize)
+            for k in range(numExchange):
+                rnd = random.randint(0, len(popObj) - 1)
+                if (popObj[rnd].seq.count > 4):
                     [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
-                popObj[rnd] = exchange(popObj[rnd], idxI, idxJ)
-                print("Exchange: ", popObj[rnd].score, popObj[rnd].dist)
+                    while (abs(idxJ - idxI) <= 2
+                        or idxI == 0 and idxJ == popObj[rnd].seq.count - 1
+                        or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
+                        [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
+                    popObj[rnd] = exchange(popObj[rnd], idxI, idxJ)
+                    print("Exchange: ", popObj[rnd].score, popObj[rnd].dist)
 
         # rotate
-        numRotate = (int)(neighRatio['rotate'] * popSize)
-        for k in range(numRotate):
-            rnd = random.randint(0, len(popObj) - 1)
-            if (popObj[rnd].seq.count > 4):
-                [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
-                while (abs(idxJ - idxI) <= 2
-                    or idxI == 0 and idxJ == popObj[rnd].seq.count - 1
-                    or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
+        if ('rotate' in neighRatio):
+            numRotate = (int)(neighRatio['rotate'] * popSize)
+            for k in range(numRotate):
+                rnd = random.randint(0, len(popObj) - 1)
+                if (popObj[rnd].seq.count > 4):
                     [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
-                popObj[rnd] = rotate(popObj[rnd], idxI, idxJ)
-                print("Rotate: ", popObj[rnd].score, popObj[rnd].dist)
+                    while (abs(idxJ - idxI) <= 2
+                        or idxI == 0 and idxJ == popObj[rnd].seq.count - 1
+                        or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
+                        [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
+                    popObj[rnd] = rotate(popObj[rnd], idxI, idxJ)
+                    print("Rotate: ", popObj[rnd].score, popObj[rnd].dist)
+
+        # random destroy and recreate
+        if ('rndDestroy' in neighRatio):
+            numRndDestory = (int)(neighRatio['rndDestroy'] * popSize)
+            for k in range(numRndDestory):
+                rnd = random.randint(0, len(popObj) - 1)
+                popObj[rnd] = rndDestroy(popObj[rnd])
+                print("Random destroy: ", popObj[rnd].score, popObj[rnd].dist)
 
         # Tournament
         while (len(popObj) > popSize):

@@ -37,3 +37,4 @@ from .op import *
 # Close enough TSP
 from .cetsp import *
 from .ceop import *
+from .gceop import *
