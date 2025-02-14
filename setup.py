@@ -7,7 +7,7 @@ long_description = """
 
 setuptools.setup(
 	name="geoVeRoPy",
-	version="0.0.58",
+	version="0.0.5",
 	author="Lan Peng",
 	author_email="lanpeng@shu.edu.cn",
 	description="VRP Solver",

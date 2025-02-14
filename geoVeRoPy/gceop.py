@@ -580,7 +580,8 @@ def solveGCEOP(
             'score': dashboard['bestScore'],
             'dist': dashboard['bestDist'],
             'seq': dashboard['bestSeq'],
-            'path': dashboard['bestChromo'].path
+            'path': dashboard['bestChromo'].path,
+            'runtime': (datetime.datetime.now() - startTime).total_seconds()
         })
 
         # Check stopping criteria
