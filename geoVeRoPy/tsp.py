@@ -75,6 +75,7 @@ def solveTSP(
             - meta: str, choose a metaheuristic improvement method
                 - meta = 'SimulatedAnnealing', use Simulated Annealing to improve a solution create by 'cons', choice of 'cons' are all construction heuristic available for 'Heuristic'
                 - meta = 'GeneticAlgorithm', use Genetic Algorithm to create solutions. Choice of 'cons' includes ['Random', 'RandomInsertion']
+                - meta = 'TabuSearch', use Tabu Search to improve a given solution.
 
     detailFlag: bool, optional, default as False
         If True, an additional field `vehicle` will be added into the solution, which can be used for animation. See :func:`~vrpSolver.plot.aniRouting()`.
@@ -239,7 +240,7 @@ def solveTSP(
             tsp['cons'] = kwargs['cons']
             tsp['meta'] = kwargs['meta']
         # Search based
-        elif (kwargs['meta'] in ['SimulatedAnnealing', 'ALNS', 'GRASP']):
+        elif (kwargs['meta'] in ['SimulatedAnnealing', 'TabuSearch', 'ALNS', 'GRASP']):
             # Two-phase: construction phase
             seqObj = _consTSP(
                 nodes = nodes,
@@ -1211,6 +1212,13 @@ def _metaLocalSearchTSP(seqObj, **kwargs):
             neighRatio = kwargs['neighRatio'], 
             coolRate = kwargs['coolRate'], 
             stop = kwargs['stop'])
+    elif (kwargs['meta'] == 'TabuSearch'):
+        seqObj = _metaTSPTabuSearch(
+            seqObj = seqObj,
+            maxTabuListLength = kwargs['maxTabuListLength'],
+            neighRatio = kwargs['neighRatio'],
+            neighNum = kwargs['neighNum'],
+            stop = kwargs['stop'])
     else:
         raise UnsupportedInputError("ERROR: Currently not support.")
 
@@ -1362,6 +1370,149 @@ def _consTSPChristofides(nodes, depotID, tau):
 def _consTSPCycleCover(depotID, tau):
     raise VrpSolverNotAvailableError("ERROR: vrpSolver has not implement this kwargs yet")
 
+def _metaTSPTabuSearch(seqObj, maxTabuListLength, neighRatio, neighNum, stop) -> dict:
+
+    # Subroutines to generate neighborhoods ===================================
+    # Swap i and i + 1
+    def swap(seqObjSwap, keyI):
+        oldDist = seqObjSwap.dist
+        nI = seqObjSwap.query(keyI)
+        seqObjSwap.swap(nI)
+        return
+
+    # Randomly exchange two vertices
+    def exchange(seqObjExchange, keyI, keyJ):
+        oldDist = seqObjExchange.dist
+        nI = seqObjExchange.query(keyI)
+        nJ = seqObjExchange.query(keyJ)
+        seqObjExchange.exchange(nI, nJ)
+        return
+        
+    # Randomly rotate part of seq
+    def rotate(seqObjRotate, keyI, keyJ):
+        oldDist = seqObjRotate.dist
+        nI = seqObjRotate.query(keyI)
+        nJ = seqObjRotate.query(keyJ)
+        seqObjRotate.rotate(nI, nJ)
+        return
+
+    # Initialize ==============================================================
+    tabu = []
+
+    # Initial Solution
+    curSeq = [i.key for i in seqObj.traverse()]
+    ofv = seqObj.dist
+    startTime = datetime.datetime.now()
+
+    # Main tabu ===============================================================
+    contFlag = True
+
+    iterTotal = 0
+    iterNoImp = 0
+    iterAcc = 0
+
+    while (contFlag):
+        iterTotal += 1
+
+        # Create a list of candidates =========================================
+        candi = []
+        for i in range(neighNum):
+            # Clone a current sequence
+            seqObjNew = seqObj.clone()
+
+            # Randomly create a neighbor
+            typeOfNeigh = rndPickFromDict(neighRatio)
+
+            # Randomly swap
+            if (typeOfNeigh == 'swap'):
+                curSeq = [f.key for f in seqObjNew.traverse()]
+                i = random.randint(0, len(curSeq) - 1)
+                keyI = curSeq[i]
+                swap(seqObjNew, keyI)
+                seqObjNew.rehead(0)
+                if (tuple([f.key for f in seqObjNew.traverse()]) not in tabu):
+                    candi.append(seqObjNew)
+
+            # Randomly exchange two digits
+            elif (typeOfNeigh == 'exchange'):
+                curSeq = [f.key for f in seqObj.traverse()]
+                i = None
+                j = None
+                while (i == None 
+                        or j == None 
+                        or abs(i - j) <= 2 
+                        or (i == 0 and j == len(curSeq) - 1) 
+                        or (i == len(curSeq) - 1 and j == 0)):
+                    i = random.randint(0, len(curSeq) - 1)
+                    j = random.randint(0, len(curSeq) - 1)
+                keyI = curSeq[i]
+                keyJ = curSeq[j]
+                exchange(seqObjNew, keyI, keyJ)
+                seqObjNew.rehead(0)
+                if (tuple([f.key for f in seqObjNew.traverse()]) not in tabu):
+                    candi.append(seqObjNew)
+
+            # Randomly reverse part of path
+            elif (typeOfNeigh == 'rotate'):
+                curSeq = [f.key for f in seqObj.traverse()]
+                i = None
+                j = None
+                while (i == None 
+                        or j == None 
+                        or abs(i - j) <= 2 
+                        or (i == 0 and j == len(curSeq) - 1) 
+                        or (i == len(curSeq) - 1 and j == 0)):
+                    i = random.randint(0, len(curSeq) - 1)
+                    j = random.randint(0, len(curSeq) - 1)
+                keyI = curSeq[i]
+                keyJ = curSeq[j]
+                rotate(seqObjNew, keyI, keyJ)
+                seqObjNew.rehead(0)
+                if (tuple([f.key for f in seqObjNew.traverse()]) not in tabu):
+                    candi.append(seqObjNew)
+
+        # Add all candidates into tabu list ===================================
+        for i in candi:
+            tabu.append(tuple([f.key for f in i.traverse()]))
+
+        # Find the best among candidates, if it improves, move to candidate ===
+        newOfvFound = False
+        if (len(candi) > 0):
+            bestSeq = seqObj.clone()
+            bestDist = seqObj.dist
+            for i in candi:
+                if (i.dist < bestDist):
+                    bestSeq = i
+                    bestDist = i.dist
+            seqObj = bestSeq.clone()
+            newOfvFound = True
+        if (not newOfvFound):
+            iterNoImp += 1
+
+        writeLog(hyphenStr())
+        writeLog("Iter: " + str(iterTotal) + 
+            "\nRuntime [s]: " + str(round((datetime.datetime.now() - startTime).total_seconds(), 2)) + 
+            "\nDist: " + str(seqObj.dist))
+
+        # Update tabu list to keep traceable ==================================
+        tabu = tabu[max((len(tabu) - maxTabuListLength), 0):-1]
+
+        # Check stopping criteria
+        if ('numNoImproveIter' in stop):
+            if (iterNoImp > stop['numNoImproveIter']):
+                contFlag = False
+                break
+        if ('numIter' in stop):
+            if (iterTotal > stop['numIter']):
+                contFlag = False
+                break
+        if ('runtime' in stop):
+            if ((datetime.datetime.now() - startTime).total_seconds() > stop['runtime']):
+                contFlag = False
+                break
+
+    return seqObj
+
 def _metaTSPSimulatedAnnealing(seqObj, initTemp, lengTemp, neighRatio, coolRate, stop) -> dict:
 
     # Subroutines to generate neighborhoods ===================================
@@ -1508,8 +1659,12 @@ def _metaTSPSimulatedAnnealing(seqObj, initTemp, lengTemp, neighRatio, coolRate,
 
             apRate = iterAcc / iterTotal
 
+            writeLog(hyphenStr())
+            writeLog("Iter: " + str(iterTotal) + 
+                "\nRuntime [s]: " + str(round((datetime.datetime.now() - startTime).total_seconds(), 2)) + 
+                "\nDist: " + str(seqObj.dist))
+
             # Check stopping criteria
-            endCriteria = None
             if ('finalTemp' in stop):
                 if (T < stop['finalTemp']):
                     contFlag = False
@@ -1720,6 +1875,11 @@ def _metaTSPGeneticAlgorithm(popObj, nodeObj, depotID, tau, asymFlag, neighRatio
         else:
             iterNoImp += 1
         iterTotal += 1
+
+        writeLog(hyphenStr())
+        writeLog("Iter: " + str(iterTotal) + 
+            "\nRuntime [s]: " + str(round((datetime.datetime.now() - startTime).total_seconds(), 2)) + 
+            "\nDist: " + str(dashboard['bestOfv']))
 
         # Check stopping criteria
         if ('numNoImproveIter' in stop):

@@ -23,6 +23,8 @@ def solveGCEOP(
     **kwargs
     ) -> dict | None:
 
+    DP = {}
+
     class chromosomeGCEOP:
         def __init__(self, startLoc, endLoc, nodes, seq, maxLength):
             # NOTE: seq以depotID开始和结束
@@ -43,33 +45,46 @@ def solveGCEOP(
             self.seq.rehead(0)
 
             # 转折点列表
-            self.turning = []
-            self.aggTurning = []
+            self.turning = [] # Format: [(nodeID, radiusIdx), (nodeID, radiusIdx), ...]
+            self.aggTurning = [] # Format: [[(nodeID, radiusIdx)], [(nodeID, radiusIdx), (nodeID, radiusIdx)], ...]
             # 穿越点列表
-            self.trespass = [] # 这里保存的是穿过的最小半径
+            self.trespass = [] # Format: [(nodeID, radiusIdx), (nodeID, radiusIdx), ...]
             # 未访问点及距离，暂存用，这里保存的是距离
             self.dist2NotInclude = {}
             # 补全
             self.seq2Path()
-
+        
         def getPath(self):
-            # 需要先得到一组turn point
+            # 需要先得到一组seq
             circles = []
             seqTra = [[n.key, n.value] for n in self.seq.traverse()]
             seqTra.append([0, 0])
-            for i in range(1, len(seqTra) - 1):
-                nodeID = seqTra[i][0]
-                radiusIdx = seqTra[i][1]
-                circles.append({
-                    'center': self.nodes[nodeID]['loc'],
-                    'radius': radiusList[radiusIdx] if radiusList != None else self.nodes[nodeID][radiusListFieldName][radiusIdx]
-                })
-            c2c = circle2CirclePath(
-                startPt = self.startLoc,
-                endPt = self.endLoc,
-                circles = circles,
-                algo = 'SOCP')
-            degen = seqRemoveDegen(seq = c2c['path'])
+
+            hashSeqTra = (tuple(i) for i in seqTra)
+
+            c2c = None
+            degen = None
+            if (hashSeqTra in DP):
+                c2c = DP[hashSeqTra]['c2c']
+                degen = DP[hashSeqTra]['degen']
+            else:
+                for i in range(1, len(seqTra) - 1):
+                    nodeID = seqTra[i][0]
+                    radiusIdx = seqTra[i][1]
+                    circles.append({
+                        'center': self.nodes[nodeID]['loc'],
+                        'radius': radiusList[radiusIdx] if radiusList != None else self.nodes[nodeID][radiusListFieldName][radiusIdx]
+                    })
+                c2c = circle2CirclePath(
+                    startPt = self.startLoc,
+                    endPt = self.endLoc,
+                    circles = circles,
+                    algo = 'SOCP')
+                degen = seqRemoveDegen(seq = c2c['path'])
+                DP[hashSeqTra] = {
+                    'c2c': c2c,
+                    'degen': degen
+                }
 
             # 找turn point
             self.turning = []
@@ -85,10 +100,10 @@ def solveGCEOP(
             self.dist2NotInclude = {}
             self.score = 0
             # 先判断每个点是不是trespass点，collect score
-            for i in self.nodes:                
-                nodesInTurning = []
-                for k in self.turning:
-                    nodesInTurning.append(k[0])
+            nodesInTurning = []
+            for k in self.turning:
+                nodesInTurning.append(k[0])
+            for i in self.nodes:
                 # 假如(i, x)都不在self.turning里，就计算下距离
                 if (i not in nodesInTurning):
                     res = distPt2Seq(
