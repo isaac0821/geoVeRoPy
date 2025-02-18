@@ -13,6 +13,119 @@ from .province import *
 from .geometry import *
 from .travel import *
 
+def findBoundingBox(
+    boundingBox = (None, None, None, None),
+    pts: list[pt] = None,
+    nodes: dict = None,
+    locFieldName = 'loc',
+    arcs: dict = None,
+    arcFieldName = 'arc',
+    arcStartLocFieldName = 'startLoc',
+    arcEndLocFieldName = 'endLoc',
+    poly: poly = None,
+    polys: polys = None, 
+    polygons: dict = None,
+    anchorFieldName: str = 'anchor',
+    polyFieldName: str = 'poly',
+    latLonFlag: bool = False,
+    edgeWidth: float = 0.1):
+
+    """
+    Given a list of objects, returns a bounding box of all given objects.
+
+    Parameters
+    ----------
+    boundingBox: list|tuple, optional, default as None
+        An existing bounding box
+    pts: list of pts, optional, default as None
+        A list of pts
+    nodes: dict, optional, default as None
+        A `nodes` dictionary
+    locFieldName: str, optional, default as 'loc'
+        The field in `nodes` indicates locations of nodes
+    arcs: dict, optional, default as None
+        An `arcs` dictionary
+    arcFieldName: str, optional, default as 'arc'
+        The field in `arcs` indicates locations of arcs
+    poly: poly, optional, default as None
+        A poly
+    polys: polys, optional, default as None
+        A list of polys
+    polygons: dict, optional, default as None
+        A `polygons` dictionary
+    anchorFieldName: str, optional, default as `anchor`
+        The field in `polygons` indicates anchor of each polygon
+    polyFieldName: str, optional, default as `poly`
+        The field in `polygons` indicates polygons
+    latLonFlag: bool, optional, default as True
+        True if x, y is reversed.
+    edgeWidth: float, optional, default as 0.1
+        The extra space around bounding box
+
+    Returns
+    -------
+    (float, float, float, float)
+        A bounding box
+
+    """
+
+    (xMin, xMax, yMin, yMax) = boundingBox
+    allX = []
+    allY = []
+    if (xMin != None):
+        allX.append(xMin)
+    if (xMax != None):
+        allX.append(xMax)
+    if (yMin != None):
+        allY.append(yMin)
+    if (yMax != None):
+        allY.append(yMax)
+
+    if (pts != None):
+        for pt in pts:
+            allX.append(pt[0])
+            allY.append(pt[1])
+    if (nodes != None):
+        for i in nodes:
+            allX.append(nodes[i][locFieldName][0])
+            allY.append(nodes[i][locFieldName][1])
+    if (arcs != None):
+        for i in arcs:
+            if (arcFieldName in arcs[i]):
+                allX.append(arcs[i][arcFieldName][0][0])
+                allX.append(arcs[i][arcFieldName][1][0])
+                allY.append(arcs[i][arcFieldName][0][1])
+                allY.append(arcs[i][arcFieldName][1][1])
+            elif (arcStartLocFieldName in arcs[i] and arcEndLocFieldName in arcs[i]):
+                allX.append(arcs[i][arcStartLocFieldName][0])
+                allY.append(arcs[i][arcStartLocFieldName][1])
+                allX.append(arcs[i][arcEndLocFieldName][0])
+                allY.append(arcs[i][arcEndLocFieldName][1])     
+    if (poly != None):
+        for pt in poly:
+            allX.append(pt[0])
+            allY.append(pt[1])
+    if (polys != None):
+        for poly in polys:
+            for pt in poly:
+                allX.append(pt[0])
+                allY.append(pt[1])
+    if (polygons != None):
+        for p in polygons:
+            for pt in polygons[p][polyFieldName]:
+                allX.append(pt[0])
+                allY.append(pt[1])
+
+    xMin = min(allX) - edgeWidth * abs(max(allX) - min(allX))
+    xMax = max(allX) + edgeWidth * abs(max(allX) - min(allX))
+    yMin = min(allY) - edgeWidth * abs(max(allY) - min(allY))
+    yMax = max(allY) + edgeWidth * abs(max(allY) - min(allY))
+
+    if (latLonFlag):
+        xMin, xMax, yMin, yMax = yMin, yMax, xMin, xMax
+
+    return (xMin, xMax, yMin, yMax)
+
 def findFigSize(
     boundingBox, 
     width = None, 

@@ -20,9 +20,26 @@ ERRTOL = {
     'vertical': 0.001
 }
 
+DEBUG = {
+    'DEBUG_WRITE_LOG': False,
+    'DEBUG_PRINT_LOG': True,
+    'DEBUG_LOG_PATH': "log.log"
+}
+
 def configSetError(errorType, err):
     global ERRTOL
-    ERRTOL[errorType] = err
+    if (errorType in ERRTOL):
+        ERRTOL[errorType] = err
+    else:
+        print(f"ERROR: {errorType} is not a valid ERRTOL parameter")
+    return
+
+def configSetLog(param, value):
+    global DEBUG
+    if (param in DEBUG):
+        DEBUG[param] = value
+    else:
+        print(f"ERROR: {param} is not a valid DEBUG parameter")
     return
 
 # Earth radius
@@ -36,13 +53,6 @@ poly = list[list[float]] | list[tuple[float, float]]
 polys = list[list[list[float]]] | list[list[tuple[float, float]]]
 circle = tuple[pt, float]
 line = list[pt]
-
-DEBUG = {
-    'DEBUG_WRITE_LOG': False,
-    'DEBUG_PRINT_LOG': True,
-    'DEBUG_LOG_PATH': "log.log"
-}
-
 
 class UnsupportedInputError(Exception):
     pass
@@ -185,12 +195,6 @@ def splitList(inputList, binNum):
         acc += sizePerBin[i]
     return bins
 
-def setLog(param, value):
-    global DEBUG
-    if (param in DEBUG):
-        DEBUG[param] = value
-    return
-
 def writeLog(string, logPath = None):
     if (DEBUG['DEBUG_WRITE_LOG']):
         if (logPath == None):
@@ -232,193 +236,6 @@ def splitIntoSubSeq(inputList, selectFlag):
     if (len(sub) > 0):
         splitSub.append([k for k in sub])
     return splitSub
-
-def findBoundingBox(
-    boundingBox = (None, None, None, None),
-    pts: list[pt] = None,
-    nodes: dict = None,
-    locFieldName = 'loc',
-    arcs: dict = None,
-    arcFieldName = 'arc',
-    arcStartLocFieldName = 'startLoc',
-    arcEndLocFieldName = 'endLoc',
-    poly: poly = None,
-    polys: polys = None, 
-    polygons: dict = None,
-    anchorFieldName: str = 'anchor',
-    polyFieldName: str = 'poly',
-    latLonFlag: bool = False,
-    edgeWidth: float = 0.1):
-
-    """
-    Given a list of objects, returns a bounding box of all given objects.
-
-    Parameters
-    ----------
-    boundingBox: list|tuple, optional, default as None
-        An existing bounding box
-    pts: list of pts, optional, default as None
-        A list of pts
-    nodes: dict, optional, default as None
-        A `nodes` dictionary
-    locFieldName: str, optional, default as 'loc'
-        The field in `nodes` indicates locations of nodes
-    arcs: dict, optional, default as None
-        An `arcs` dictionary
-    arcFieldName: str, optional, default as 'arc'
-        The field in `arcs` indicates locations of arcs
-    poly: poly, optional, default as None
-        A poly
-    polys: polys, optional, default as None
-        A list of polys
-    polygons: dict, optional, default as None
-        A `polygons` dictionary
-    anchorFieldName: str, optional, default as `anchor`
-        The field in `polygons` indicates anchor of each polygon
-    polyFieldName: str, optional, default as `poly`
-        The field in `polygons` indicates polygons
-    latLonFlag: bool, optional, default as True
-        True if x, y is reversed.
-    edgeWidth: float, optional, default as 0.1
-        The extra space around bounding box
-
-    Returns
-    -------
-    (float, float, float, float)
-        A bounding box
-
-    """
-
-    (xMin, xMax, yMin, yMax) = boundingBox
-    allX = []
-    allY = []
-    if (xMin != None):
-        allX.append(xMin)
-    if (xMax != None):
-        allX.append(xMax)
-    if (yMin != None):
-        allY.append(yMin)
-    if (yMax != None):
-        allY.append(yMax)
-
-    if (pts != None):
-        for pt in pts:
-            allX.append(pt[0])
-            allY.append(pt[1])
-    if (nodes != None):
-        for i in nodes:
-            allX.append(nodes[i][locFieldName][0])
-            allY.append(nodes[i][locFieldName][1])
-    if (arcs != None):
-        for i in arcs:
-            if (arcFieldName in arcs[i]):
-                allX.append(arcs[i][arcFieldName][0][0])
-                allX.append(arcs[i][arcFieldName][1][0])
-                allY.append(arcs[i][arcFieldName][0][1])
-                allY.append(arcs[i][arcFieldName][1][1])
-            elif (arcStartLocFieldName in arcs[i] and arcEndLocFieldName in arcs[i]):
-                allX.append(arcs[i][arcStartLocFieldName][0])
-                allY.append(arcs[i][arcStartLocFieldName][1])
-                allX.append(arcs[i][arcEndLocFieldName][0])
-                allY.append(arcs[i][arcEndLocFieldName][1])     
-    if (poly != None):
-        for pt in poly:
-            allX.append(pt[0])
-            allY.append(pt[1])
-    if (polys != None):
-        for poly in polys:
-            for pt in poly:
-                allX.append(pt[0])
-                allY.append(pt[1])
-    if (polygons != None):
-        for p in polygons:
-            for pt in polygons[p][polyFieldName]:
-                allX.append(pt[0])
-                allY.append(pt[1])
-
-    xMin = min(allX) - edgeWidth * abs(max(allX) - min(allX))
-    xMax = max(allX) + edgeWidth * abs(max(allX) - min(allX))
-    yMin = min(allY) - edgeWidth * abs(max(allY) - min(allY))
-    yMax = max(allY) + edgeWidth * abs(max(allY) - min(allY))
-
-    if (latLonFlag):
-        xMin, xMax, yMin, yMax = yMin, yMax, xMin, xMax
-
-    return (xMin, xMax, yMin, yMax)
- 
-def findBoundingBox3D(
-    boundingBox3D = (None, None, None, None, None, None),
-    pts3D: list[pt] = None,
-    cone: dict = None,
-    arcs: dict = None,
-    arcFieldName = 'arc',
-    arcStartLocFieldName = 'startLoc',
-    arcEndLocFieldName = 'endLoc',
-    latLonFlag: bool = False,
-    edgeWidth: float = 0.1):
-
-    (xMin, xMax, yMin, yMax, zMin, zMax) = boundingBox3D
-    allX = []
-    allY = []
-    allZ = []
-    if (xMin != None):
-        allX.append(xMin)
-    if (xMax != None):
-        allX.append(xMax)
-    if (yMin != None):
-        allY.append(yMin)
-    if (yMax != None):
-        allY.append(yMax)
-    if (zMin != None):
-        allZ.append(zMin)
-    if (zMax != None):
-        allZ.append(zMax)
-
-    if (pts3D != None):
-        for pt in pts3D:
-            allX.append(pt[0])
-            allY.append(pt[1])
-            allZ.append(pt[2])
-    if (arcs != None):
-        for i in arcs:
-            if (arcFieldName in arcs[i]):
-                allX.append(arcs[i][arcFieldName][0][0])
-                allX.append(arcs[i][arcFieldName][1][0])
-                allY.append(arcs[i][arcFieldName][0][1])
-                allY.append(arcs[i][arcFieldName][1][1])
-                allZ.append(arcs[i][arcFieldName][0][2])
-                allZ.append(arcs[i][arcFieldName][1][2])
-            elif (arcStartLocFieldName in arcs[i] and arcEndLocFieldName in arcs[i]):
-                allX.append(arcs[i][arcStartLocFieldName][0])
-                allY.append(arcs[i][arcStartLocFieldName][1])
-                allZ.append(arcs[i][arcStartLocFieldName][2])
-                allX.append(arcs[i][arcEndLocFieldName][0])
-                allY.append(arcs[i][arcEndLocFieldName][1])
-                allZ.append(arcs[i][arcEndLocFieldName][2])
-    if (cone != None):
-        # 顶点
-        allX.append(cone['center'][0])
-        allY.append(cone['center'][1])
-        allZ.append(cone['center'][2] if len(cone['center']) >= 3 else 0)
-        # 上边缘四个点
-        rMax = cone['maxHeight'] * cone['tanAlpha']
-        allX.append(cone['center'][0] + rMax)
-        allX.append(cone['center'][0] - rMax)
-        allY.append(cone['center'][1] + rMax)
-        allY.append(cone['center'][1] - rMax)
-        allZ.append(cone['center'][2] if len(cone['center']) >= 3 else 0 + cone['maxHeight'])
-
-    xMin = min(allX) - edgeWidth * abs(max(allX) - min(allX))
-    xMax = max(allX) + edgeWidth * abs(max(allX) - min(allX))
-    yMin = min(allY) - edgeWidth * abs(max(allY) - min(allY))
-    yMax = max(allY) + edgeWidth * abs(max(allY) - min(allY))
-    zMin = min(allZ) - edgeWidth * abs(max(allZ) - min(allZ))
-    zMax = max(allZ) + edgeWidth * abs(max(allZ) - min(allZ))
-
-    if (latLonFlag):
-        xMin, xMax, yMin, yMax = yMin, yMax, xMin, xMax
-
-    return (xMin, xMax, yMin, yMax, zMin, zMax)
 
 globalRuntimeAnalysis = {}
 # Support runtime tracking and store in dictionary of at most three level
