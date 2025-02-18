@@ -1483,10 +1483,12 @@ def _metaTSPTabuSearch(seqObj, maxTabuListLength, neighRatio, neighNum, stop) ->
             for i in candi:
                 if (i.dist < bestDist):
                     bestSeq = i
-                    bestDist = i.dist
+                    bestDist = i.dist                    
+                    newOfvFound = True                    
+        if (newOfvFound):
             seqObj = bestSeq.clone()
-            newOfvFound = True
-        if (not newOfvFound):
+            iterNoImp = 0
+        else:
             iterNoImp += 1
 
         writeLog(hyphenStr())
