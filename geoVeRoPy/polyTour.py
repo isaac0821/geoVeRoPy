@@ -374,8 +374,8 @@ def segSetSeq2Poly(seq: list, polygons: dict, polyFieldName: str = 'polygon', se
     """
 
     # NOTE: 简化线段，去掉穿越点，如果已经处理过了，就不用重复计算了
-    if (not seqDegenFlag):
-        seq = seqRemoveDegen(seq)['newSeq']
+    # if (not seqDegenFlag):
+    #     seq = seqRemoveDegen(seq)['newSeq']
 
     # Step 0: turnPts =========================================================
     # NOTE: 所有的转折点必须在一个多边形的边缘上，所以必须给每个turn point找到一个polygon
@@ -383,16 +383,27 @@ def segSetSeq2Poly(seq: list, polygons: dict, polyFieldName: str = 'polygon', se
     turnPts = {}
     for i in range(len(seq)):
         pt = seq[i]
-        # 记录到每个polygon的距离
+        # 记录到每个polygon的距离，找到最近的那个，得是它的交点
         tansPolys = []
         inerPolys = []
+        closestIdx = None
+        closestDist = float('inf')
+        foundClosest = False
         for p in polygons:
             d2Edge = distPt2Seq(pt = pt, seq = polygons[p][polyFieldName], closedFlag = True)
+            # 找到最近的
+            if (d2Edge < closestDist):
+                closestDist = d2Edge
+                closestIdx = p
             if (d2Edge <= ERRTOL['distPt2Poly']):
                 tansPolys.append(p)
+                foundClosest = True
                 inerPolys.append(p)
             if (p not in inerPolys and isPtInPoly(pt=pt, poly=polygons[p][polyFieldName])):
                 inerPolys.append(p)
+        if (foundClosest == False):
+            tansPolys.append(closestIdx)
+            inerPolys.append(closestIdx)
         turnPts[i] = {
             'loc': seq[i],
             'tansPolys': tansPolys,
@@ -1003,7 +1014,6 @@ def serviceTimeCETSP(
 
     return {
         'ofv': ofv,
-        # 'assignment': assignment,
         'timedSeq': timedSeq,
         'note': noteSeq
     }
