@@ -353,44 +353,152 @@ def ptSetSeq2Poly(seq, polygons:dict, polyFieldName = 'polygon'):
 
     return actions
 
+@runtime("segSetSeq2Circle")
 def segSetSeq2Circle(seq: list, circles: dict, seqDegenFlag: bool = False):
-
-
-    if (not seqDegenFlag):
+    if (seqDegenFlag):
         seq = seqRemoveDegen(seq)['newSeq']
 
     # Step 0: turnPts =========================================================
     # NOTE: 所有的转折点必须在一个多边形的边缘上，所以必须给每个turn point找到一个polygon
     # NOTE: 只有出现了转折点本身在一个多边形的边缘上才需要记录tangle的形式，否则都会作为seg的一部分
-    turnPts = {}
-    for i in range(len(seq)):
+    turnPts = {
+        0: {
+            'loc': seq[0],
+            'tangCircle': [],
+            'inerCircle': []
+        }
+    }
+    for i in range(1, len(seq) - 1):
         pt = seq[i]
-        # 记录到每个圆心的距离，找到最近的那个，得是它的交点
         tangCircle = []
-        inerCircle = []  
+        inerCircle = []
+
+        closestToBoundaryIdx = []
+        closestToBoundaryError = float('inf')
         for p in circles:
+            # 必须找到一个圆，如果找不到，就按最合适的那个算
             d2Circle = distEuclideanXY(pt, circles[p]['center'])
-            # 找到最近的
-            if (d2Edge < closestDist):
-                closestDist = d2Edge
-                closestIdx = p
-            if (d2Edge <= ERRTOL['distPt2Poly']):
+            if (d2Circle < circles[p]['radius'] - ERRTOL['distPt2Poly']):
+                inerCircle.append(p)
+            
+            if (circles[p]['radius'] + ERRTOL['distPt2Poly'] >= d2Circle >= circles[p]['radius'] - ERRTOL['distPt2Poly']):
                 tangCircle.append(p)
-                foundClosest = True
-                inerCircle.append(p)
-            if (p not in inerCircle and isPtInPoly(pt=pt, poly=polygons[p][polyFieldName])):
-                inerCircle.append(p)
-        if (foundClosest == False):
-            warnings.warn(f"WARNING: Distance exceeds error: {closestDist}")
-            tangCircle.append(closestIdx)
-            inerCircle.append(closestIdx)
+                if (p not in inerCircle):
+                    inerCircle.append(p)
+            else:
+                if (abs(d2Circle - circles[p]['radius']) < closestToBoundaryError):
+                    closestToBoundaryIdx = p
+                    closestToBoundaryError = abs(d2Circle - circles[p]['radius'])
+            # print(i, p, d2Circle)
+        if (len(tangCircle) == 0):
+            tangCircle.append(closestToBoundaryIdx)
+            inerCircle.append(closestToBoundaryIdx)
+            warnings.warn(f"WARNING: Did not find the corresponding circle for node {i}, the smallest error is {closestToBoundaryError}, to circle {closestToBoundaryIdx}")
+            # if (closestToBoundaryError > 10):
+            #     print("seq: ", seq)
+            #     print("circles: ", circles)
+            #     raise RuntimeError
         turnPts[i] = {
             'loc': seq[i],
             'tangCircle': tangCircle,
             'inerCircle': inerCircle
         }
+    turnPts[len(seq) - 1] = {
+        'loc': seq[-1],
+        'tangCircle': [],
+        'inerCircle': []
+    }
 
-@runtime("segSetSeq2Poly")
+    # Step 1: Initialize ======================================================
+    segIntCircle = {}
+    accMileage = 0
+    for i in range(len(seq) - 1):
+        segIntCircle[i] = {
+            'seg': [seq[i], seq[i + 1]],
+            'startMileage': accMileage,
+            'intCircles': [],
+            'stTangPt': None,
+        }
+        if (len(turnPts[i]['tangCircle']) > 0):
+            segIntCircle[i]['stTangPt'] = {
+                'shape': seq[i],
+                'type': 'Point',
+                'belong': turnPts[i]['inerCircle'],
+                'mileage': accMileage
+            }
+        accMileage += distEuclideanXY(seq[i], seq[i + 1])
+        segIntCircle[i]['endMileage'] = accMileage
+
+    # Step 2: For each segment, gets polygon intersected ======================
+    for i in segIntCircle:
+        segIntCircle[i]['intMileageList'] = []
+        st = segIntCircle[i]['startMileage']
+        ed = segIntCircle[i]['endMileage']
+
+        segIntCircle[i]['intMileageList'].append((st, -1, segIntCircle[i]['seg'][0], 'start'))
+
+        for p in circles:
+            # 如果有一段距离过短，视作点
+            if (is2PtsSame(seq[i], seq[i + 1])):
+                segIntCircle[i]['intMileageList'].append((st, p, seq[i], 'tangle'))
+            else:
+                segInt = intSeg2Circle(seg = [seq[i], seq[i + 1]], circle = circles[p], detailFlag = True)
+                # 如果交出一个线段，计算线段的起始结束mileage
+                if (segInt['status'] == 'Cross' and segInt['intersectType'] == 'Segment'):
+                    int1 = segInt['intersect'][0]
+                    int2 = segInt['intersect'][1]
+                    d1 = segInt['mileage'][0]
+                    d2 = segInt['mileage'][1]
+                    if (d1 < d2):
+                        segIntCircle[i]['intMileageList'].append((d1 + st, p, int1, 'enter'))
+                        segIntCircle[i]['intMileageList'].append((d2 + st, p, int2, 'leave'))
+                    else:
+                        segIntCircle[i]['intMileageList'].append((d2 + st, p, int2, 'enter'))
+                        segIntCircle[i]['intMileageList'].append((d1 + st, p, int1, 'leave'))
+                # 如果交出一个点，计算点的mileage
+                elif (segInt['status'] == 'Cross' and segInt['intersectType'] == 'Point'):
+                    intP = segInt['intersect']
+                    dP = segInt['mileage']
+                    segIntCircle[i]['intMileageList'].append((dP + st, p, intP, 'tangle'))
+
+        # 对intMileageList进行排序
+        segIntCircle[i]['intMileageList'].sort()
+        segIntCircle[i]['intMileageList'].append((ed, -1, segIntCircle[i]['seg'][1], 'end'))
+
+    # Step 3: Restore =========================================================
+    segSet = []
+    for i in segIntCircle:
+        circleInside = []
+        segIntCircle[i]['segSet'] = []
+        curMileage = segIntCircle[i]['startMileage']
+        curPt = segIntCircle[i]['seg'][0]
+        if (segIntCircle[i]['stTangPt'] != None):
+            segSet.append(segIntCircle[i]['stTangPt'])
+
+        for k in range(len(segIntCircle[i]['intMileageList'])):
+            # 下一个点
+            newMileage = segIntCircle[i]['intMileageList'][k][0]
+            newPt = segIntCircle[i]['intMileageList'][k][2]
+
+            # 如果mileage不增长，则不会单独交一段出来，除非是有tangle
+            if (abs(newMileage - curMileage) > ERRTOL['distPt2Pt']):
+                segSet.append({
+                    'shape': [curPt, newPt],
+                    'type': 'Segment',
+                    'belong': [k for k in circleInside],
+                    'mileage': [curMileage, newMileage]
+                    })
+                curMileage = newMileage
+                curPt = newPt
+
+            if (segIntCircle[i]['intMileageList'][k][3] == 'enter'):
+                circleInside.append(segIntCircle[i]['intMileageList'][k][1])
+
+            elif (segIntCircle[i]['intMileageList'][k][3] == 'leave'):
+                circleInside.remove(segIntCircle[i]['intMileageList'][k][1])
+
+    return segSet
+
 def segSetSeq2Poly(seq: list, polygons: dict, polyFieldName: str = 'polygon', seqDegenFlag: bool = False):
     """Given a sequence and a dictionary of polygons, finds the intersection between seq and polygons
 

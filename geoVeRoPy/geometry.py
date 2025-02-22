@@ -2038,7 +2038,7 @@ def intSeg2Circle(seg: line, circle: dict, detailFlag: bool = True):
                     'intersect': [intPt, seg[1]],
                     'intersectType': 'Segment',
                     'interiorFlag': True,
-                    'mileage': [distFromSeg0ToIntPt1, L]
+                    'mileage': [distFromSeg0ToIntPt, L]
                 }
             else:
                 return [intPt, seg[1]]
