@@ -481,7 +481,16 @@ def solveGCEOP(
     contFlag = True
     iterTotal = 0
     iterNoImp = 0
+
+    adaptMutation = {
+        'numIntraSwap': (int)(neighRatio['intraSwap'] * popSize),
+        'numInterSwap': (int)(neighRatio['interSwap'] * popSize),
+        'numExchange': (int)(neighRatio['exchange'] * popSize),
+        'numRotate': (int)(neighRatio['rotate'] * popSize),
+        'numRndDestory': (int)(neighRatio['rndDestroy'] * popSize),
+    }
     while (contFlag):
+
         # Crossover and create offspring
         while (len(popObj) <= (int)((1 + neighRatio['crossover']) * popSize)):
             # Randomly select two genes, the better gene has better chance to have offspring            
@@ -504,25 +513,26 @@ def solveGCEOP(
 
         # intraSwap
         if ('intraSwap' in neighRatio):
-            numIntraSwap = (int)(neighRatio['intraSwap'] * popSize)
-            for k in range(numIntraSwap):
+            for k in range(adaptMutation['numIntraSwap']):
                 rnd = random.randint(0, len(popObj) - 1)
+                scoreBefore = popObj[rnd].score
                 popObj[rnd] = intraSwap(popObj[rnd])
-                writeLog("IntraSwap - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
+                scoreAfter = popObj[rnd].score
+                writeLog("IntraSwap - Score: " + str(scoreBefore) + " => " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
         # interSwap
         if ('interSwap' in neighRatio):
-            numInterSwap = (int)(neighRatio['interSwap'] * popSize)
-            for k in range(numInterSwap):
+            for k in range(adaptMutation['numInterSwap']):
                 rnd = random.randint(0, len(popObj) - 1)            
                 idx = random.randint(0, popObj[rnd].seq.count - 1)
+                scoreBefore = popObj[rnd].score
                 popObj[rnd] = interSwap(popObj[rnd], idx)
-                writeLog("InterSwap - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
+                scoreAfter = popObj[rnd].score
+                writeLog("InterSwap - Score: " + str(scoreBefore) + " => " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
         # exchange
         if ('exchange' in neighRatio):
-            numExchange = (int)(neighRatio['exchange'] * popSize)
-            for k in range(numExchange):
+            for k in range(adaptMutation['numExchange']):
                 rnd = random.randint(0, len(popObj) - 1)
                 if (popObj[rnd].seq.count > 4):
                     [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
@@ -530,13 +540,14 @@ def solveGCEOP(
                         or idxI == 0 and idxJ == popObj[rnd].seq.count - 1
                         or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
                         [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
+                    scoreBefore = popObj[rnd].score
                     popObj[rnd] = exchange(popObj[rnd], idxI, idxJ)
-                    writeLog("Exchange - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
+                    scoreAfter = popObj[rnd].score
+                    writeLog("Exchange - Score: " + str(scoreBefore) + " => " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
         # rotate
         if ('rotate' in neighRatio):
-            numRotate = (int)(neighRatio['rotate'] * popSize)
-            for k in range(numRotate):
+            for k in range(adaptMutation['numRotate']):
                 rnd = random.randint(0, len(popObj) - 1)
                 if (popObj[rnd].seq.count > 4):
                     [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
@@ -544,16 +555,19 @@ def solveGCEOP(
                         or idxI == 0 and idxJ == popObj[rnd].seq.count - 1
                         or idxI == popObj[rnd].seq.count - 1 and idxJ == 0):
                         [idxI, idxJ] = random.sample([i for i in range(popObj[rnd].seq.count)], 2)
+                    scoreBefore = popObj[rnd].score
                     popObj[rnd] = rotate(popObj[rnd], idxI, idxJ)
-                    writeLog("Rotate - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
+                    scoreAfter = popObj[rnd].score
+                    writeLog("Rotate - Score: " + str(scoreBefore) + " => " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
         # random destroy and recreate
         if ('rndDestroy' in neighRatio):
-            numRndDestory = (int)(neighRatio['rndDestroy'] * popSize)
-            for k in range(numRndDestory):
+            for k in range(adaptMutation['numRndDestory']):
                 rnd = random.randint(0, len(popObj) - 1)
+                scoreBefore = popObj[rnd].score
                 popObj[rnd] = rndDestroy(popObj[rnd])
-                writeLog("Random R&R - Score: " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
+                scoreAfter = popObj[rnd].score
+                writeLog("Random R&R - Score: " + str(scoreBefore) + " => " + str(popObj[rnd].score) + "\tDist: " + str(popObj[rnd].dist))
 
         # Tournament
         while (len(popObj) > popSize):

@@ -12,6 +12,8 @@ def solveTSP(
     nodes: dict, 
     locFieldName: str = 'loc',
     depotID: int|str = 0,
+    startID: int|str = None,
+    endID: int|str = None,
     nodeIDs: list[int|str]|str = 'All',
     vehicles: dict = {0: {'speed': 1}},
     vehicleID: int|str = 0,
@@ -112,9 +114,19 @@ def solveTSP(
             for i in nodeIDs:
                 if (i not in nodes):
                     raise OutOfRangeError("ERROR: Node %s is not in `nodes`." % i)
-    if ((type(nodeIDs) == list and depotID not in nodeIDs)
-        or (nodeIDs == 'All' and depotID not in nodes)):
-        raise OutOfRangeError("ERROR: Cannot find `depotID` in given `nodes`/`nodeIDs`")
+    if (depotID != None): 
+        if ((type(nodeIDs) == list and depotID not in nodeIDs)
+            or (nodeIDs == 'All' and depotID not in nodes)):
+            raise OutOfRangeError("ERROR: Cannot find `depotID` in given `nodes`/`nodeIDs`")
+    elif (startID != None and endID != None):
+        if ((type(nodeIDs) == list and startID not in nodeIDs)
+            or (nodeIDs == 'All' and startID not in nodes)):
+            raise OutOfRangeError("ERROR: Cannot find `startID` in given `nodes`/`nodeIDs`")
+        if ((type(nodeIDs) == list and endID not in nodeIDs)
+            or (nodeIDs == 'All' and endID not in nodes)):
+            raise OutOfRangeError("ERROR: Cannot find `endID` in given `nodes`/`nodeIDs`")
+    if (depotID == None and (startID == None or endID == None)):
+        raise OutOfRangeError("ERROR: Need to specify depotID or both the startID and endID")
 
     # Check if detail information is needed ===================================
     if (detailFlag == True):
@@ -176,6 +188,15 @@ def solveTSP(
         if (tau[i, j] != tau[j, i]):
             asymFlag = True
             break
+
+    # Open TSP modify =========================================================
+    M = 0
+    for (i, j) in tau:
+        M += tau[i, j]
+    if (depotID == None and (startID != None and endID != None)):
+        depotID = endID
+        tau[startID, endID] = 0
+        tau[endID, startID] = 0
 
     # TSP =====================================================================
     startTime = datetime.datetime.now()
@@ -263,18 +284,36 @@ def solveTSP(
     # Fix the sequence to make it start from the depot ========================
     startIndex = 0
     seq = [i for i in tsp['seq']]
-    nodeSeq = []
-    for k in range(len(seq)):
-        if (seq[k] == depotID):
-            startIndex = k
-    if (startIndex <= len(seq) - 1):
-        for k in range(startIndex, len(seq) - 1):
-            nodeSeq.append(seq[k])
-    if (startIndex >= 0):
-        for k in range(0, startIndex):
-            nodeSeq.append(seq[k])
-    nodeSeq.append(depotID)
-    tsp['seq'] = nodeSeq
+    if (startID == None or endID == None):
+        nodeSeq = []
+        for k in range(len(seq)):
+            if (seq[k] == depotID):
+                startIndex = k
+        if (startIndex <= len(seq) - 1):
+            for k in range(startIndex, len(seq) - 1):
+                nodeSeq.append(seq[k])
+        if (startIndex >= 0):
+            for k in range(0, startIndex):
+                nodeSeq.append(seq[k])
+        nodeSeq.append(depotID)
+        tsp['seq'] = nodeSeq
+    else:
+        nodeSeq = []
+        arcs = []
+        for i in range(-1, len(seq) - 1):
+            arcs.append((seq[i], seq[i + 1]))
+        if ((startID, endID) in arcs):
+            seq.reverse()
+        for k in range(len(seq)):
+            if (seq[k] == startID):
+                startIndex = k
+        if (startIndex <= len(seq) - 1):
+            for k in range(startIndex, len(seq) - 1):
+                nodeSeq.append(seq[k])
+        if (startIndex >= 0):
+            for k in range(0, startIndex):
+                nodeSeq.append(seq[k])
+        tsp['seq'] = nodeSeq
 
     # Add service time if provided ============================================
     hasServiceTimeInfoFlag = False

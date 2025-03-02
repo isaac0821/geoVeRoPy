@@ -701,7 +701,10 @@ def plotArcs(
         dy = y2 - y1
         if (arcColor == 'Random'):
             rndRGB = rndColor()
-            ax.plot([x1, x2], [y1, y2], color = rndRGB, linewidth=arcWidth, linestyle = arcStyle, dashes = arcDashes)
+            if (arcDashes == None):
+                ax.plot([x1, x2], [y1, y2], color = rndRGB, linewidth=arcWidth, linestyle = arcStyle)
+            else:
+                ax.plot([x1, x2], [y1, y2], color = rndRGB, linewidth=arcWidth, linestyle = arcStyle, dashes = arcDashes)
             if (arrowFlag):
                 deg = headingXY([x1, y1], [x2, y2])
                 ptC = [x1 + (x2 - x1) * arrowPosition, y1 + (y2 - y1) * arrowPosition]
@@ -712,7 +715,10 @@ def plotArcs(
                 ax.fill([ptH[0], pt1[0], pt2[0]], [ptH[1], pt1[1], pt2[1]], facecolor=rndRGB, edgecolor=rndRGB, linewidth=0)
                 # ax.arrow(x=x1, y=y1, dx=dx * arrowPosition, dy=dy * arrowPosition, linewidth=arcWidth, head_width=arrowHeadWidth, head_length=arrowHeadLength, color=rndRGB)
         else:
-            ax.plot([x1, x2], [y1, y2], color = arcColor, linewidth=arcWidth, linestyle = arcStyle, dashes = arcDashes)
+            if (arcDashes == None):
+                ax.plot([x1, x2], [y1, y2], color = arcColor, linewidth=arcWidth, linestyle = arcStyle)
+            else:
+                ax.plot([x1, x2], [y1, y2], color = arcColor, linewidth=arcWidth, linestyle = arcStyle, dashes = arcDashes)
             if (arrowFlag):
                 deg = headingXY([x1, y1], [x2, y2])
                 ptC = [x1 + (x2 - x1) * arrowPosition, y1 + (y2 - y1) * arrowPosition]
