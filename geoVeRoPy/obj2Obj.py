@@ -396,6 +396,7 @@ def circle2CirclePath(startPt: pt, endPt: pt, circles: list[dict], algo: str = '
             outputFlag = False
             if ('outputFlag' in kwargs):
                 outputFlag = kwargs['outputFlag']
+            # print(circles)
             res = _circle2CirclePathGurobi(startPt, endPt, circles, outputFlag)
         elif (kwargs['solver'] == 'COPT'):
             outputFlag = False

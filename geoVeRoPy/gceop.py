@@ -632,9 +632,9 @@ def solveGCEOP(
         'score': dashboard['bestScore'],
         'dist': dashboard['bestDist'],
         'seq': dashboard['bestSeq'],
-        'chromo': dashboard['bestChromo'],
         'path': dashboard['bestChromo'].path,
         'runtime': runtime,
         'convergence': convergence,
-        'popObj': popObj
+        'neighRatio': neighRatio,
+        'maxLength': maxLength
     }
