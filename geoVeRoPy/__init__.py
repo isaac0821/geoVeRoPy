@@ -1,4 +1,4 @@
-__version__ = "0.0.5"
+__version__ = "0.0.10"
 __author__ = "Lan Peng"
 
 # A few SE tips/notes =========================================================
@@ -27,6 +27,7 @@ from .instance import *
 from .geometry import *
 from .obj2Obj import *
 from .polyTour import *
+from .vector import *
 
 # TSP/VRP
 from .tsp import *
@@ -38,3 +39,5 @@ from .op import *
 from .cetsp import *
 from .ceop import *
 from .gceop import *
+
+from .mttsp import *

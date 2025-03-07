@@ -850,6 +850,16 @@ def rndNodeNeighbors(
 
     return nodes
 
+def rndNodeTimeDependentNeighbors(    nodes: dict,
+    nodeIDs: list[int|str]|str = 'All', 
+    shape: str = 'Circle',
+    locFieldName = 'loc',
+    neighborFieldName = 'neighbor',
+    **kwargs
+    ) -> dict:
+
+    return nodes
+
 def rndArcs(
     A: int|None = None,
     arcIDs: list[int|str] = [],

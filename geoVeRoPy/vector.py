@@ -90,7 +90,7 @@ def timedSeg2Vec(timedSeg):
     ly = dy * dt / l
     return timedSeg[0][0], (lx, ly)
 
-def distVec2Vec(pt1, vec1, pt2, vec2, earliest:None|float = None, latest:None|float = None):
+def distVec2Vec(pt1, vec1, pt2, vec2):
     # NOTE: 俩点同时都在动
     # NOTE: 这段代码目前先用gurobi来做，之后要换成O(1)代入公式
     x1, y1 = pt1
@@ -103,18 +103,14 @@ def distVec2Vec(pt1, vec1, pt2, vec2, earliest:None|float = None, latest:None|fl
 
     # Decision variables ======================================================
     d = model.addVar(vtype=grb.GRB.CONTINUOUS, obj=1)
-    t = model.addVar(vtype=grb.GRB.CONTINUOUS)
+    t = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = 0)
     dx = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
     dy = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
 
     # Constraints =============================================================
     model.addConstr(dx == (x1 - x2) + t * (vx1 - vx2))
     model.addConstr(dy == (y1 - y2) + t * (vy1 - vy2))
-    model.addConstr(d ** 2 >= dx ** 2 + dy ** 2)
-    if (earliest != None):
-        model.addConstr(t >= earliest)
-    if (latest != None):
-        model.addConstr(t <= latest)
+    model.addQConstr(d ** 2 >= dx ** 2 + dy ** 2)
 
     # Optimize ================================================================
     model.modelSense = grb.GRB.MINIMIZE
