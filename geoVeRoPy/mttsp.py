@@ -267,3 +267,166 @@ def solveMTTSP(
         'cutCount': cutCount,
         'zBar': zBar
     }
+
+def solveMTTSP_MISOCP(
+    startLoc: pt,
+    endLoc: pt,
+    nodes: dict, # 1 => n
+    vehSpeed: float,
+    timeLimit: None|float = None
+    ) -> dict | None:
+
+    # Model initialization ====================================================
+    MTTSP = grb.Model("MTTSP")
+    MTTSP.setParam('OutputFlag', 1)
+    if (timeLimit != None):
+        MTTSP.setParam(grb.GRB.Param.TimeLimit, timeLimit)
+    convergence = []
+    repSeqHis = {}
+    GBDCuts = []
+
+    startTime = datetime.datetime.now()
+
+    # Define sets
+    startID = 0
+    endID = len(nodes) + 1
+    nodeAll = [i for i in range(0, len(nodes) + 2)]
+    nodeFrom = [i for i in range(0, len(nodes) + 1)]
+    nodeTo = [i for i in range(1, len(nodes) + 2)]
+
+    # Decision variables ======================================================
+    # e[i,j] == 1 if target i is visited instantly prior to j
+    e = {}
+    for i in nodeFrom:
+        for j in nodeTo:
+            if (i != j):
+                e[i, j] = MTTSP.addVar(
+                    vtype = grb.GRB.BINARY, 
+                    name = 'e_%s_%s' % (i, j))
+
+    t = {}
+    t[0] = 0
+    for i in nodeTo:
+        t[i] = MTTSP.addVar(vtype = grb.GRB.CONTINUOUS, name = 't_%s' % i)
+
+    x = {}
+    y = {}
+    for i in nodes:
+        x[i] = MTTSP.addVar(vtype = grb.GRB.CONTINUOUS, name = 'x_%s' % i, lb = -float('inf'))
+        y[i] = MTTSP.addVar(vtype = grb.GRB.CONTINUOUS, name = 'y_%s' % i, lb = -float('inf'))
+    x[startID] = startLoc[0]
+    x[endID] = endLoc[0]
+    y[startID] = startLoc[1]
+    y[endID] = endLoc[1]
+
+    d = {}
+    dx = {}
+    dy = {}
+    for i in nodeFrom:
+        for j in nodeTo:
+            d[i, j] = MTTSP.addVar(vtype = grb.GRB.CONTINUOUS, name = 'd_%s_%s' % (i, j))
+            dx[i, j] = MTTSP.addVar(vtype = grb.GRB.CONTINUOUS, name = 'dx_%s_%s' % (i, j), lb = -float('inf'))
+            dy[i, j] = MTTSP.addVar(vtype = grb.GRB.CONTINUOUS, name = 'dy_%s_%s' % (i, j), lb = -float('inf'))
+    # d[endID, startID] = 0
+
+    # Objective function ======================================================
+    MTTSP.setObjective(t[endID] * vehSpeed)
+    MTTSP.modelSense = grb.GRB.MINIMIZE
+    MTTSP.update()
+
+    # TSP constraints =========================================================
+    for i in nodeFrom:
+        MTTSP.addConstr(grb.quicksum(e[i, j] for j in nodeTo if i != j and (i, j) in e) == 1)
+    for i in nodeTo:
+        MTTSP.addConstr(grb.quicksum(e[j, i] for j in nodeFrom if i != j and (j, i) in e) == 1)
+
+    for i in nodes:
+        MTTSP.addConstr(x[i] == nodes[i]['loc'][0] + t[i] * nodes[i]['vec'][0])
+        MTTSP.addConstr(y[i] == nodes[i]['loc'][1] + t[i] * nodes[i]['vec'][1])
+
+    M = 5000
+    for i in nodeFrom:
+        for j in nodeTo:
+            if (i != j):
+                MTTSP.addConstr(dx[i, j] == x[j] - x[i])
+                MTTSP.addConstr(dy[i, j] == y[j] - y[i])
+                MTTSP.addQConstr(dx[i, j] ** 2 + dy[i, j] ** 2 <= d[i, j] ** 2)
+                MTTSP.addConstr(t[i] + (1 / vehSpeed) * d[i, j] <= t[j] + M * (1 - e[i, j]))
+
+    # TSP with no callback ====================================================
+    MTTSP.update()
+    MTTSP.optimize()
+
+    # Reconstruct solution ====================================================
+    ofv = None
+    seq = []
+    activeX = []
+    solType = None
+    gap = None
+    lb = None
+    ub = None
+    runtime = None
+
+    for i in nodeTo:
+        print(f"t[{i}] = {t[i].x}")
+    for i in nodes:
+        print(f"x[{i}] = {x[i].x}, y[{i}] = {y[i].x}")
+    for i, j in e:
+        print(f"e[{i}, {j}] = {e[i, j].x}")
+    for i, j in d:
+        print(f"d[{i}, {j}] = {d[i, j].x}")
+
+    # return
+
+    ofv = MTTSP.getObjective().getValue()
+    for i, j in e: 
+        if (e[i, j].x > 0.5):
+            activeX.append([i, j])
+    currentNode = startID
+    seq.append(currentNode)
+    while (len(activeX) > 0):
+        for i in range(len(activeX)):
+            if (activeX[i][0] == currentNode):
+                currentNode = activeX[i][1]
+                seq.append(currentNode)
+                activeX.pop(i)
+                break
+    # seq = seq[:-1]
+    vecs = []
+    for i in range(1, len(seq) - 1):
+        vecs.append({
+            'loc': nodes[seq[i]]['loc'],
+            'vec': nodes[seq[i]]['vec'] 
+        })
+    v2v = vec2VecPath(startLoc, endLoc, vecs, vehSpeed)
+    timedSeq = seq2TimedSeq(seq = v2v['path'], vehSpeed = vehSpeed)
+
+    if (MTTSP.status == grb.GRB.status.OPTIMAL):
+        solType = 'IP_Optimal'
+        gap = 0
+        lb = ofv
+        ub = ofv
+        runtime = MTTSP.Runtime
+    elif (MTTSP.status == grb.GRB.status.TIME_LIMIT):
+        solType = 'IP_TimeLimit'
+        gap = MTTSP.MIPGap
+        lb = MTTSP.ObjBoundC
+        ub = MTTSP.ObjVal
+        runtime = MTTSP.Runtime
+    else:
+        return None
+
+    return {
+        'ofv': ofv,
+        'dist': v2v['dist'],
+        'seq': seq,
+        'timedSeq': timedSeq,
+        'path': v2v['path'],
+        'gap': gap,
+        'solType': solType,
+        'lowerBound': lb,
+        'upperBound': ub,
+        'runtime': runtime,
+    }
+
+
