@@ -82,10 +82,6 @@ def solveMTTSP(
         MTTSP.addConstr(grb.quicksum(e[j, i] for j in nodeFrom if i != j and (j, i) in e) == 1)
     MTTSP.addConstr(e[endID, startID] == 1)
 
-    # a = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-    # for i in range(len(a) - 1):
-    #     MTTSP.addConstr(e[a[i], a[i + 1]] == 1)
-
     MTTSP._e = e
     MTTSP._theta = theta
     def GBDCutInfo(coeff, dvSeq, note) -> str:
@@ -191,7 +187,6 @@ def solveMTTSP(
                         'coeff': [i for i in coeff],
                         'dvSeq': [i for i in dvSeq]
                     })
-
 
                 objBound = model.cbGet(grb.GRB.Callback.MIPSOL_OBJBND)
                 objIncum = model.cbGet(grb.GRB.Callback.MIPSOL_OBJBST)
