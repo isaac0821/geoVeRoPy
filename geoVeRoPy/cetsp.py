@@ -122,6 +122,7 @@ def solveCETSP(
                 nodes = nodes,
                 radius = kwargs['radius'] if 'radius' in kwargs else None,
                 radiusFieldName = kwargs['radiusFieldName'] if 'radiusFieldName' in kwargs else None,
+                c2cAlgo = kwargs['c2cAlgo'] if 'c2cAlgo' in kwargs else 'SOCP',
                 timeLimit = kwargs['timeLimit'] if 'timeLimit' in kwargs else None)
         elif (neighbor == 'Poly'):
             cetsp = _solveCETSPGBDPoly(
@@ -129,6 +130,7 @@ def solveCETSP(
                 endLoc = endLoc,
                 nodes = nodes,
                 polyFieldName = kwargs['polyFieldName'],
+                c2cAlgo = kwargs['c2cAlgo'] if 'c2cAlgo' in kwargs else 'SOCP',
                 timeLimit = kwargs['timeLimit'] if 'timeLimit' in kwargs else None)
         elif (neighbor == 'CircleLatLon'):
             polyXYMercator = {}
@@ -210,6 +212,7 @@ def _solveCETSPGBDCircle(
     nodes: dict,
     radius: float | None = None,
     radiusFieldName: str = 'radius',
+    c2cAlgo: str = 'SOCP',
     timeLimit: int | None = None
     ) -> dict | None:
 
@@ -380,7 +383,7 @@ def _solveCETSPGBDCircle(
                                 'center': nodes[i]['loc'],
                                 'radius': radius if radius != None else nodes[i][radiusFieldName]
                             })
-                    p2p = circle2CirclePath(startPt = startLoc, endPt = endLoc, circles = circles)
+                    p2p = circle2CirclePath(startPt = startLoc, endPt = endLoc, circles = circles, algo = c2cAlgo)
                     
                     minDist = float('inf')
                     for seq in repSeqHis:
@@ -453,7 +456,7 @@ def _solveCETSPGBDCircle(
                 'center': nodes[i]['loc'],
                 'radius': radius if radius != None else nodes[i][radiusFieldName]
             })
-    p2p = circle2CirclePath(startPt = startLoc, endPt = endLoc, circles = circles)
+    p2p = circle2CirclePath(startPt = startLoc, endPt = endLoc, circles = circles, algo = c2cAlgo)
 
     if (CETSP.status == grb.GRB.status.OPTIMAL):
         solType = 'IP_Optimal'
@@ -633,7 +636,7 @@ def _solveCETSPGBDPoly(
                     for i in repSeq:
                         if (i != startID and i != endID):
                             polys.append(nodes[i][polyFieldName])
-                    p2p = poly2PolyPath(startPt = startLoc, endPt = endLoc, polys = polys)
+                    p2p = poly2PolyPath(startPt = startLoc, endPt = endLoc, polys = polys, algo = c2cAlgo)
                     
                     minDist = float('inf')
                     for seq in repSeqHis:
@@ -703,7 +706,7 @@ def _solveCETSPGBDPoly(
     for i in seq:
         if (i != startID and i != endID):
             polys.append(nodes[i][polyFieldName])
-    p2p = poly2PolyPath(startPt = startLoc, endPt = endLoc, polys = polys)
+    p2p = poly2PolyPath(startPt = startLoc, endPt = endLoc, polys = polys, algo = c2cAlgo)
 
     if (CETSP.status == grb.GRB.status.OPTIMAL):
         solType = 'IP_Optimal'

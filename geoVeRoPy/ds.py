@@ -2,11 +2,12 @@ import math
 from .common import *
 
 class RingNode(object):
-    def __init__(self, key, value=None, prev: 'RingNode' = None, next: 'RingNode' = None):
+    def __init__(self, key, value=None, prev: 'RingNode' = None, next: 'RingNode' = None, **kwargs):
         self.key = key
         self.value = value if value != None else key
         self.prev = prev if prev != None else RingNilNode()
         self.next = next if next != None else RingNilNode()
+        self.__dict__.update(kwargs)
 
     def clone(self):
         newObj = RingNode(self.key, self.value)
@@ -567,6 +568,13 @@ class Tree(object):
             if (not treeNode.isChildren):
                 tra.extend(self._traverseChildren(treeNode))
         return tra
+
+# class BnBTreeNode(object):
+#     def __init__(self, key, rxSol, upper, lower, feaFlag):
+#         return
+
+# class BnBTree(Tree):
+#     def insert()
 
 class BSTreeNode(object):
     def __init__(self, key:int, value, parent:'BSTreeNode'=None, left:'BSTreeNode'=None, right:'BSTreeNode'=None):

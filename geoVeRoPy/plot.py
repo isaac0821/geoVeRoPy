@@ -886,6 +886,7 @@ def plotPathCover(
         edgeColor = 'gray',
         fillColor = 'gray',
         fillStyle = '///',
+        boundingBox = boundingBox,
         opacity = 0.3)
 
     for i in range(1, len(locSeq) - 1):
@@ -905,6 +906,7 @@ def plotPathCover(
                 edgeColor = 'gray',
                 fillColor = 'gray',
                 fillStyle = '///',
+                boundingBox = boundingBox,
                 opacity = 0.3)
         # 如果没有大于L
         else:
@@ -919,6 +921,7 @@ def plotPathCover(
                 edgeColor = 'gray',
                 fillColor = 'gray',
                 fillStyle = '///',
+                boundingBox = boundingBox,
                 opacity = 0.3)
 
     for i in range(len(locSeq) - 1):
@@ -944,6 +947,7 @@ def plotPathCover(
                 edgeColor = 'gray',
                 fillColor = 'gray',
                 fillStyle = '///',
+                boundingBox = boundingBox,
                 opacity = 0.3)
         # Case 2: L <= 2R
         elif (L > radius):
@@ -963,6 +967,7 @@ def plotPathCover(
                 edgeColor = 'gray',
                 fillColor = 'gray',
                 fillStyle = '///',
+                boundingBox = boundingBox,
                 opacity = 0.3)
             fig, ax = plotPoly(
                 fig = fig,
@@ -972,6 +977,7 @@ def plotPathCover(
                 edgeColor = 'gray',
                 fillColor = 'gray',
                 fillStyle = '///',
+                boundingBox = boundingBox,
                 opacity = 0.3)
         # Case 3: L < R
         elif (L < radius):
@@ -992,6 +998,7 @@ def plotPathCover(
                 edgeColor = 'gray',
                 fillColor = 'gray',
                 fillStyle = '///',
+                boundingBox = boundingBox,
                 opacity = 0.3)
             fig, ax = plotPoly(
                 fig = fig,
@@ -1001,6 +1008,7 @@ def plotPathCover(
                 edgeColor = 'gray',
                 fillColor = 'gray',
                 fillStyle = '///',
+                boundingBox = boundingBox,
                 opacity = 0.3)
 
     return fig, ax

@@ -90,6 +90,7 @@ def timedSeg2Vec(timedSeg):
     ly = dy * dt / l
     return timedSeg[0][0], (lx, ly)
 
+# [WRONG]
 def distVec2Vec(pt1, vec1, pt2, vec2):
     # NOTE: 俩点同时都在动
     # NOTE: 这段代码目前先用gurobi来做，之后要换成O(1)代入公式
@@ -102,14 +103,22 @@ def distVec2Vec(pt1, vec1, pt2, vec2):
     model.setParam("OutputFlag", 0)
 
     # Decision variables ======================================================
-    d = model.addVar(vtype=grb.GRB.CONTINUOUS, obj=1)
-    t = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = 0)
+    d = model.addVar(vtype=grb.GRB.CONTINUOUS, obj= 1)
+    t1 = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = 0)
+    t2 = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = 0)
+
     dx = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
     dy = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
+    ex = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
+    ey = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
 
     # Constraints =============================================================
-    model.addConstr(dx == (x1 - x2) + t * (vx1 - vx2))
-    model.addConstr(dy == (y1 - y2) + t * (vy1 - vy2))
+    model.addConstr(dx == x1 + t1 * vx1)
+    model.addConstr(dy == y1 + t1 * vy1)
+
+    model.addConstr(ex == x2 + t2 * vx2)
+    model.addConstr(ey == y2 + t2 * vy2)
+
     model.addQConstr(d ** 2 >= dx ** 2 + dy ** 2)
 
     # Optimize ================================================================
@@ -119,7 +128,7 @@ def distVec2Vec(pt1, vec1, pt2, vec2):
 
     return minDist
 
-def travelVec2Vec(pt1, vec1, pt2, vec2, speed, earliest:None|float = None, latest:None|float = None):
+def travelVec2Vec(pt1, vec1, pt2, vec2, speed):
     # NOTE: 俩点同时都在动
     # NOTE: 这段代码目前先用gurobi来做，之后要换成O(1)代入公式
     x1, y1 = pt1
@@ -133,22 +142,34 @@ def travelVec2Vec(pt1, vec1, pt2, vec2, speed, earliest:None|float = None, lates
     # Decision variables ======================================================
     d = model.addVar(vtype=grb.GRB.CONTINUOUS, obj=1)
 
+    # 出发点和到达点时刻
     t1 = model.addVar(vtype=grb.GRB.CONTINUOUS)
     t2 = model.addVar(vtype=grb.GRB.CONTINUOUS)
+
+    # 出发点和到达点位置
+    leaveX = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
+    leaveY = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
+
+    arriveX = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
+    arriveY = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
 
     dx = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
     dy = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
 
-    # Constraints =============================================================
-    model.addConstr(dx == x1 - x2 + t1 * vx1 - t2 * vx2)
-    model.addConstr(dy == y1 - y2 + t1 * vy1 - t2 * vy2)
-    model.addConstr(d ** 2 >= dx ** 2 + dy ** 2)
-    model.addConstr(t2 == t1 + d * (1 / speed))
+    model.update()
 
-    if (earliest != None):
-        model.addConstr(t1 >= earliest)
-    if (latest != None):
-        model.addConstr(t2 <= latest)
+    # Constraints =============================================================
+    model.addConstr(leaveX == x1 + t1 * vx1)
+    model.addConstr(leaveY == y1 + t1 * vy1)
+    model.addConstr(arriveX == x2 + t2 * vx2)
+    model.addConstr(arriveY == y2 + t2 * vy2)
+
+    model.addConstr(dx == arriveX - leaveX)
+    model.addConstr(dy == arriveY - leaveY)
+
+    model.addConstr(d ** 2 >= dx ** 2 + dy ** 2)
+    model.addConstr(t2 >= t1 + d * (1 / speed))
+
 
     # Optimize ================================================================
     model.modelSense = grb.GRB.MINIMIZE

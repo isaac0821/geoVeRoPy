@@ -3,6 +3,7 @@ import gurobipy as grb
 
 from .geometry import *
 from .ds import *
+from .common import *
 
 # obj2ObjPath =================================================================
 def poly2PolyPath(startPt: pt, endPt: pt, polys: polys, algo: str = 'SOCP', **kwargs):
@@ -38,10 +39,10 @@ def poly2PolyPath(startPt: pt, endPt: pt, polys: polys, algo: str = 'SOCP', **kw
 
     # Sanity check ============================================================
     if (algo == 'AdaptIter'):
-        errTol = errTol['deltaDist']
-        if ('errTol' in kwargs):
-            errTol = kwargs['errTol']
-        res = _poly2PolyPathAdaptIter(startPt, endPt, polys, errTol)
+        adaptErr = ERRTOL['deltaDist']
+        if ('adaptErr' in kwargs):
+            adaptErr = kwargs['adaptErr']
+        res = _poly2PolyPathAdaptIter(startPt, endPt, polys, adaptErr)
     elif (algo == 'SOCP'):
         outputFlag = False
         if ('outputFlag' in kwargs):
@@ -61,7 +62,7 @@ def poly2PolyPath(startPt: pt, endPt: pt, polys: polys, algo: str = 'SOCP', **kw
         'dist': res['dist']
     }
 
-def _poly2PolyPathAdaptIter(startPt: pt, endPt: pt, polys: polys, errTol):
+def _poly2PolyPathAdaptIter(startPt: pt, endPt: pt, polys: polys, adaptErr):
 
     """Given a list of points, each belongs to a neighborhood of a node, find the shortest path between each steps
 
@@ -198,7 +199,7 @@ def _poly2PolyPathAdaptIter(startPt: pt, endPt: pt, polys: polys, errTol):
             newDist += tau[(sp[i][0], sp[i][1]), (sp[i + 1][0], sp[i + 1][1])]
         newDist += distEuclideanXY(polyRings[sp[-2][0]].query(sp[-2][1]).value, endPt)
 
-        if (abs(newDist - dist) <= errTol):
+        if (abs(newDist - dist) <= adaptErr):
             refineFlag = False
 
         dist = newDist
@@ -391,7 +392,12 @@ def circle2CirclePath(startPt: pt, endPt: pt, circles: list[dict], algo: str = '
     if (algo == None):
         raise MissingParameterError("ERROR: Missing required field `algo`.")
 
-    if (algo == 'SOCP'):
+    if (algo == 'AdaptIter'):
+        adaptErr = ERRTOL['deltaDist']
+        if ('adaptErr' in kwargs):
+            adaptErr = kwargs['adaptErr']
+        res = _circle2CirclePathAdaptIter(startPt, endPt, circles, adaptErr)
+    elif (algo == 'SOCP'):
         if ('solver' not in kwargs or kwargs['solver'] == 'Gurobi'):
             outputFlag = False
             if ('outputFlag' in kwargs):
@@ -409,6 +415,196 @@ def circle2CirclePath(startPt: pt, endPt: pt, circles: list[dict], algo: str = '
     return {
         'path': res['path'],
         'dist': res['dist']
+    }
+
+def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], adaptErr, initLod: int = 4):
+
+    def getLocByDeg(circle, deg):
+        return (
+            circle['center'][0] + circle['radius'] * math.cos(math.radians(deg)),
+            circle['center'][1] + circle['radius'] * math.sin(math.radians(deg))
+        )
+
+    # First, create a ring, to help keying each extreme points of polygons
+    tau = {}
+
+    # Initialize
+    G = nx.Graph()
+    circleRings = []
+
+    # circleRing is keyed by index, valued by [degree, loc]
+    for c in circles:
+        circleRing = Ring()
+        for i in range(initLod):
+            deg = i * 360 / initLod
+            circleRing.append(RingNode(
+                key = i, 
+                deg = deg, 
+                loc = getLocByDeg(c, deg)))
+        circleRings.append(circleRing)
+
+    # startPt to the first polygon
+    cur = circleRings[0].head
+    while (True):
+        d = distEuclideanXY(startPt, cur.loc)
+        tau['s', (0, cur.key)] = d
+        G.add_edge('s', (0, cur.key), weight = d)
+        cur = cur.next
+        if (cur.key == circleRings[0].head.key):
+            break
+
+    # If more than one polygon btw startPt and endPt
+    for i in range(len(circles) - 1):
+        curI = circleRings[i].head
+        while (True):
+            curJ = circleRings[i + 1].head
+            while (True):
+                d = distEuclideanXY(curI.loc, curJ.loc)
+                tau[(i, curI.key), (i + 1, curJ.key)] = d
+                G.add_edge((i, curI.key), (i + 1, curJ.key), weight = d)
+                curJ = curJ.next
+                if (curJ.key == circleRings[i + 1].head.key):
+                    break
+            curI = curI.next
+            if (curI.key == circleRings[i].head.key):
+                break
+
+    # last polygon to endPt
+    cur = circleRings[-1].head
+    while (True):
+        d = distEuclideanXY(cur.loc, endPt)
+        tau[(len(circles) - 1, cur.key), 'e'] = d
+        G.add_edge((len(circles) - 1, cur.key), 'e', weight = d)
+        cur = cur.next
+        if (cur.key == circleRings[len(circles) - 1].head.key):
+            break
+
+    sp = nx.dijkstra_path(G, 's', 'e')
+
+    # sp[i] => (circleIdx, curKey)
+
+    dist = distEuclideanXY(startPt, circleRings[sp[1][0]].query(sp[1][1]).loc)
+    for i in range(1, len(sp) - 2):
+        dist += tau[(sp[i][0], sp[i][1]), (sp[i + 1][0], sp[i + 1][1])]
+    dist += distEuclideanXY(circleRings[sp[-2][0]].query(sp[-2][1]).loc, endPt)
+    
+    # Find detailed location
+    refineFlag = True
+    iterNum = 0
+    while (refineFlag):
+        # sp[0] is startLoc
+        # sp[-1] is endLoc
+        for i in range(1, len(sp) - 1):
+            # Find current shortest intersecting point
+            circIdx = sp[i][0]
+            inteKey = sp[i][1]
+
+            # Insert two new points before and after this point
+            p = circleRings[circIdx].query(inteKey)
+            pPrev = p.prev
+            pNext = p.next
+
+            # Get deg before and after current deg
+            pPrevMidDeg = None
+            pNextMidDeg = None
+
+            # If p.prev.deg > p.deg => p.prev -= 360
+            # If p.next.deg < p.deg => p.next += 360
+
+            pPrevDeg = p.prev.deg if (p.prev.deg < p.deg) else p.prev.deg - 360
+            pNextDeg = p.next.deg if (p.next.deg > p.deg) else p.next.deg + 360
+            pPrevMidDeg = p.prev.deg + (p.deg - p.prev.deg) / 2
+            pNextMidDeg = p.deg + (p.next.deg - p.deg) / 2
+            if (pPrevMidDeg < 0):
+                pPrevMidDeg += 360
+            if (pNextMidDeg > 360):
+                pNextMidDeg -= 360
+
+            pPrevMidLoc = getLocByDeg(circles[circIdx], pPrevMidDeg)
+            pNextMidLoc = getLocByDeg(circles[circIdx], pNextMidDeg)
+
+            pPrevMid = RingNode(circleRings[circIdx].count, deg = pPrevMidDeg, loc = pPrevMidLoc)
+            pNextMid = RingNode(circleRings[circIdx].count + 1, deg = pNextMidDeg, loc = pNextMidLoc)
+
+            circleRings[circIdx].insert(p, pNextMid)
+            circleRings[circIdx].insert(pPrev, pPrevMid)
+
+        # # Simplify the graph
+        # G = nx.Graph()
+        # # New start
+        # startPolyPt = circleRings[sp[1][0]].query(sp[1][1])
+        # startNearPt = [startPolyPt.prev.prev, startPolyPt.prev, startPolyPt, startPolyPt.next, startPolyPt.next.next]
+        # for p in startNearPt:
+        #     d = distEuclideanXY(startPt, p.loc)
+        #     G.add_edge('s', (0, p.key), weight = d)
+        # # In between
+        # for i in range(1, len(sp) - 2):
+        #     circIdx = sp[i][0]
+        #     circNextIdx = sp[i + 1][0]
+        #     inteKey = sp[i][1]
+        #     inteNextKey = sp[i + 1][1]
+        #     ptI = circleRings[circIdx].query(inteKey)
+        #     ptNearI = [ptI.prev.prev, ptI.prev, ptI, ptI.next, ptI.next.next]
+        #     ptJ = circleRings[circNextIdx].query(inteNextKey)
+        #     ptNearJ = [ptJ.prev.prev, ptJ.prev, ptJ, ptJ.next, ptJ.next.next]
+        #     for kI in ptNearI:
+        #         for kJ in ptNearJ:
+        #             d = None
+        #             if (((circIdx, kI.key), (circNextIdx, kJ.key)) in tau):
+        #                 d = tau[((circIdx, kI.key), (circNextIdx, kJ.key))]
+        #             else:
+        #                 d = distEuclideanXY(kI.loc, kJ.loc)
+        #                 tau[((circIdx, kI.key), (circNextIdx, kJ.key))] = d
+        #             G.add_edge((circIdx, kI.key), (circNextIdx, kJ.key), weight = d)
+        # # New end
+        # endPolyPt = circleRings[sp[-2][0]].query(sp[-2][1])
+        # endNearPt = [endPolyPt.prev.prev, endPolyPt.prev, endPolyPt, endPolyPt.next, endPolyPt.next.next]
+        # for p in endNearPt:
+        #     d = distEuclideanXY(p.loc, endPt)
+        #     G.add_edge((len(circles) - 1, p.key), 'e', weight = d)
+
+        # New start
+        for p in circleRings[sp[1][0]].traverse():
+            if (('s', (0, p.key)) not in G.edges):
+                d = distEuclideanXY(startPt, p.loc)
+                G.add_edge('s', (0, p.key), weight = d)
+        # In between
+        for i in range(1, len(sp) - 2):
+            circIdx = sp[i][0]
+            circNextIdx = sp[i + 1][0]
+            for kI in circleRings[circIdx].traverse():
+                for kJ in circleRings[circNextIdx].traverse():
+                    if (((circIdx, kI.key), (circNextIdx, kJ.key)) not in G.edges):
+                        d = distEuclideanXY(kI.loc, kJ.loc)
+                        G.add_edge((circIdx, kI.key), (circNextIdx, kJ.key), weight = d)
+        for p in circleRings[sp[-2][0]].traverse():
+            if (((len(circles) - 1, p.key), 'e') not in G.edges):
+                d = distEuclideanXY(p.loc, endPt)
+                G.add_edge((len(circles) - 1, p.key), 'e', weight = d)
+
+        sp = nx.dijkstra_path(G, 's', 'e')
+
+        newDist = distEuclideanXY(startPt, circleRings[sp[1][0]].query(sp[1][1]).loc)
+        for i in range(1, len(sp) - 2):
+            newDist += distEuclideanXY(
+                circleRings[sp[i][0]].query(sp[i][1]).loc,
+                circleRings[sp[i + 1][0]].query(sp[i + 1][1]).loc)
+        newDist += distEuclideanXY(circleRings[sp[-2][0]].query(sp[-2][1]).loc, endPt)
+
+        if (abs(newDist - dist) <= adaptErr):
+            refineFlag = False
+
+        dist = newDist
+
+    path = [startPt]
+    for p in sp:
+        if (p != 's' and p != 'e'):
+            path.append(circleRings[p[0]].query(p[1]).loc)
+    path.append(endPt)
+
+    return {
+        'path': path,
+        'dist': dist
     }
 
 def _circle2CirclePathGurobi(startPt: pt, endPt: pt, circles: list[dict], outputFlag: bool = False):
