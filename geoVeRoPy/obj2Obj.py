@@ -4,6 +4,7 @@ import gurobipy as grb
 from .geometry import *
 from .ds import *
 from .common import *
+# from .plot import *
 
 # obj2ObjPath =================================================================
 def poly2PolyPath(startPt: pt, endPt: pt, polys: polys, algo: str = 'SOCP', **kwargs):
@@ -396,7 +397,10 @@ def circle2CirclePath(startPt: pt, endPt: pt, circles: list[dict], algo: str = '
         adaptErr = ERRTOL['deltaDist']
         if ('adaptErr' in kwargs):
             adaptErr = kwargs['adaptErr']
-        res = _circle2CirclePathAdaptIter(startPt, endPt, circles, adaptErr)
+        initLod = 12
+        if ('initLod' in kwargs):
+            initLod = kwargs['initLod']
+        res = _circle2CirclePathAdaptIter(startPt, endPt, circles, adaptErr, initLod)
     elif (algo == 'SOCP'):
         if ('solver' not in kwargs or kwargs['solver'] == 'Gurobi'):
             outputFlag = False
@@ -425,10 +429,6 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
             circle['center'][1] + circle['radius'] * math.sin(math.radians(deg))
         )
 
-    # First, create a ring, to help keying each extreme points of polygons
-    tau = {}
-
-    # Initialize
     G = nx.Graph()
     circleRings = []
 
@@ -447,7 +447,6 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
     cur = circleRings[0].head
     while (True):
         d = distEuclideanXY(startPt, cur.loc)
-        tau['s', (0, cur.key)] = d
         G.add_edge('s', (0, cur.key), weight = d)
         cur = cur.next
         if (cur.key == circleRings[0].head.key):
@@ -460,7 +459,6 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
             curJ = circleRings[i + 1].head
             while (True):
                 d = distEuclideanXY(curI.loc, curJ.loc)
-                tau[(i, curI.key), (i + 1, curJ.key)] = d
                 G.add_edge((i, curI.key), (i + 1, curJ.key), weight = d)
                 curJ = curJ.next
                 if (curJ.key == circleRings[i + 1].head.key):
@@ -473,7 +471,6 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
     cur = circleRings[-1].head
     while (True):
         d = distEuclideanXY(cur.loc, endPt)
-        tau[(len(circles) - 1, cur.key), 'e'] = d
         G.add_edge((len(circles) - 1, cur.key), 'e', weight = d)
         cur = cur.next
         if (cur.key == circleRings[len(circles) - 1].head.key):
@@ -485,13 +482,18 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
 
     dist = distEuclideanXY(startPt, circleRings[sp[1][0]].query(sp[1][1]).loc)
     for i in range(1, len(sp) - 2):
-        dist += tau[(sp[i][0], sp[i][1]), (sp[i + 1][0], sp[i + 1][1])]
+        dist += distEuclideanXY(
+            circleRings[sp[i][0]].query(sp[i][1]).loc,
+            circleRings[sp[i + 1][0]].query(sp[i + 1][1]).loc)
     dist += distEuclideanXY(circleRings[sp[-2][0]].query(sp[-2][1]).loc, endPt)
     
+    iterNum = 0
+
     # Find detailed location
     refineFlag = True
     iterNum = 0
-    while (refineFlag):
+    # while (iterNum <= 10):
+    while(refineFlag):
         # sp[0] is startLoc
         # sp[-1] is endLoc
         for i in range(1, len(sp) - 1):
@@ -529,40 +531,6 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
             circleRings[circIdx].insert(p, pNextMid)
             circleRings[circIdx].insert(pPrev, pPrevMid)
 
-        # # Simplify the graph
-        # G = nx.Graph()
-        # # New start
-        # startPolyPt = circleRings[sp[1][0]].query(sp[1][1])
-        # startNearPt = [startPolyPt.prev.prev, startPolyPt.prev, startPolyPt, startPolyPt.next, startPolyPt.next.next]
-        # for p in startNearPt:
-        #     d = distEuclideanXY(startPt, p.loc)
-        #     G.add_edge('s', (0, p.key), weight = d)
-        # # In between
-        # for i in range(1, len(sp) - 2):
-        #     circIdx = sp[i][0]
-        #     circNextIdx = sp[i + 1][0]
-        #     inteKey = sp[i][1]
-        #     inteNextKey = sp[i + 1][1]
-        #     ptI = circleRings[circIdx].query(inteKey)
-        #     ptNearI = [ptI.prev.prev, ptI.prev, ptI, ptI.next, ptI.next.next]
-        #     ptJ = circleRings[circNextIdx].query(inteNextKey)
-        #     ptNearJ = [ptJ.prev.prev, ptJ.prev, ptJ, ptJ.next, ptJ.next.next]
-        #     for kI in ptNearI:
-        #         for kJ in ptNearJ:
-        #             d = None
-        #             if (((circIdx, kI.key), (circNextIdx, kJ.key)) in tau):
-        #                 d = tau[((circIdx, kI.key), (circNextIdx, kJ.key))]
-        #             else:
-        #                 d = distEuclideanXY(kI.loc, kJ.loc)
-        #                 tau[((circIdx, kI.key), (circNextIdx, kJ.key))] = d
-        #             G.add_edge((circIdx, kI.key), (circNextIdx, kJ.key), weight = d)
-        # # New end
-        # endPolyPt = circleRings[sp[-2][0]].query(sp[-2][1])
-        # endNearPt = [endPolyPt.prev.prev, endPolyPt.prev, endPolyPt, endPolyPt.next, endPolyPt.next.next]
-        # for p in endNearPt:
-        #     d = distEuclideanXY(p.loc, endPt)
-        #     G.add_edge((len(circles) - 1, p.key), 'e', weight = d)
-
         # New start
         for p in circleRings[sp[1][0]].traverse():
             if (('s', (0, p.key)) not in G.edges):
@@ -596,11 +564,45 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
 
         dist = newDist
 
+        # 测试
+        # fig, ax = None, None
+        # for i in circles:
+        #     fig, ax = plotCircle(
+        #         fig = fig,
+        #         ax = ax,
+        #         center = i['center'],
+        #         radius = i['radius'],
+        #         edgeColor = 'black',
+        #         fillColor = 'gray',
+        #         boundingBox = (-10, 110, -10, 110))
+        # locs = [startPt, endPt]
+        # for i in circleRings:
+        #     for c in i.traverse():
+        #         locs.append(c.loc)
+        # fig, ax = plotLocs(
+        #     fig = fig,
+        #     ax = ax,
+        #     locs = locs,
+        #     locColor = 'red',
+        #     locMarkerSize = 3)
+        # locSeq = [startPt]
+        # for i in range(1, len(sp) - 1):
+        #     locSeq.append(circleRings[sp[i][0]].query(sp[i][1]).loc)
+        # locSeq.append(endPt)
+        # fig, ax = plotLocSeq(
+        #     fig = fig,
+        #     ax = ax,
+        #     locSeq = locSeq,
+        #     lineColor = 'blue')
+        # fig.savefig(f"Iter_{iterNum}.png")
+        iterNum += 1
+
     path = [startPt]
     for p in sp:
         if (p != 's' and p != 'e'):
             path.append(circleRings[p[0]].query(p[1]).loc)
     path.append(endPt)
+    # print("Num of iter: ", iterNum)
 
     return {
         'path': path,

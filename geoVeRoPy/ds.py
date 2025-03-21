@@ -569,13 +569,6 @@ class Tree(object):
                 tra.extend(self._traverseChildren(treeNode))
         return tra
 
-# class BnBTreeNode(object):
-#     def __init__(self, key, rxSol, upper, lower, feaFlag):
-#         return
-
-# class BnBTree(Tree):
-#     def insert()
-
 class BSTreeNode(object):
     def __init__(self, key:int, value, parent:'BSTreeNode'=None, left:'BSTreeNode'=None, right:'BSTreeNode'=None):
         self.key = key

@@ -384,7 +384,7 @@ def _solveCETSPGBDCircle(
                                 'radius': radius if radius != None else nodes[i][radiusFieldName]
                             })
                     p2p = circle2CirclePath(startPt = startLoc, endPt = endLoc, circles = circles, algo = c2cAlgo)
-                    
+
                     minDist = float('inf')
                     for seq in repSeqHis:
                         if (repSeqHis[seq] < minDist):

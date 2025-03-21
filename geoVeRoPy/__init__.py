@@ -39,5 +39,6 @@ from .op import *
 from .cetsp import *
 from .ceop import *
 from .gceop import *
+from .serviceTime import *
 
 from .mttsp import *
