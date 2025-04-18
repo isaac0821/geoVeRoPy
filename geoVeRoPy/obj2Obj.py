@@ -2,7 +2,8 @@ import networkx as nx
 import gurobipy as grb
 
 from .geometry import *
-from .ds import *
+from .ring import *
+from .gridSurface import *
 from .common import *
 # from .plot import *
 
@@ -1011,6 +1012,130 @@ def vec2VecPath(startPt: pt, endPt: pt, vecs: list[dict], vehSpeed: float, confi
         t[i] = model.addVar(vtype=grb.GRB.CONTINUOUS, name = "t_%s" % i, lb=0, ub=float('inf'))
 
     # Constraints =============================================================
+    constr = {}
+    # Aux constr - dx dy
+    constr['dx_0'] = model.addConstr(dx[0] == x[1] - startPt[0])
+    constr['dy_0'] = model.addConstr(dy[0] == y[1] - startPt[1])
+    for i in range(1, len(vecs)):
+        constr[f'dx_{i}'] = model.addConstr(dx[i] == x[i + 1] - x[i])
+        constr[f'dy_{i}'] = model.addConstr(dy[i] == y[i + 1] - y[i])
+    constr[f'dx_{len(vecs)}'] = model.addConstr(dx[len(vecs)] == endPt[0] - x[len(vecs)])
+    constr[f'dy_{len(vecs)}'] = model.addConstr(dy[len(vecs)] == endPt[1] - y[len(vecs)])
+
+    # 相遇时的位置
+    for i in range(1, len(vecs) + 1):
+        constr[f'sx_{i}'] = model.addConstr(x[i] == sx[i] + t[i] * vx[i])
+        constr[f'sy_{i}'] = model.addConstr(y[i] == sy[i] + t[i] * vy[i])
+
+    # Distance btw visits
+    for i in range(len(vecs) + 1):
+        constr[f'd_{i}'] = model.addQConstr(d[i] ** 2 >= dx[i] ** 2 + dy[i] ** 2)
+
+    # 相遇点之间的距离
+    constr['t_0'] = model.addConstr(t[0] == 0)
+    for i in range(len(vecs) + 1):
+        constr[f't_{i}'] = model.addConstr(t[i + 1] == t[i] + d[i] * (1 / vehSpeed))
+
+    model.modelSense = grb.GRB.MINIMIZE
+    # model.write("SOCP.lp")
+    model.optimize()
+
+    # Post-processing =========================================================
+    ofv = None
+    path = [startPt]
+    timedSeq = [(startPt, 0)]
+    if (model.status == grb.GRB.status.OPTIMAL):
+        solType = 'IP_Optimal'
+        ofv = model.getObjective().getValue()
+        for i in x:
+            path.append((x[i].x, y[i].x))
+            timedSeq.append(((x[i].x, y[i].x), t[i].x))
+        path.append(endPt)
+        timedSeq.append((endPt, t[len(vecs) + 1].x))
+        for c in constr:
+            print(c, constr[c].Pi)
+        gap = 0
+        lb = ofv
+        ub = ofv
+        runtime = model.Runtime
+    elif (model.status == grb.GRB.status.TIME_LIMIT):
+        solType = 'IP_TimeLimit'
+        ofv = model.ObjVal
+        for i in x:
+            path.append((x[i].x, y[i].x))
+            timedSeq.append(((x[i].x, y[i].x), t[i].x))
+        path.append(endPt)
+        timedSeq.append((endPt, t[len(vecs) + 1].x))
+        gap = model.MIPGap
+        lb = model.ObjBoundC
+        ub = model.ObjVal
+        runtime = model.Runtime
+
+    return {
+        'dist': ofv,
+        'time': t[len(vecs)].x,
+        'path': path,
+        'timedSeq': timedSeq,
+        'runtime': runtime
+    }
+
+# [Working]
+def timedCircle2timedCirclePath(startPt: pt, endPt: pt, vecs: list[dict], radius: float, vehSpeed: float, config: dict = {'outputFlag': False}, closedFlag = False):
+    try:
+        import gurobipy as grb
+    except(ImportError):
+        raise ImportError("ERROR: Cannot find Gurobi")
+
+    model = grb.Model("SOCP")
+    if (config == None or 'outputFlag' not in config or config['outputFlag'] == False):
+        model.setParam('OutputFlag', 0)
+    else:
+        model.setParam('OutputFlag', 1)
+
+    if (config != None and 'gapTol' in config):
+        model.setParam('MIPGap', config['gapTol'])
+
+    model.setParam(grb.GRB.Param.TimeLimit, 15)
+
+    # Parameters ==============================================================
+    sx = {}
+    sy = {}
+    vx = {}
+    vy = {}
+    for i in range(1, len(vecs) + 1):
+        sx[i] = vecs[i - 1]['loc'][0]
+        sy[i] = vecs[i - 1]['loc'][1]
+        vx[i] = vecs[i - 1]['vec'][0]
+        vy[i] = vecs[i - 1]['vec'][1]
+
+    # Decision variables ======================================================
+    # (x[i], y[i]) 为第i个vec上相遇时的坐标
+    # NOTE: 只有vec上的是决策变量
+    # index = 1, 2, ..., len(vecs)
+    x = {}
+    y = {}
+    for i in range(1, len(vecs) + 1):
+        x[i] = model.addVar(vtype=grb.GRB.CONTINUOUS, name = "x_%s" % i, lb=-float('inf'), ub=float('inf'))
+        y[i] = model.addVar(vtype=grb.GRB.CONTINUOUS, name = "y_%s" % i, lb=-float('inf'), ub=float('inf'))
+
+    # d[i] 是 (x[i], y[i]) 到 (x[i + 1], y[i + 1])之间的距离
+    d = {}
+    for i in range(len(vecs) + 1):
+        d[i] = model.addVar(vtype = grb.GRB.CONTINUOUS, name = 'd_%s' % i)
+    model.setObjective(grb.quicksum(d[i] for i in range(len(vecs) + 1)), grb.GRB.MINIMIZE)
+
+    # Aux vars - distance between (x, y)
+    dx = {}
+    dy = {}
+    for i in range(len(vecs) + 1):
+        dx[i] = model.addVar(vtype = grb.GRB.CONTINUOUS, name = 'dx_%s' % i, lb = -float('inf'), ub = float('inf'))
+        dy[i] = model.addVar(vtype = grb.GRB.CONTINUOUS, name = 'dy_%s' % i, lb = -float('inf'), ub = float('inf'))
+
+    t = {}
+    for i in range(len(vecs) + 2):
+        t[i] = model.addVar(vtype=grb.GRB.CONTINUOUS, name = "t_%s" % i, lb=0, ub=float('inf'))
+
+    # Constraints =============================================================
     # Aux constr - dx dy
     model.addConstr(dx[0] == x[1] - startPt[0])
     model.addConstr(dy[0] == y[1] - startPt[1])
@@ -1074,3 +1199,12 @@ def vec2VecPath(startPt: pt, endPt: pt, vecs: list[dict], vehSpeed: float, confi
         'timedSeq': timedSeq,
         'runtime': runtime
     }
+
+def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:list[TriGridSurface], vehSpeed):
+    
+    # 先用贪婪的方法，找到由一个点出发最短的到下一个surface的
+    
+
+    # 开始迭代调整，从头到尾挤压
+
+    return

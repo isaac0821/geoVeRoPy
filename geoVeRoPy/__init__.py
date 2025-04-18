@@ -17,8 +17,12 @@ from .color import *
 from .province import *
 from .road import *
 
-# Basic modules
-from .ds import *
+# Data structures
+from .ring import *
+from .tree import *
+from .gridSurface import *
+
+# Visualize modules
 from .plot import *
 from .animation import *
 from .instance import *
@@ -38,7 +42,8 @@ from .op import *
 # Close enough TSP
 from .cetsp import *
 from .ceop import *
-from .gceop import *
+# from .gceop import *
 from .serviceTime import *
 
+# Moving target TSP
 from .mttsp import *

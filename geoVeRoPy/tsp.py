@@ -6,6 +6,7 @@ import networkx as nx
 from .common import *
 from .geometry import *
 from .msg import *
+from .ring import *
 from .travel import *
 
 def solveTSP(

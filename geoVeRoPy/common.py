@@ -49,8 +49,9 @@ CONST_EARTH_RADIUS_METERS = 6378137.0
 # Type alias
 pt = list[float] | tuple[float, float]
 pt3D = list[float] | tuple[float, float, float]
-poly = list[list[float]] | list[tuple[float, float]]
-polys = list[list[list[float]]] | list[list[tuple[float, float]]]
+poly = list[pt]
+polys = list[poly]
+timedPoly = list[list[poly, float]]
 circle = tuple[pt, float]
 line = list[pt]
 

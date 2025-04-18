@@ -317,9 +317,6 @@ def plotLocs3D(
     if (fig == None or ax == None):
         fig = plt.figure()
         ax = plt.axes(projection = '3d')
-        boundingBox3D = findBoundingBox3D(
-            boundingBox3D = boundingBox3D, 
-            pts3D = locs3D)
         (xMin, xMax, yMin, yMax, zMin, zMax) = boundingBox3D
         # (width, height) = findFigSize(boundingBox3D, figSize[0], figSize[1], latLonFlag)
         # fig.set_figwidth(width)
@@ -1136,9 +1133,6 @@ def plotLocSeq3D(
     if (fig == None or ax == None):
         fig = plt.figure()
         ax = plt.axes(projection = '3d')
-        boundingBox3D = findBoundingBox3D(
-            boundingBox3D = boundingBox3D, 
-            pts3D = locSeq3D)
         (xMin, xMax, yMin, yMax, zMin, zMax) = boundingBox3D
         # (width, height) = findFigSize(boundingBox3D, figSize[0], figSize[1], latLonFlag)
         # fig.set_figwidth(width)
@@ -1409,8 +1403,8 @@ def plotPoly(
 
     return fig, ax
 
-def plotPolyhedron3D(
-    polyhedron: poly, 
+def plotTimedPoly(
+    timedPoly: poly, 
     edgeWidth: float = 0.5,
     edgeColor: str|None = 'Random',
     fillColor: str|None = None,
@@ -2207,3 +2201,4 @@ def plotGantt(
         plt.close(fig)
 
     return fig, ax
+

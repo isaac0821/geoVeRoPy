@@ -14,7 +14,7 @@ import networkx as nx
 
 from .common import *
 from .msg import *
-from .ds import *
+from .tree import *
 
 # Relation between Pts ========================================================
 def is2PtsSame(pt1: pt, pt2: pt) -> bool:
@@ -34,10 +34,11 @@ def is2PtsSame(pt1: pt, pt2: pt) -> bool:
         True if two points are at the same location, False else-wise
 
     """
-    if (abs(pt1[0] - pt2[0]) >= ERRTOL['distPt2Pt']):
+    if (len(pt1) != len(pt2)):
         return False
-    if (abs(pt1[1] - pt2[1]) >= ERRTOL['distPt2Pt']):
-        return False
+    for k in range(len(pt1)):
+        if (abs(pt1[k] - pt2[k]) >= ERRTOL['distPt2Pt']):
+            return False
     return True
 
 def is3PtsClockWise(pt1: pt, pt2: pt, pt3: pt) -> bool | None:
@@ -376,7 +377,6 @@ def isPtOnPolyEdge(pt: pt, poly: poly) -> bool:
             return True
     return False
 
-@runtime("isPtInPoly")
 def isPtInPoly(pt: pt, poly: poly, interiorOnly: bool=False) -> bool:
     """
     Is a pt in the polygon?
@@ -1696,7 +1696,6 @@ def seqLinkSeq(seq1: list[pt], seq2: list[pt]):
     else:
         return None
 
-@runtime("intSeg2Poly")
 def intSeg2Poly(seg: line, poly: poly=None, polyShapely: shapely.Polygon=None, returnShaplelyObj: bool=False) -> dict | list[dict] | shapely.Point | shapely.Polygon | shapely.GeometryCollection:
     """
     The intersection of a line segment to a polygon
@@ -2379,7 +2378,6 @@ def distPt2Line(pt: pt, line: line) -> float:
     h = 2 * area / a
     return h
 
-@runtime("distPt2Seg")
 def distPt2Seg(pt: pt, seg: line, detailFlag: bool = False) -> float:
     # r = (A->P A->B) / (|AB|^2)
     AP = [pt[0] - seg[0][0], pt[1] - seg[0][1]]
@@ -2455,7 +2453,6 @@ def distPt2Ray(pt: pt, ray: line, detailFlag: bool = False) -> float:
     else:
         return d
 
-@runtime("distPt2Seq")
 def distPt2Seq(pt: pt, seq: list[pt], closedFlag: bool = False, detailFlag: bool = False) -> float:
     """
     The distance between a point and a sequence of points
@@ -3181,6 +3178,16 @@ def poly2CCW(poly) -> poly:
         return [poly[len(poly) - 1 - i] for i in range(len(poly))]
     else:
         return poly
+
+def polyConvexHull(pts: list[pt]) -> poly:
+    geo = shapely.MultiPoint([p for p in pts])
+    cvxShapley = shapely.convex_hull(geo)
+    cvx = [[i[0], i[1]] for i in list(cvxShapley.exterior.coords)]
+    noRepeatCvx = []
+    for i in cvx:
+        if (i not in noRepeatCvx):
+            noRepeatCvx.append(i)
+    return noRepeatCvx
 
 # Visibility check ============================================================
 def polysVisibleGraph(polys:polys) -> dict:
@@ -3930,7 +3937,10 @@ def distEuclideanXY(pt1: pt, pt2: pt) -> dict:
     dict
         A dictionary, with the distance in 'dist', and the path in 'path'
     """
-    return math.sqrt((pt1[0] - pt2[0]) ** 2 + (pt1[1] - pt2[1]) ** 2)
+    if (len(pt1) == 2):
+        return math.sqrt((pt1[0] - pt2[0]) ** 2 + (pt1[1] - pt2[1]) ** 2)
+    elif (len(pt1) == 3):
+        return math.sqrt((pt1[0] - pt2[0]) ** 2 + (pt1[1] - pt2[1]) ** 2 + (pt1[2] - pt2[2]) ** 2)
 
 def distManhattenXY(pt1: pt, pt2: pt, detailFlag: bool=False) -> dict:
     """

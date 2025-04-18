@@ -4,7 +4,6 @@ import networkx as nx
 from .geometry import *
 from .common import *
 from .msg import *
-from .ds import *
 
 # Distance between timed-objects ==============================================
 # [Constructing]
@@ -89,44 +88,6 @@ def timedSeg2Vec(timedSeg):
     lx = dx * dt / l 
     ly = dy * dt / l
     return timedSeg[0][0], (lx, ly)
-
-# [WRONG]
-def distVec2Vec(pt1, vec1, pt2, vec2):
-    # NOTE: 俩点同时都在动
-    # NOTE: 这段代码目前先用gurobi来做，之后要换成O(1)代入公式
-    x1, y1 = pt1
-    x2, y2 = pt2
-    vx1, vy1 = vec1
-    vx2, vy2 = vec2
-
-    model = grb.Model("SOCP")
-    model.setParam("OutputFlag", 0)
-
-    # Decision variables ======================================================
-    d = model.addVar(vtype=grb.GRB.CONTINUOUS, obj= 1)
-    t1 = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = 0)
-    t2 = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = 0)
-
-    dx = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
-    dy = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
-    ex = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
-    ey = model.addVar(vtype=grb.GRB.CONTINUOUS, lb = -float('inf'))
-
-    # Constraints =============================================================
-    model.addConstr(dx == x1 + t1 * vx1)
-    model.addConstr(dy == y1 + t1 * vy1)
-
-    model.addConstr(ex == x2 + t2 * vx2)
-    model.addConstr(ey == y2 + t2 * vy2)
-
-    model.addQConstr(d ** 2 >= dx ** 2 + dy ** 2)
-
-    # Optimize ================================================================
-    model.modelSense = grb.GRB.MINIMIZE
-    model.optimize()
-    minDist = model.getObjective().getValue()
-
-    return minDist
 
 def travelVec2Vec(pt1, vec1, pt2, vec2, speed):
     # NOTE: 俩点同时都在动

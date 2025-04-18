@@ -4,7 +4,6 @@ import networkx as nx
 from .geometry import *
 from .common import *
 from .msg import *
-from .ds import *
 
 # Mileage of points on seq ====================================================
 def mileagePt(seq: list[pt], pt: pt) -> None | float | list[float]:
@@ -72,7 +71,6 @@ def mileagePt(seq: list[pt], pt: pt) -> None | float | list[float]:
         return m
 
 # Path touring through polygons ===============================================
-@runtime("seqRemoveDegen")
 def seqRemoveDegen(seq: list[pt]):
     """
     Given a sequence of points, returns a subset of points that only includes turning points of the sequence. If there are multiple points overlapped at the same location, keeps one of those points.
@@ -353,7 +351,6 @@ def ptSetSeq2Poly(seq, polygons:dict, polyFieldName = 'polygon'):
 
     return actions
 
-@runtime("segSetSeq2Circle")
 def segSetSeq2Circle(seq: list, circles: dict, seqDegenFlag: bool = False):
     if (seqDegenFlag):
         seq = seqRemoveDegen(seq)['newSeq']

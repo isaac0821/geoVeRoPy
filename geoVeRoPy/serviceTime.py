@@ -2,7 +2,7 @@ import networkx as nx
 import gurobipy as grb
 
 from .geometry import *
-from .ds import *
+from .ring import *
 from .common import *
 from .plot import *
 
@@ -276,6 +276,5 @@ def c2cServicePathAdaptIter(
     return {
         'path': path,
         'travelTime': travelTime,
-        'G': G,
         'tau': tau
     }

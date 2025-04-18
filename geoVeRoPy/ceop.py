@@ -3,7 +3,7 @@ import random
 import shapely
 from shapely.geometry import mapping
 
-from .ds import *
+from .ring import *
 from .common import *
 from .geometry import *
 from .obj2Obj import *

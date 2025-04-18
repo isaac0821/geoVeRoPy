@@ -1115,7 +1115,7 @@ def _solveCETSPGACircle(
                             seq = degen['newSeq'],
                             closedFlag = False,
                             detailFlag = True)
-                        if (res['dist'] <=  radius if radius != None else self.nodes[i][radiusFieldName]):
+                        if (res['dist'] <= radius if radius != None else self.nodes[i][radiusFieldName]):
                             self.trespass.append(i)
                         else:
                             self.dist2NotInclude[i] = res
