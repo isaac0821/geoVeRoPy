@@ -6,6 +6,7 @@ from .common import *
 from .geometry import *
 from .msg import *
 from .road import *
+from .gridSurface import *
 
 def rndLocs(
     N: int, 
@@ -581,25 +582,6 @@ def rndNodeNeighbors(
                 nodes[n][locFieldName][1] + kwargs['radius'] * math.cos(2 * d * math.pi / lod),
             ] for d in range(lod + 1)]
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
-        
-    elif (shape == 'IsoCircle'):
-        for n in nodeIDs:
-            if ('radiusList' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'radiusList'")
-            # By default, a circle is plotted by a 30-gon
-            lod = 30
-            if ('lod' in kwargs and type(kwargs['lod']) == int):
-                lod = kwargs['lod']
-
-            nodes[n][neighborFieldName] = []
-            nodes[n]['neiShape'] = 'Isochrone'
-            nodes[n]['radiusList'] = kwargs['radiusList']
-            for r in kwargs['radiusList']:
-                poly = [[
-                    nodes[n][locFieldName][0] + r * math.sin(2 * d * math.pi / lod),
-                    nodes[n][locFieldName][1] + r * math.cos(2 * d * math.pi / lod),
-                ] for d in range(lod + 1)]
-                nodes[n][neighborFieldName].append([poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']])
 
     elif (shape == 'Egg'):
         for n in nodeIDs:
@@ -850,13 +832,151 @@ def rndNodeNeighbors(
 
     return nodes
 
-def rndNodeTimeDependentNeighbors(    nodes: dict,
+def rndNodeIsoNeighbors(
+    nodes: dict,
     nodeIDs: list[int|str]|str = 'All', 
-    shape: str = 'Circle',
+    shape: str = 'IsoCircle',
     locFieldName = 'loc',
     neighborFieldName = 'neighbor',
     **kwargs
     ) -> dict:
+
+    # Sanity check ============================================================
+    if (type(nodeIDs) is not list):
+        if (nodeIDs == 'All'):
+            nodeIDs = [i for i in nodes]
+        else:
+            for i in nodeIDs:
+                if (i not in nodes):
+                    raise OutOfRangeError("ERROR: Node %s is not in `nodes`." % i)
+
+    if (shape == 'IsoCircle'):
+        for n in nodeIDs:
+            if ('radiusList' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'radiusList'")
+            # By default, a circle is plotted by a 30-gon
+            lod = 30
+            if ('lod' in kwargs and type(kwargs['lod']) == int):
+                lod = kwargs['lod']
+
+            nodes[n][neighborFieldName] = []
+            nodes[n]['neiShape'] = 'Isochrone'
+            nodes[n]['radiusList'] = kwargs['radiusList']
+            for r in kwargs['radiusList']:
+                poly = [[
+                    nodes[n][locFieldName][0] + r * math.sin(2 * d * math.pi / lod),
+                    nodes[n][locFieldName][1] + r * math.cos(2 * d * math.pi / lod),
+                ] for d in range(lod + 1)]
+                nodes[n][neighborFieldName].append([poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']])
+    else:
+        raise UnsupportedInputError("ERROR: Unsupported option for `shape`.")
+
+    return nodes
+
+def rndNodeTimedNeighbors(
+    nodes: dict,
+    nodeIDs: list[int|str]|str = 'All', 
+    shape: str = 'Egg',
+    locFieldName = 'loc',
+    neighborFieldName = 'neighbor',
+    **kwargs
+    ) -> dict:
+
+    # Sanity check ============================================================
+    if (type(nodeIDs) is not list):
+        if (nodeIDs == 'All'):
+            nodeIDs = [i for i in nodes]
+        else:
+            for i in nodeIDs:
+                if (i not in nodes):
+                    raise OutOfRangeError("ERROR: Node %s is not in `nodes`." % i)
+
+    if (shape == 'Egg'):
+        for n in nodeIDs:
+            if ('T' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required arg 'T'.")
+            T = kwargs['T']
+            if ('dirT' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required arg 'dirT'.")
+            dirT = kwargs['dirT']
+
+            aT = None
+            bT = None
+            cT = None
+            if ('aT' not in kwargs or 'bT' not in kwargs or 'cT' not in kwargs):
+                if ('a' in kwargs and 'b' in kwargs and 'c' in kwargs):
+                    aT = [kwargs['a'] for k in range(len(T))]
+                    bT = [kwargs['b'] for k in range(len(T))]
+                    cT = [kwargs['c'] for k in range(len(T))]
+                else:
+                    raise MissingParameterError("ERROR: Missing required args 'a', 'b', and/or 'c'.")
+            else:        
+                # 先给出不同时刻的各个参数
+                aT = kwargs['aT']
+                bT = kwargs['bT']
+                cT = kwargs['cT']
+
+            lod = 30
+            if ('lod' in kwargs and type(kwargs['lod']) == int):
+                lod = kwargs['lod']
+
+            timedPoly = []
+
+            for k in range(len(T)):
+                # Formulation:
+                # \frac{x^2}{(a - b)x + ab} + \frac{y^2}{c^2} = 1
+                direction = dirT[k]
+                a = aT[k]
+                b = bT[k]
+                c = cT[k]
+                
+                vHLod = math.ceil(lod * 2 / 9)
+                vTLod = math.ceil(lod / 3)
+                hLod = math.ceil(lod * 2 / 3)
+
+                polyL = []
+                polyM = []
+                polyR = []
+                for d in range(vHLod + 1):
+                    y = c * 0.75 * d / vHLod
+                    A = 1
+                    B = (y ** 2 / c ** 2 - 1) * (a - b)
+                    C = (y ** 2 / c ** 2 - 1) * a * b
+                    X = (-B - math.sqrt(B ** 2 - 4 * A * C)) / (2 * A)
+                    polyL.append((X, y))
+                    xStart = X
+                for d in range(vTLod + 1):
+                    y = c * 0.4 * d / vHLod
+                    A = 1
+                    B = (y ** 2 / c ** 2 - 1) * (a - b)
+                    C = (y ** 2 / c ** 2 - 1) * a * b
+                    X = (-B + math.sqrt(B ** 2 - 4 * A * C)) / (2 * A)
+                    polyR.insert(0, (X, y))
+                    xEnd = X
+                for d in range(hLod + 1):
+                    x = xStart + (xEnd - xStart) * d / hLod
+                    Y = math.sqrt(c * c * (1 - (x * x) / ((a - b) * x + a * b)))
+                    polyM.append((x, Y))
+                polyHf = []
+                polyHf.extend(polyL)
+                polyHf.extend(polyM)
+                polyHf.extend(polyR)
+
+                polyB4Rot = [i for i in polyHf]
+                polyB4Rot.extend([(polyHf[len(polyHf) - 1 - k][0], - polyHf[len(polyHf) - 1 - k][1]) for k in range(len(polyHf))])
+                
+                u = math.cos(math.radians(direction))
+                v = math.sin(math.radians(direction))
+                poly = [(nodes[n][locFieldName][0] + u * pt[0] + v * pt[1], nodes[n][locFieldName][1] + -v * pt[0] + u * pt[1]) for pt in polyB4Rot]
+                timedPoly.append([[poly[i] for i in range(len(poly)) if not is2PtsSame(poly[i], poly[i - 1])], T[k]])
+
+            nodes[n][neighborFieldName] = TriGridSurface(timedPoly)
+
+    elif (shape == 'Circle'):
+        pass
+
+    else:
+        raise UnsupportedInputError("ERROR: Unsupported option for `shape`.")
 
     return nodes
 

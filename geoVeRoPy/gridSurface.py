@@ -90,7 +90,8 @@ class TriGridSurface(object):
         self.surfaceGraph.add_node(key)
         self.triFacets[key] = tri
         [x, y, z] = tri
-        self.triCenters[key] = ((x[0] + y[0] + z[0]) / 3, (x[1] + y[1] + z[1]) / 3, (x[2] + y[2] + z[2]) / 3)
+        self.triCenters[key] = [[(x[0] + y[0] + z[0]) / 3, (x[1] + y[1] + z[1]) / 3], max(x[2], y[2], z[2])]
+
         for nei in adjTo:
             # Check if a neighborhood is feasible
             adjFlag = False
@@ -107,6 +108,8 @@ class TriGridSurface(object):
                     if (is2PtsSame(self.triFacets[nei][i], tri[j])):
                         sameMat[i][j] += 1
             if (sum([sum(sameMat[i]) for i in range(len(sameMat))]) == 2):
+                adjFlag = True
+            elif (sum([sum(sameMat[i]) for i in range(len(sameMat))]) == 1):
                 adjFlag = True
             else:
                 raise ZeroVectorError("ERROR: facet does not match")
@@ -141,36 +144,104 @@ class TriGridSurface(object):
         return poly
 
     # 对于给定的时空上的点，找到最快速度可以到达的最近的facet
-    def fastestPt2Facet(self, pt, z):
-        # 先找到一个可行的点，假如存在的话
+    def fastestPt2Facet(self, pt, z, vehSpeed):
+        knownFacetIDs = []
+
+        # Find initial facet ==================================================
+        # 先找到一个可行的点，假如存在的话，至少找到一个好的开始点
         # NOTE: 先找到位于这个平面上的最近的facet，此时需要的速度是无限大
         # NOTE: 从(0, z对应的layer)搜起
-        
+        # FIXME: 应该从更近的点开始搜索，这里图了个省事儿
+        # FIXME: 接下来应该预估在哪里碰到
         idx = None
-        t0 = None
-        t1 = None
         for i in range(len(self.timedPoly) - 1):
             t0 = self.timedPoly[i][1]
             t1 = self.timedPoly[i + 1][1]
             if (abs(t0 - z) <= ERRTOL['vertical'] or t0 <= z < t1):
                 idx = i
                 break
+        tptOri = [pt, z]
 
-        # greedy search for the best facet
-        curFacetID = (0, idx)
-        curSpeed = None
-        curDist = None
-
-        # 然后在表面上进行搜索，粗搜索，按照facet的中间点确定距离
-        # NOTE: 找局部最优解...
-
-
-        # 细搜索，在找到的facet上找确定的点
+        trace = []
         
-        return ptOnFacet
+        # Start greedy search =================================================
+        curFacetID = (idx, 0)
+        tptCur = self.triCenters[curFacetID]
+        curT2T = distTpt2Tpt(tptOri, tptCur)
+        knownFacetIDs.append(curFacetID)
+
+        trace.append(tptCur)
+
+        # Rough search ========================================================
+        # 然后在表面上进行搜索，粗搜索，按照facet的中间点确定距离
+        # FIXME: 找第一个局部最优解...
+        canImproveFlag = True
+        while (canImproveFlag):
+            canImproveFlag = False
+
+            # 找到所有相邻的facetID
+            adjFacetIDs = [i for i in self.surfaceGraph.neighbors(curFacetID)]
+            lstNeiT2T = []
+
+            # 对于每个adjFacet，得比当前好且没有被覆盖到过才有必要写入
+            for k in adjFacetIDs:
+                # 首先得是没搜索过的
+                if (k not in knownFacetIDs and self.triCenters[k][1] >= tptOri[1]):
+                    t2t = distTpt2Tpt(tptOri, self.triCenters[k])
+                    t2t['facetID'] = k
+
+                    # 接下来判断是不是比当前的好
+                    keepFlag = False
+                    # Case 1: 当前的不可行，邻居可行，保存
+                    if (t2t['speed'] <= vehSpeed and curT2T['speed'] > vehSpeed):
+                        keepFlag = True
+                    # Case 2: 当前的可行，邻居可行，且时间更短，保存
+                    elif (t2t['speed'] <= vehSpeed and t2t['time'] <= curT2T['time'] and t2t['dist'] < curT2T['dist']):
+                        keepFlag = True
+                    elif (t2t['speed'] <= vehSpeed and t2t['dist'] <= curT2T['dist'] and t2t['time'] <= curT2T['time']):
+                        keepFlag = True
+                    # Case 3: 都不可行，且距离更短，保存
+                    elif (curT2T['speed'] > vehSpeed and t2t['speed'] > vehSpeed and t2t['dist'] < curT2T['dist']):
+                        keepFlag = True
+
+                    if (keepFlag):
+                        lstNeiT2T.append(t2t)
+                        knownFacetIDs.append(k)
+
+            if (len(lstNeiT2T) > 0):
+                hasFeasibleFlag = False
+                # 如果其中有一个可行解，就移除所有不可行解，找到可行解中时间最短的，然后在时间最短的中找到距离最短的
+                lstNeiT2T = sorted(lstNeiT2T, key = lambda d:d['time'])
+                for i in range(len(lstNeiT2T)):
+                    if (lstNeiT2T[i]['speed'] <= vehSpeed):
+                        hasFeasibleFlag = True
+                        curFacetID = lstNeiT2T[i]['facetID']
+                        break
+                # 如果其中每个解都不可行，那就找到所有不可行解中速度最慢的，然后找到速度最慢的中距离最短的，尽可能快的到达可行域
+                if (not hasFeasibleFlag):
+                    lstNeiT2T = sorted(lstNeiT2T, key = lambda d:d['speed'])
+                    curFacetID = lstNeiT2T[0]['facetID']
+                canImproveFlag = True
+
+                tptCur = self.triCenters[curFacetID]
+                curT2T = distTpt2Tpt(tptOri, tptCur)
+                trace.append(tptCur)
+
+        # Detail search =======================================================
+        # 细搜索，在找到的facet上找确定的点
+        # 第一步，确定可行域的边界
+        pass
+        
+        return {
+            'facetID': curFacetID,
+            'tpt': tptCur,
+            'speed': curT2T['speed'],
+            'time': curT2T['time'],
+            'trace': trace
+        }
 
     # 对于给定的时空上的一个点，作为起点，再给定空间中的一个点，作为终点，找到按照最快速度下最短时间内可以到达的最近facet
-    def fastestPt2Facet2Pt(self, startPt, z, endPt):
+    def fastestPt2Facet2Pt(self, startPt, endPt, startZ, vehSpeed):
 
         return {
             'facetID': facetID,
@@ -181,29 +252,16 @@ class TriGridSurface(object):
         zProj = self.buildZProfile(z)
         return isPtInPoly(pt, zProj)
 
-    def isPtReachable(self, pt, z, vehSpeed):
-        # 粗略的做法，二分查找是否剖面相交
-        t = z        
-
-        return
-
-def distTimedPt2timedPt(timedPt1, timedPt2, detailFlag = True):
-    dist = distEuclidean(timedPt1[0], timedPt2[0])
+def distTpt2Tpt(timedPt1, timedPt2):
+    dist = distEuclideanXY(timedPt1[0], timedPt2[0])
     dt = timedPt2[1] - timedPt1[1]
     speed = None
-    if (dt <= 0):
-        speed = None
-    else:
+    if (dt > 0):
         speed = dist / dt
+    else:
+        speed = float('inf')
     return {
         'dist': dist,
+        'time': dt,
         'speed': speed
     }
-
-def shortestPt2TriGridSurface(pt, triGridSurface, vehSpeed, startZ = 0):
-    
-
-    
-
-def pt2TriGridSurface2Pt(startPt, triGridSurface, endPt, vehSpeed, startZ = 0):
-    return
