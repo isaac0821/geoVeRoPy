@@ -1901,13 +1901,11 @@ def intRay2Poly(ray: line, poly: poly=None, polyShapely: shapely.Polygon=None, r
         return intSeg2Poly(seg, poly, polyShapely, returnShaplelyObj)
 
 def intSeg2Circle(seg: line, circle: dict, detailFlag: bool = True):
-    # 计算圆心到线段的距离和投影
-    # NOTE: 先计算圆心到线段的距离
-    center2Seg = distPt2Seg(pt = circle['center'], seg = seg, detailFlag = True)
+    # 先判断会不会相交
+    distCenter2Seg = distPt2Seg(pt = circle['center'], seg = seg, detailFlag = True)
 
-    # Case 1: 圆和线段不相交
-    if (center2Seg['dist'] > circle['radius'] + ERRTOL['distPt2Seg']):
-        if (detailFlag == True):
+    if (distCenter2Seg['dist'] >= circle['radius'] + ERRTOL['distPt2Seg']):
+        if (detailFlag):
             return {
                 'status': 'NoCross',
                 'intersect': None,
@@ -1918,184 +1916,89 @@ def intSeg2Circle(seg: line, circle: dict, detailFlag: bool = True):
         else:
             return None
 
-    # 计算两个端点到圆的距离
-    d1 = distEuclideanXY(seg[0], circle['center'])
-    d2 = distEuclideanXY(seg[1], circle['center'])
-
-    # Case 2: 圆心到线段的距离"等于"半径
-    if (circle['radius'] + ERRTOL['distPt2Seg'] >= center2Seg['dist'] >= circle['radius'] - ERRTOL['distPt2Seg']):
+    if (circle['radius'] + ERRTOL['distPt2Seg'] >= distCenter2Seg['dist'] >= circle['radius'] - ERRTOL['distPt2Seg']):
         if (detailFlag == True):
             return {
                 'status': 'Cross',
-                'intersect': center2Seg['proj'],
+                'intersect': distCenter2Seg['proj'],
                 'intersectType': 'Point',
                 'interiorFlag': False,
-                'mileage': distEuclideanXY(seg[0], center2Seg['proj'])
+                'mileage': distEuclideanXY(seg[0], distCenter2Seg['proj'])
             }
         else:
-            return center2Seg['proj']
+            return distCenter2Seg['proj']
 
-    # Case 3: 圆和线段相交，而且圆心投影在线段上
-    elif (center2Seg['location'] == 'inner'):
-        # Case 3.1: 两个端点都在外面
-        if(d1 >= circle['radius'] and d2 >= circle['radius']):
-            proj = center2Seg['proj']
-            vec = vecFromSeg(seg)
+    # 分别看看两个端点是不是在圆内部
+    insideAFlag = distEuclideanXY(seg[0], circle['center']) < circle['radius']
+    insideBFlag = distEuclideanXY(seg[1], circle['center']) < circle['radius']
+    L = distEuclideanXY(seg[0], seg[1])
 
-            # 计算半个弦的长度，计算两个交点
-            halfCord = math.sqrt(circle['radius'] ** 2 - center2Seg['dist'] ** 2)
-            intPt1 = ptInDistVec(pt = proj, vec = vec, dist = -halfCord)
-            intPt2 = ptInDistVec(pt = proj, vec = vec, dist = halfCord)
-            if (detailFlag == True):
-                distFromSeg0ToIntPt1 = distEuclideanXY(seg[0], intPt1)
-                return {
-                    'status': 'Cross',
-                    'intersect': [intPt1, intPt2],
-                    'intersectType': 'Segment',
-                    'interiorFlag': True,
-                    'mileage': [distFromSeg0ToIntPt1, distFromSeg0ToIntPt1 + 2 * halfCord]
-                }
-            else:
-                return [intPt1, intPt2]
+    # Case 1: 俩端点都在里头，返回整条线段
+    # NOTE: 快速计算，不用麻烦
+    if (insideAFlag and insideBFlag):
+        return {
+            'status': 'Cross',
+            'intersect': seg,
+            'intersectType': 'Segment',
+            'interiorFlag': True,
+            'mileage': [0, L]
+        }
 
-        # Case 3.2: 第二个端点在圆内
-        elif (d1 >= circle['radius'] and d2 <= circle['radius']):
-            proj = center2Seg['proj']
-            vec = vecFromSeg(seg)
+    # Case 2, 3, 4 则是计算 \lambda
+    x1, y1 = seg[0]
+    x2, y2 = seg[1]
+    a, b = circle['center']
+    r = circle['radius']
 
-            # 计算半个弧的长度
-            halfCord = math.sqrt(circle['radius'] ** 2 - center2Seg['dist'] ** 2)
-            intPt1 = ptInDistVec(pt = proj, vec = vec, dist = -halfCord)
-            if (detailFlag == True):
-                distFromSeg0ToIntPt1 = distEuclideanXY(seg[0], intPt1)
-                L = distEuclideanXY(seg[0], seg[1])
-                return {
-                    'status': 'Cross',
-                    'intersect': [intPt1, seg[1]],
-                    'intersectType': 'Segment',
-                    'interiorFlag': True,
-                    'mileage': [distFromSeg0ToIntPt1, L]
-                }
-            else:
-                return [intPt1, seg[1]]
+    A = (x2 - x1) ** 2 + (y2 - y1) ** 2
+    B = 2 * (x1 - a) * (x2 - x1) + 2 * (y1 - b) * (y2 - y1)
+    C = (x1 - a) ** 2 + (y1 - b) ** 2 - r ** 2
 
-        # Case 3.3: 第一个端点在圆内
-        elif (d1 <= circle['radius'] and d2 >= circle['radius']):
-            proj = center2Seg['proj']
-            vec = vecFromSeg(seg)
+    sqDelta = math.sqrt(B ** 2 - 4 * A * C)
+    lambda1 = (- B - sqDelta) / (2 * A)
+    lambda2 = (- B + sqDelta) / (2 * A)
 
-            # 计算半个弧的长度
-            halfCord = math.sqrt(circle['radius'] ** 2 - center2Seg['dist'] ** 2)
-            intPt2 = ptInDistVec(pt = proj, vec = vec, dist = halfCord)
-            if (detailFlag == True):
-                distFromSeg0ToIntPt2 = distEuclideanXY(seg[0], intPt2)
-                return {
-                    'status': 'Cross',
-                    'intersect': [seg[0], intPt2],
-                    'intersectType': 'Segment',
-                    'interiorFlag': True,
-                    'mileage': [0, distFromSeg0ToIntPt2]
-                }
-            else:
-                return [seg[0], intPt2]
+    loc1 = [x1 + lambda1 * (x2 - x1), y1 + lambda1 * (y2 - y1)]
+    loc2 = [x1 + lambda2 * (x2 - x1), y1 + lambda2 * (y2 - y1)]
 
-        # Case 3.4: 两个端点都在园内
-        elif (d1 <= circle['radius'] and d2 <= circle['radius']):
-            if (detailFlag == True):
-                L = distEuclideanXY(seg[0], seg[1])        
-                return {
-                    'status': 'Cross',
-                    'intersect': [seg[0], seg[1]],
-                    'intersectType': 'Segment',
-                    'interiorFlag': True,
-                    'mileage': [0, L]
-                }
-            else:
-                return seg
+    L1 = L * lambda1
+    L2 = L * lambda2
 
-    # Case 4: 圆于线段相交，但是投影在线段的右侧（第二个端点在圆内）
-    elif (center2Seg['location'] == 'next'):
-        # Case 4.1: 第一个端点不在圆内
-        if (d1 >= circle['radius']):
-            # 垂点
-            foot = ptFoot2Line(pt = circle['center'], line = seg)
-            # 圆心到垂点距离
-            h = distEuclideanXY(circle['center'], foot)
-            # 半弦长度
-            halfCord = math.sqrt(circle['radius'] ** 2 - h ** 2)
-            # 线段方向
-            vec = vecFromSeg(seg)
-            # 线段与圆交点
-            intPt = ptInDistVec(pt = foot, vec = vec, dist = -halfCord)
-            if (detailFlag == True):
-                # 端点到交点距离
-                distFromSeg0ToIntPt = distEuclideanXY(seg[0], intPt)
-                # 线段长度
-                L = distEuclideanXY(seg[0], seg[1])
-                return {
-                    'status': 'Cross',
-                    'intersect': [intPt, seg[1]],
-                    'intersectType': 'Segment',
-                    'interiorFlag': True,
-                    'mileage': [distFromSeg0ToIntPt, L]
-                }
-            else:
-                return [intPt, seg[1]]
-
-        # Case 4.2: 第一个端点在圆内
-        elif (d1 <= circle['radius']):
-            if (detailFlag == True):
-                L = distEuclideanXY(seg[0], seg[1])
-                return {
-                    'status': 'Cross',
-                    'intersect': [seg[0], seg[1]],
-                    'intersectType': 'Segment',
-                    'interiorFlag': True,
-                    'mileage': [0, L]
-                }
-            else:
-                return seg
-
-    # Case 5: 圆于线段相交，但是投影在线段的左侧（第一个端点在圆内）
-    elif (center2Seg['location'] == 'prev'):
-        # Case 5.1: 第二个端点不在圆内
-        if (d2 >= circle['radius']):
-            # 垂点
-            foot = ptFoot2Line(pt = circle['center'], line = seg)
-            # 圆心到垂点距离
-            h = distEuclideanXY(circle['center'], foot)
-            # 半弦长度
-            halfCord = math.sqrt(circle['radius'] ** 2 - h ** 2)
-            if (detailFlag == True):
-                # 线段方向
-                vec = vecFromSeg(seg)
-                # 线段与圆交点
-                intPt = ptInDistVec(pt = foot, vec = vec, dist = halfCord)
-                # 端点到交点距离
-                distFromSeg0ToIntPt = distEuclideanXY(seg[0], intPt)
-                return {
-                    'status': 'Cross',
-                    'intersect': [seg[0], intPt],
-                    'intersectType': 'Segment',
-                    'interiorFlag': True,
-                    'mileage': [0, distFromSeg0ToIntPt]
-                }
-            else:
-                return [seg[0], intPt]
-
-        # Case 4.2: 第一个端点在圆内
-        elif (d2 <= circle['radius']):
-            if (detailFlag == True):
-                L = distEuclideanXY(seg[0], seg[1])
-                return {
-                    'status': 'Cross',
-                    'intersect': [seg[0], seg[1]],
-                    'intersectType': 'Segment',
-                    'interiorFlag': True,
-                    'mileage': [0, L]
-                }
-            else:
-                return seg
+    # Case 2: A在内部，B不在内部，找到线段上唯一一个圆与线段的交点
+    if (insideAFlag and not insideBFlag):
+        if (detailFlag):
+            return {
+                'status': 'Cross',
+                'intersect': [seg[0], loc2],
+                'intersectType': 'Segment',
+                'interiorFlag': True,
+                'mileage': [0, L2]
+            }
+        else:
+            return [seg[0], loc2]
+    # Case 3: A不在内部，B在内部，找到线段上唯一一个圆与线段的交点
+    elif (not insideAFlag and insideBFlag):
+        if (detailFlag):
+            return {
+                'status': 'Cross',
+                'intersect': [loc1, seg[1]],
+                'intersectType': 'Segment',
+                'interiorFlag': True,
+                'mileage': [L1, L]
+            }
+        else:
+            return [loc1, seg[1]]
+    else:
+        if (detailFlag):
+            return {
+                'status': 'Cross',
+                'intersect': [loc1, loc2],
+                'intersectType': 'Segment',
+                'interiorFlag': True,
+                'mileage': [L1, L2]
+            }
+        else:
+            return [loc1, loc2]
 
 # Line-shape versus polygon ===================================================
 def isLineIntPoly(line: line, poly: poly=None, polyShapely: shapely.Polygon=None, interiorOnly: bool=False) -> bool:

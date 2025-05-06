@@ -714,6 +714,9 @@ def _circle2CirclePathGurobi(startPt: pt, endPt: pt, circles: list[dict], output
         gap = model.MIPGap
         lb = model.ObjBoundC
         ub = model.ObjVal
+    else:
+        print(model.status)
+        
     return {
         'path': path,
         'dist': ofv,

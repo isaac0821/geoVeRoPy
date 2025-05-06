@@ -11,8 +11,6 @@ from .travel import *
 def solveOP(
     nodes: dict, 
     maxBudget: float,
-    locFieldName: str = 'loc',
-    priceFieldName: str = 'price',
     startID: int|str = 0,
     endID: int|str = 0,
     nodeIDs: list[int|str]|str = 'All',
@@ -62,6 +60,10 @@ def solveOP(
             raise MissingParameterError("ERROR: Missing required field `solver`.")
         elif (kwargs['solver'] == 'Gurobi' and kwargs['fml'] not in ['MTZ', 'DFJ_Lazy']):
             raise OutOfRangeError("ERROR: Formulation is not supported.", )
+
+    # Field names =============================================================
+    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+    priceFieldName = 'price' if 'priceFieldName' not in kwargs else kwargs['priceFieldName']
 
     # Define tau ==============================================================
     tau = None

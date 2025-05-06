@@ -11,7 +11,7 @@ def c2cServicePathAdaptIter(
     endPt: pt, 
     seq: list, 
     circles: dict, 
-    velocity, 
+    vehSpeed: float, 
     serviceTime, 
     adaptErr = ERRTOL['deltaDist'], 
     initLod: int = 12):
@@ -78,7 +78,7 @@ def c2cServicePathAdaptIter(
     cur = circleRings[0].head
     while (True):
         d = distEuclideanXY(startPt, cur.loc)
-        t = max(alpha[0] * serviceTime, d / velocity)
+        t = max(alpha[0] * serviceTime, d / vehSpeed)
         G.add_edge('s', (0, seq[0], cur.key), weight = t)
         tau['s', (0, seq[0], cur.key)] = d
         cur = cur.next
@@ -92,7 +92,7 @@ def c2cServicePathAdaptIter(
             curJ = circleRings[i + 1].head
             while (True):
                 d = distEuclideanXY(curI.loc, curJ.loc)
-                t = max(alpha[i + 1] * serviceTime, d / velocity)
+                t = max(alpha[i + 1] * serviceTime, d / vehSpeed)
                 G.add_edge((i, seq[i], curI.key), (i + 1, seq[i + 1], curJ.key), weight = t)
                 tau[(i, seq[i], curI.key), (i + 1, seq[i + 1], curJ.key)] = d
                 curJ = curJ.next
@@ -106,7 +106,7 @@ def c2cServicePathAdaptIter(
     cur = circleRings[-1].head
     while (True):
         d = distEuclideanXY(cur.loc, endPt)
-        t = max(alpha[-1] * serviceTime, d / velocity)
+        t = max(alpha[-1] * serviceTime, d / vehSpeed)
         G.add_edge((len(seq) - 1, seq[-1], cur.key), 'e', weight = t)
         tau[(len(seq) - 1, seq[-1], cur.key), 'e'] = d
         cur = cur.next
@@ -180,7 +180,7 @@ def c2cServicePathAdaptIter(
         while (True):
             if (('s', (0, seq[0], p.key)) not in G.edges):
                 d = distEuclideanXY(startPt, cur.loc)
-                t = max(alpha[0] * serviceTime, d / velocity)
+                t = max(alpha[0] * serviceTime, d / vehSpeed)
                 G.add_edge('s', (0, seq[0], cur.key), weight = t)
                 tau['s', (0, seq[0], cur.key)] = d
             cur = cur.next
@@ -195,7 +195,7 @@ def c2cServicePathAdaptIter(
                 while (True):
                     if (((i, seq[i], curI.key), (i + 1, seq[i + 1], curJ.key)) not in G.edges):
                         d = distEuclideanXY(curI.loc, curJ.loc)
-                        t = max(alpha[i + 1] * serviceTime, d / velocity)
+                        t = max(alpha[i + 1] * serviceTime, d / vehSpeed)
                         G.add_edge((i, seq[i], curI.key), (i + 1, seq[i + 1], curJ.key), weight = t)
                         tau[(i, seq[i], curI.key), (i + 1, seq[i + 1], curJ.key)] = d
                     curJ = curJ.next
@@ -209,7 +209,7 @@ def c2cServicePathAdaptIter(
         while (True):
             if (((len(seq) - 1, seq[-1], cur.key), 'e') not in G.edges):
                 d = distEuclideanXY(cur.loc, endPt)
-                t = max(alpha[-1] * serviceTime, d / velocity)
+                t = max(alpha[-1] * serviceTime, d / vehSpeed)
                 G.add_edge((len(seq) - 1, seq[-1], cur.key), 'e', weight = t)
                 tau[(len(seq) - 1, seq[-1], cur.key), 'e'] = d
             cur = cur.next

@@ -204,73 +204,6 @@ def rndLocs(
 
     return nodeLocs
 
-def rndNodes(
-    N: int|None = None, 
-    nodeIDs: list[int|str] = [], 
-    nodes: dict|None = None,
-    distr = 'UniformSquareXY',
-    locFieldName = 'loc',
-    **kwargs
-    ) -> dict:
-
-    """Randomly create a nodes dictionary
-
-    Parameters
-    ----------
-
-    N: integer, optional
-        Number of locations/vertices/customers to be randomly created
-    nodeIDs: list of int|str, optional
-        A list of ids for the locations to be created, an alternative option for `N`
-    nodes: dict, optional
-        A nodes dictionary, if given, new locations will be append into this dictionary
-    distr: string, optional, default as 'UniformSquareXY'
-        See `distr` docstring in :func:`~geoVeRoPy.instance.rndLocs()`
-    locFieldName: str, optional, default as 'loc'
-        The key in nodes dictionary to indicate the locations
-    **kwargs: optional
-        Provide additional inputs for different `distr` options
-
-    Returns
-    -------
-    list
-        A list of randomly created locations
-
-    Raises
-    ------
-    MissingParameterError
-        Missing required inputs in **kwargs.
-    UnsupportedInputError
-        Option is not supported for `distr`
-    NotAvailableError
-        Functions/options that are not ready yet.
-    EmptyError
-        The sample area is empty.
-    """
-
-    # Sanity checks ===========================================================
-    if (nodes == None):
-        nodes = {}
-    
-    if (nodeIDs == [] and N == None):
-        raise MissingParameterError(ERROR_MISSING_N)
-    elif (nodeIDs == [] and N != None):
-        nodeIDs = [i for i in range(N)]
-
-    # Generate instance =======================================================
-    nodeLocs = rndLocs(
-        N = len(nodeIDs), 
-        distr = distr,
-        **kwargs)
-    for n in range(len(nodeIDs)):
-        if (nodeIDs[n] in nodes):
-            warnings.warn("WARNING: %s already exists, will be replaced" % n)
-        nodes[nodeIDs[n]] = {
-            locFieldName: nodeLocs[n]
-        }
-
-    return nodes
-
 def _rndPtUniformSquareXY(xRange: list[int]|list[float], yRange: list[int]|list[float]) -> pt:
     x = random.uniform(xRange[0], xRange[1])
     y = random.uniform(yRange[0], yRange[1])
@@ -489,12 +422,68 @@ def _rndPtRoadNetworkCircleLatLon(N: int, roads: dict, radius: float, center: pt
 
     return nodeLocs
 
+def rndNodes(
+    N: int|None = None, 
+    nodeIDs: list[int|str] = [], 
+    nodes: dict|None = None,
+    distr = 'UniformSquareXY',
+    **kwargs
+    ) -> dict:
+
+    """Randomly create a nodes dictionary
+
+    Parameters
+    ----------
+
+    N: integer, optional
+        Number of locations/vertices/customers to be randomly created
+    nodeIDs: list of int|str, optional
+        A list of ids for the locations to be created, an alternative option for `N`
+    nodes: dict, optional
+        A nodes dictionary, if given, new locations will be append into this dictionary
+    distr: string, optional, default as 'UniformSquareXY'
+        See `distr` docstring in :func:`~geoVeRoPy.instance.rndLocs()`
+    locFieldName: str, optional, default as 'loc'
+        The key in nodes dictionary to indicate the locations
+    **kwargs: optional
+        Provide additional inputs for different `distr` options
+
+    Returns
+    -------
+    list
+        A list of randomly created locations
+    """
+
+    # Sanity checks ===========================================================
+    if (nodes == None):
+        nodes = {}
+    
+    if (nodeIDs == [] and N == None):
+        raise MissingParameterError(ERROR_MISSING_N)
+    elif (nodeIDs == [] and N != None):
+        nodeIDs = [i for i in range(N)]
+
+    # Field names =============================================================
+    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+
+    # Generate instance =======================================================
+    nodeLocs = rndLocs(
+        N = len(nodeIDs), 
+        distr = distr,
+        **kwargs)
+    for n in range(len(nodeIDs)):
+        if (nodeIDs[n] in nodes):
+            warnings.warn("WARNING: %s already exists, will be replaced" % n)
+        nodes[nodeIDs[n]] = {
+            locFieldName: nodeLocs[n]
+        }
+
+    return nodes
+
 def rndNodeNeighbors(
     nodes: dict,
     nodeIDs: list[int|str]|str = 'All', 
     shape: str = 'Circle',
-    locFieldName = 'loc',
-    neighborFieldName = 'neighbor',
     **kwargs
     ) -> dict:
 
@@ -556,6 +545,10 @@ def rndNodeNeighbors(
                 if (i not in nodes):
                     raise OutOfRangeError("ERROR: Node %s is not in `nodes`." % i)
     
+    # Field names =============================================================
+    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+    neighborFieldName = 'neighbor' if 'neighborFieldName' not in kwargs else kwargs['neighborFieldName']
+
     # Add neighborhood by 'shape' =============================================
     if (shape == 'Poly'):
         for n in nodeIDs:
@@ -577,9 +570,32 @@ def rndNodeNeighbors(
 
             nodes[n]['neiShape'] = 'Circle'
             nodes[n]['radius'] = kwargs['radius']
+
             poly = [[
                 nodes[n][locFieldName][0] + kwargs['radius'] * math.sin(2 * d * math.pi / lod),
                 nodes[n][locFieldName][1] + kwargs['radius'] * math.cos(2 * d * math.pi / lod),
+            ] for d in range(lod + 1)]
+            nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
+
+    elif (shape == 'RndCircle'):
+        for n in nodeIDs:
+            if ('minRadius' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'minRadius'")
+            if ('maxRadius' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'maxRadius'")
+            # By default, a circle is plotted by a 30-gon
+            lod = 30
+            if ('lod' in kwargs and type(kwargs['lod']) == int):
+                lod = kwargs['lod']
+
+            radius = random.uniform(kwargs['minRadius'], kwargs['maxRadius'])
+
+            nodes[n]['neiShape'] = 'Circle'
+            nodes[n]['radius'] = radius
+
+            poly = [[
+                nodes[n][locFieldName][0] + radius * math.sin(2 * d * math.pi / lod),
+                nodes[n][locFieldName][1] + radius * math.cos(2 * d * math.pi / lod),
             ] for d in range(lod + 1)]
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
 
@@ -600,6 +616,11 @@ def rndNodeNeighbors(
             a = kwargs['a']
             b = kwargs['b']
             c = kwargs['c']
+            nodes[n]['parameter'] = {
+                'a': a,
+                'b': b,
+                'c': c
+            }
             
             vHLod = math.ceil(lod * 2 / 9)
             vTLod = math.ceil(lod / 9)
@@ -651,15 +672,18 @@ def rndNodeNeighbors(
                 warnings.warn("WARNING: 'minLen' is greater than 'maxLen', will be swapped")
                 kwargs['maxLen'], kwargs['minLen'] = kwargs['minLen'], kwargs['maxLen']
             
-            nodes[n]['neiShape'] = 'Poly'
-            width = random.uniform(kwargs['minLen'], kwargs['maxLen'])
-            height = random.uniform(kwargs['minLen'], kwargs['maxLen'])
+            nodes[n]['neiShape'] = 'Poly'            
+            length = random.uniform(kwargs['minLen'], kwargs['maxLen'])
+
+            nodes[n]['parameter'] = {
+                'length': length
+            }
 
             nodes[n][neighborFieldName] = [
-                [nodes[n][locFieldName][0] - width / 2, nodes[n][locFieldName][1] - height / 2], 
-                [nodes[n][locFieldName][0] + width / 2, nodes[n][locFieldName][1] - height / 2], 
-                [nodes[n][locFieldName][0] + width / 2, nodes[n][locFieldName][1] + height / 2], 
-                [nodes[n][locFieldName][0] - width / 2, nodes[n][locFieldName][1] + height / 2]
+                [nodes[n][locFieldName][0] - length / 2, nodes[n][locFieldName][1] - length / 2], 
+                [nodes[n][locFieldName][0] + length / 2, nodes[n][locFieldName][1] - length / 2], 
+                [nodes[n][locFieldName][0] + length / 2, nodes[n][locFieldName][1] + length / 2], 
+                [nodes[n][locFieldName][0] - length / 2, nodes[n][locFieldName][1] + length / 2]
             ]
 
     elif (shape == 'RndRectangle'):
@@ -682,6 +706,11 @@ def rndNodeNeighbors(
             nodes[n]['neiShape'] = 'Poly'
             width = random.uniform(kwargs['minWidth'], kwargs['maxWidth'])
             height = random.uniform(kwargs['minLength'], kwargs['maxLength'])
+
+            nodes[n]['parameter'] = {
+                'width': width,
+                'height': height
+            }
 
             nodes[n][neighborFieldName] = [
                 [nodes[n][locFieldName][0] - width / 2, nodes[n][locFieldName][1] - height / 2], 
@@ -706,10 +735,20 @@ def rndNodeNeighbors(
             if (kwargs['minLength'] > kwargs['maxLength']):
                 warnings.warn("WARNING: 'minLength' is greater than 'maxLength', will be swapped")
                 kwargs['maxLength'], kwargs['minLength'] = kwargs['minLength'], kwargs['maxLength']
+            # 在矩形的边缘上和内部随机取点
+            if ('numIntePt' not in kwargs):
+                kwargs['numIntePt'] = 10
+            if ('numEdgePt' not in kwargs):
+                kwargs['numEdgePt'] = 5
 
             nodes[n]['neiShape'] = 'Poly'
             width = random.uniform(kwargs['minWidth'], kwargs['maxWidth'])
             height = random.uniform(kwargs['minLength'], kwargs['maxLength'])
+            
+            nodes[n]['parameter'] = {
+                'width': width,
+                'height': height
+            }
 
             # 先生成bounding的矩形
             bounding = [
@@ -718,11 +757,7 @@ def rndNodeNeighbors(
                 [+width / 2, +height / 2], 
                 [-width / 2, +height / 2]
             ]
-            # 在矩形的边缘上和内部随机取点
-            if ('numIntePt' not in kwargs):
-                kwargs['numIntePt'] = 10
-            if ('numEdgePt' not in kwargs):
-                kwargs['numEdgePt'] = 5
+
             polyPts = []
             # Interior
             for i in range(kwargs['numIntePt']):
@@ -757,7 +792,6 @@ def rndNodeNeighbors(
             if ('lod' in kwargs and type(kwargs['lod']) == int):
                 lod = kwargs['lod']
 
-            nodes[n]['neiShape'] = 'Poly'
             r = []
             for i in range(lod + 1):
                 r.append(kwargs['minRadius'])
@@ -774,6 +808,13 @@ def rndNodeNeighbors(
                 c = random.uniform(0, 2)
                 for i in range(lod + 1):
                     r[i] += a * math.sin(b * 2 * i * math.pi / lod + math.pi * c)
+
+            nodes[n]['neiShape'] = 'Poly'
+
+            nodes[n]['parameter'] = {
+                'N': N,
+                'w': w
+            }
 
             maxRI = max(r)
             for i in range(len(r)):
@@ -801,6 +842,13 @@ def rndNodeNeighbors(
                 r = kwargs['minDiag'] / 2 + random.uniform(0, 1) * (kwargs['maxDiag'] - kwargs['minDiag']) / 2
                 polyPts.append(ptInDistXY(
                     pt = nodes[n][locFieldName], direction = deg, dist = r))
+
+            nodes[n]['parameter'] = {
+                'numSide': kwargs['maxNumSide'],
+                'minDiag': kwargs['minDiag'],
+                'maxDiag': kwargs['maxDiag']
+            }
+
             polyShapely = shapely.convex_hull(shapely.MultiPoint(points = polyPts))
             poly = [i for i in mapping(polyShapely)['coordinates'][0]]
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
@@ -820,6 +868,12 @@ def rndNodeNeighbors(
                 degs.append(random.uniform(0, 1) * 360)
             degs.sort()
 
+            nodes[n]['parameter'] = {
+                'numSide': kwargs['maxNumSide'],
+                'minDiag': kwargs['minDiag'],
+                'maxDiag': kwargs['maxDiag']
+            }
+
             polyPts = []
             for i in range(kwargs['maxNumSide']):
                 r = kwargs['minDiag'] / 2 + random.uniform(0, 1) * (kwargs['maxDiag'] - kwargs['minDiag']) / 2
@@ -836,10 +890,12 @@ def rndNodeIsoNeighbors(
     nodes: dict,
     nodeIDs: list[int|str]|str = 'All', 
     shape: str = 'IsoCircle',
-    locFieldName = 'loc',
-    neighborFieldName = 'neighbor',
     **kwargs
     ) -> dict:
+
+    # Field names =============================================================
+    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+    neighborFieldName = 'neighbor' if 'neighborFieldName' not in kwargs else kwargs['neighborFieldName']
 
     # Sanity check ============================================================
     if (type(nodeIDs) is not list):
@@ -877,8 +933,6 @@ def rndNodeTimedNeighbors(
     nodes: dict,
     nodeIDs: list[int|str]|str = 'All', 
     shape: str = 'Egg',
-    locFieldName = 'loc',
-    neighborFieldName = 'neighbor',
     **kwargs
     ) -> dict:
 
@@ -890,6 +944,10 @@ def rndNodeTimedNeighbors(
             for i in nodeIDs:
                 if (i not in nodes):
                     raise OutOfRangeError("ERROR: Node %s is not in `nodes`." % i)
+
+    # Field names =============================================================
+    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+    neighborFieldName = 'neighbor' if 'neighborFieldName' not in kwargs else kwargs['neighborFieldName']
 
     if (shape == 'Egg'):
         for n in nodeIDs:
@@ -984,7 +1042,6 @@ def rndArcs(
     A: int|None = None,
     arcIDs: list[int|str] = [],
     distr = 'UniformLengthInSquareXY',
-    arcFieldName: str = 'arc',
     **kwargs
     ) -> dict:
 
@@ -1022,6 +1079,9 @@ def rndArcs(
     elif (arcIDs == [] and A != None):
         arcIDs = [i for i in range(A)]
 
+    # Field names =============================================================
+    arcFieldName = 'arc' if 'arcFieldName' not in kwargs else kwargs['arcFieldName']
+
     # Generate instance =======================================================
     if (distr == 'UniformLengthInSquareXY'):
         if ('minLen' not in kwargs or 'maxLen' not in kwargs):
@@ -1051,8 +1111,7 @@ def rndArcs(
 def rndArcNeighbors(
     arcs: dict,
     arcIDs: list[int|str]|str = 'All',
-    shape: str = 'Circle',
-    arcFieldName: str = 'arc',
+    shape: str = 'FixedRadius',
     **kwargs
     ) -> dict:
 
@@ -1096,6 +1155,14 @@ def rndArcNeighbors(
                 if (i not in arcs):
                     raise OutOfRangeError("ERROR: Node %s is not in `arcs`." % i)
     
+    # Field names =============================================================
+    arcFieldName = 'arc' if 'arcFieldName' not in kwargs else kwargs['arcFieldName']
+    neiBtwFieldName = 'neiBtw' if 'neiBtwFieldName' not in kwargs else kwargs['neiBtwFieldName'] 
+    neiAFieldName = 'neiA' if 'neiAFieldName' not in kwargs else kwargs['neiAFieldName']
+    neiBFieldName = 'neiB' if 'neiBFieldName' not in kwargs else kwargs['neiBFieldName']
+    neiAllFieldName = 'neiAll' if 'neiAllFieldName' not in kwargs else kwargs['neiAllFieldName']
+
+    # Add neighborhood ========================================================
     for i in arcIDs:
         if (shape == 'FixedRadius'):
             if ('radius' not in kwargs):
@@ -1111,29 +1178,29 @@ def rndArcNeighbors(
             heading = headingXY(startLoc, endLoc)
 
             radius = kwargs['radius']
-            arcs[i]['neiBtw'] = [[
+            arcs[i][neiBtwFieldName] = [[
                 startLoc[0] + radius * math.sin(2 * d * math.pi / lod + (heading - 90) * math.pi / 180),
                 startLoc[1] + radius * math.cos(2 * d * math.pi / lod + (heading - 90) * math.pi / 180),
             ] for d in range(int(lod / 2 + 1))]
-            arcs[i]['neiBtw'].extend([[
+            arcs[i][neiBtwFieldName].extend([[
                 endLoc[0] + radius * math.sin(2 * d * math.pi / lod + (heading + 90) * math.pi / 180),
                 endLoc[1] + radius * math.cos(2 * d * math.pi / lod + (heading + 90) * math.pi / 180),
             ] for d in range(int(lod / 2 + 1))])
 
-            arcs[i]['neiA'] = [[
+            arcs[i][neiAFieldName] = [[
                     startLoc[0] + radius * math.sin(2 * d * math.pi / lod + (heading + 90) * math.pi / 180),
                     startLoc[1] + radius * math.cos(2 * d * math.pi / lod + (heading + 90) * math.pi / 180),
                 ] for d in range(int(lod))]
-            arcs[i]['neiB'] = [[
+            arcs[i][neiBFieldName] = [[
                     endLoc[0] + radius * math.sin(2 * d * math.pi / lod + (heading - 90) * math.pi / 180),
                     endLoc[1] + radius * math.cos(2 * d * math.pi / lod + (heading - 90) * math.pi / 180),
                 ] for d in range(int(lod))]
 
-            arcs[i]['neiAll'] = [[
+            arcs[i][neiAllFieldName] = [[
                 startLoc[0] + radius * math.sin(2 * d * math.pi / lod + (heading + 90) * math.pi / 180),
                 startLoc[1] + radius * math.cos(2 * d * math.pi / lod + (heading + 90) * math.pi / 180),
             ] for d in range(int(lod / 2 + 1))]
-            arcs[i]['neiAll'].extend([[
+            arcs[i][neiAllFieldName].extend([[
                 endLoc[0] + radius * math.sin(2 * d * math.pi / lod + (heading - 90) * math.pi / 180),
                 endLoc[1] + radius * math.cos(2 * d * math.pi / lod + (heading - 90) * math.pi / 180),
             ] for d in range(int(lod / 2 + 1))])
@@ -1154,9 +1221,7 @@ def rndPolys(
     P: int|None = None,
     polyIDs: list[int|str]|None = None,
     distr = 'UniformSquareXY',
-    shape = 'RndConvexPoly',
-    anchorFieldName = 'anchor',
-    polyFieldName = 'poly',    
+    shape = 'RndConvexPoly',    
     allowOverlapFlag = True,
     returnAsListFlag = True,
     **kwargs
@@ -1208,6 +1273,10 @@ def rndPolys(
             kwargs['minDiag'] = 7
             warnings.warn("WARNING: Missing `minDiag`, set to be default as 7")
 
+    # Field names =============================================================
+    anchorFieldName = 'anchor' if 'anchorFieldName' not in kwargs else kwargs['anchorFieldName']
+    polyFieldName = 'poly' if 'polyFieldName' not in kwargs else kwargs['polyFieldName']
+
     # If overlapping is allowed ===============================================
     if (allowOverlapFlag):
         polygons = rndNodes(
@@ -1241,12 +1310,15 @@ def rndPolys(
         p = rndNodes(
             N = 1,
             distr = distr,
+            locFieldName = anchorFieldName,
             **kwargs)
         p = rndNodeNeighbors(
             nodes = p,
             shape = shape,
+            locFieldName = anchorFieldName,
+            neighborFieldName = polyFieldName,
             **kwargs)
-        newPoly = p[0]['neighbor']
+        newPoly = p[0][polyFieldName]
         for poly in polys:
             if (isPolyIntPoly(poly, newPoly) == True):
                 numOfFailedTrial += 1
@@ -1255,7 +1327,7 @@ def rndPolys(
 
         if (addedFlag == True):
             polys.append(newPoly)
-            anchor.append(p[0]['loc'])
+            anchor.append(p[0][anchorFieldName])
             numOfFailedTrial = 0
         else:
             if (numOfFailedTrial >= maxNumOfFailedTrial):

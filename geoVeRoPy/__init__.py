@@ -21,6 +21,7 @@ from .road import *
 from .ring import *
 from .tree import *
 from .gridSurface import *
+from .curveArc import *
 
 # Visualize modules
 from .plot import *

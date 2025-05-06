@@ -13,7 +13,7 @@ from .province import *
 from .geometry import *
 from .travel import *
 
-def findBoundingBox(
+def defaultBoundingBox(
     boundingBox = (None, None, None, None),
     pts: list[pt] = None,
     nodes: dict = None,
@@ -126,7 +126,7 @@ def findBoundingBox(
 
     return (xMin, xMax, yMin, yMax)
 
-def findFigSize(
+def defaultFigSize(
     boundingBox, 
     width = None, 
     height = None, 
@@ -205,13 +205,7 @@ def plotLocs(
     locMarker: str = 'o',
     locMarkerSize: float = 1,
     latLonFlag: bool = False,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
 
     """Plot locations on a figure
@@ -228,11 +222,18 @@ def plotLocs(
         The size of the marker
     latLonFlag: bool, optional, default as False
         Reverse the x, y, (x, y) => (y, x). Used in plotting (lat, lon) coordinates.
-    fig: matplotlib object, optional, default as None
-        If fig and ax are provided, 
-
-
+    **kwargs: optional
+        Additional matplotlib information
     """
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
     # Check for required fields ===============================================
     if (locs == None):
@@ -241,12 +242,12 @@ def plotLocs(
     # If no based matplotlib figure provided, define boundary =================
     if (fig == None or ax == None):
         fig, ax = plt.subplots()
-        boundingBox = findBoundingBox(
+        boundingBox = defaultBoundingBox(
             boundingBox = boundingBox, 
             pts = locs,
             latLonFlag = latLonFlag)
         (xMin, xMax, yMin, yMax) = boundingBox
-        (width, height) = findFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
+        (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
 
         if (not latLonFlag):
             fig.set_figwidth(width)
@@ -260,7 +261,9 @@ def plotLocs(
             ax.set_ylim(xMin, xMax)
 
     # Draw locs ==============================================================
+    # 逐个点绘制
     for i in locs:
+
         # Define color --------------------------------------------------------
         color = None
         if (locColor == 'Random'):
@@ -277,10 +280,7 @@ def plotLocs(
         else:
             x = i[1]
             y = i[0]
-        if (locMarkerSize == None):
-            ax.plot(x, y, color = color, marker = locMarker)
-        else:
-            ax.plot(x, y, color = color, marker = locMarker, markersize = locMarkerSize)
+        ax.plot(x, y, color = color, marker = locMarker, markersize = locMarkerSize)
 
     # Axis on and off =========================================================
     if (not showAxis):
@@ -300,27 +300,27 @@ def plotLocs3D(
     locMarker: str = 'o',
     locMarkerSize: float = 1,
     latLonFlag: bool = False,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox3D = (None, None, None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
 
     # Check for required fields ===============================================
     if (locs3D == None):
         raise MissingParameterError("ERROR: Missing required field `locs3D`.")
 
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox3D = (None, None, None, None, None, None) if 'boundingBox3D' not in kwargs else kwargs['boundingBox3D']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
     # If no based matplotlib figure provided, define boundary =================
     if (fig == None or ax == None):
         fig = plt.figure()
         ax = plt.axes(projection = '3d')
         (xMin, xMax, yMin, yMax, zMin, zMax) = boundingBox3D
-        # (width, height) = findFigSize(boundingBox3D, figSize[0], figSize[1], latLonFlag)
-        # fig.set_figwidth(width)
-        # fig.set_figheight(height)
         ax.set_xlim(xMin, xMax)
         ax.set_ylim(yMin, yMax)
         ax.set_zlim(zMin, zMax)
@@ -345,10 +345,7 @@ def plotLocs3D(
             x = i[1]
             y = i[0]
 
-        if (locMarkerSize == None):
-            ax.scatter3D(x, y, z, c = color, marker = locMarker)
-        else:
-            ax.scatter3D(x, y, z, c = color, marker = locMarker, s = locMarkerSize)
+        ax.scatter3D(x, y, z, c = color, marker = locMarker, s = locMarkerSize)
 
     # Axis on and off =========================================================
     if (not showAxis):
@@ -364,22 +361,14 @@ def plotLocs3D(
 
 def plotNodes(
     nodes: dict, 
-    locFieldName = 'loc',
     nodeColor: str = 'Random',
     nodeMarker: str = 'o',
     nodeMarkerSize: float = 1,
-    neighborFieldName = 'neighbor',
     neighborColor: str|None = 'gray',
     neighborOpacity: float = 0.5,
     neighborFillStyle: str = '///',
     latLonFlag: bool = False,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
 
     """
@@ -389,13 +378,11 @@ def plotNodes(
     ----------
     nodes: dictionary, required
         A `nodes` dictionary. See :ref:`nodes` for reference.
-    locFieldName: str, optional, default as 'loc'
-        The key value in `nodes` indicating the location of each node.
     nodeColor: str, optional, default 'Random'
         Alternative option. If 'color' is provided in `nodes`, this field will be ignored.
     nodeMarker: str, optional, default 'o'
         Alternative option for node marker. If 'marker' is provided in `nodes`, this field will be ignored.
-    nodeMarker: str, optional, default 'o'
+    nodeMarkerSize: int, optional, default 1
         Alternative option for node marker size. If 'markerSize' is provided in `nodes`, this field will be ignored.
     neighborColor: str, optional, default 'gray'
         If nodes have 'neighbor' label, will plot the neighbor area in this color
@@ -405,24 +392,27 @@ def plotNodes(
         The fill style of the neighborhood.
     latLonFlag: bool, optional, default False
         True if need to reverse the x, y coordinates, e.g., plot for (lat, lon)
-    fig: matplotlib object, optional, defaut None
-        `fig` and `ax` indicates the matplotlib object to plot on, if not provided, plot in a new figure
-    ax: matplotlib object, optional, default None
-        See `fig`
-    figSize: 2-tuple, optional, default as (None, 5)
-        Size of the figure in (width, height). If width or height is set to be None, it will be auto-adjusted.
-    boundingBox: 4-tuple, optional, default as (None, None, None, None)
-        (xMin, xMax, yMin, yMax), defines four boundaries of the figure
-    saveFigPath: string, optional, default as None
-        The path for exporting image if provided
-    showFig: bool, optional, default as True
-        True if show the figure in Juypter Notebook environment
+    **kwargs: optional
+        Additional matplotlib information
 
     Returns
     -------
     fig, ax
         matplotlib.pyplot object
     """
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Field names =============================================================
+    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+    neighborFieldName = 'neighbor' if 'neighborFieldName' not in kwargs else kwargs['neighborFieldName']
 
     # Check for required fields ===============================================
     if (nodes == None):
@@ -431,65 +421,107 @@ def plotNodes(
     # If no based matplotlib figure provided, define boundary =================
     if (fig == None or ax == None):
         fig, ax = plt.subplots()
-        boundingBox = findBoundingBox(
+        boundingBox = defaultBoundingBox(
             boundingBox = boundingBox, 
             nodes = nodes, 
             locFieldName = locFieldName, 
             latLonFlag = latLonFlag)
         (xMin, xMax, yMin, yMax) = boundingBox
-        (width, height) = findFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
+        (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
         if (isinstance(fig, plt.Figure)):
             fig.set_figwidth(width)
             fig.set_figheight(height)
             ax.set_xlim(xMin, xMax)
             ax.set_ylim(yMin, yMax)
 
+    # Create node styles ======================================================
+    nodeStyle = {}
+    for n in nodes:
+        nodeStyle[n] = {}
+
+        # x,y -----------------------------------------------------------------
+        nodeStyle[n]['x'] = None
+        nodeStyle[n]['y'] = None
+        if (not latLonFlag):
+            nodeStyle[n]['x'] = nodes[n][locFieldName][0]
+            nodeStyle[n]['y'] = nodes[n][locFieldName][1]
+        else:
+            nodeStyle[n]['x'] = nodes[n][locFieldName][1]
+            nodeStyle[n]['y'] = nodes[n][locFieldName][0]
+
+        # Color ---------------------------------------------------------------
+        if ('color' in nodes[n]):
+            nodeStyle[n]['color'] = nodes[n]['color']
+        elif (nodeColor == 'Random'):
+            nodeStyle[n]['color'] = rndColor()
+        else:
+            nodeStyle[n]['color'] = nodeColor
+
+        # Marker --------------------------------------------------------------
+        if ('marker' in nodes[n]):
+            nodeStyle[n]['marker'] = nodes[n]['marker']
+        else:
+            nodeStyle[n]['marker'] = nodeMarker
+
+        if ('markerSize' in nodes[n]):
+            nodeStyle[n]['markerSize'] = nodes[n]['markerSize']
+        else:
+            nodeStyle[n]['markerSize'] = nodeMarkerSize
+
+        # Label ---------------------------------------------------------------
+        if ('label' in nodes[n]):
+            nodeStyle[n]['label'] = nodes[n]['label']
+        else:
+            nodeStyle[n]['label'] = n
+
+        if ('ha' in nodes[n]):
+            nodeStyle[n]['ha'] = nodes[n]['ha']
+        else:
+            nodeStyle[n]['ha'] = 'left'
+        
+        if ('va' in nodes[n]):
+            nodeStyle[n]['va'] = nodes[n]['va']
+        else:
+            nodeStyle[n]['va'] = 'top'
+
     # Draw nodes ==============================================================
     for n in nodes:
-        # Define color --------------------------------------------------------
-        color = None
-        if ('color' in nodes[n]):
-            color = nodes[n]['color']
-        elif (nodeColor == 'Random'):
-            color = rndColor()
-        else:
-            color = nodeColor
+        ax.plot(
+            nodeStyle[n]['x'], 
+            nodeStyle[n]['y'], 
+            color = nodeStyle[n]['color'], 
+            marker = nodeStyle[n]['marker'], 
+            markersize = nodeStyle[n]['markerSize'])
+        ax.annotate(
+            nodeStyle[n]['label'], 
+            (nodeStyle[n]['x'], nodeStyle[n]['y']), 
+            ha=nodeStyle[n]['ha'], 
+            va=nodeStyle[n]['va'])
 
-        # Define marker and marker size ---------------------------------------
-        if ('marker' in nodes[n]):
-            nodeMarker = nodes[n]['marker']
-        if ('markerSize' in nodes[n]):
-            nodeMarkerSize = nodes[n]['markerSize']
+    # Neighborhood style ======================================================
+    nodeNeiStyle = {}
+    for n in nodes:
+        if ('neiShape' in nodes[n]):
+            # Neighborhood color --------------------------------------------------
+            if ('neighborColor' in nodes[n]):
+                nodeNeiStyle['neighborColor'] = nodes[n]['neighborColor']
+            else:
+                nodeNeiStyle['neighborColor'] = neighborColor
 
-        # plot nodes ----------------------------------------------------------
-        x = None
-        y = None
-        if (not latLonFlag):
-            x = nodes[n][locFieldName][0]
-            y = nodes[n][locFieldName][1]
-        else:
-            x = nodes[n][locFieldName][1]
-            y = nodes[n][locFieldName][0]
-        if (nodeMarkerSize == None):
-            ax.plot(x, y, color = color, marker = nodeMarker)
-        else:
-            ax.plot(x, y, color = color, marker = nodeMarker, markersize = nodeMarkerSize)
-        if ('label' not in nodes[n]):
-            lbl = n
-        else:
-            lbl = nodes[n]['label']
+            # Neighborhood opacity ------------------------------------------------
+            if ('neighborOpacity' in nodes[n]):
+                nodeNeiStyle['neighborOpacity'] = nodes[n]['neighborOpacity']
+            else:
+                nodeNeiStyle['neighborOpacity'] = neighborOpacity
 
-        ha = 'left'
-        if ('ha' in nodes[n]):
-            ha = nodes[n]['ha']
-        va = 'top'
-        if ('va' in nodes[n]):
-            va = nodes[n]['va']
-        ax.annotate(lbl, (x, y), ha=ha, va=va)
+            # Neighborhood fill style ---------------------------------------------
+            if ('neighborFillStyle' in nodes[n]):
+                nodeNeiStyle['neighborFillStyle'] = nodes[n]['neighborFillStyle']
+            else:
+                nodeNeiStyle['neighborFillStyle'] = neighborFillStyle
 
     # Draw node neighborhoods =================================================
     for n in nodes:
-        # If node has neighbor, plot the neighbor color first -----------------
         if ('neiShape' in nodes[n] and nodes[n]['neiShape'] == 'Poly'):
             fig, ax = plotPoly(
                 fig = fig,
@@ -497,52 +529,15 @@ def plotNodes(
                 poly = nodes[n][neighborFieldName],
                 edgeWidth = 1,
                 edgeColor = 'black',
-                fillColor = neighborColor,
-                opacity = neighborOpacity,
+                fillColor = nodeNeiStyle['neighborColor'],
+                fillStyle = nodeNeiStyle['neighborFillStyle'],
+                opacity = nodeNeiStyle['neighborOpacity'],
                 latLonFlag = latLonFlag,
-                showAxis = showAxis,
-                fillStyle = neighborFillStyle)
-        if ('neiShape' in nodes[n] and nodes[n]['neiShape'] == 'Isochrone'):
-            if ('actLevel' in nodes[n]):
-                for k in range(nodes[n]['actLevel'] + 1):
-                    fig, ax = plotPoly(
-                        fig = fig,
-                        ax = ax,
-                        poly = nodes[n][neighborFieldName][k],
-                        edgeWidth = 1,
-                        edgeColor = 'black',
-                        fillColor = 'red',
-                        opacity = neighborOpacity / len(nodes[n][neighborFieldName]),
-                        latLonFlag = latLonFlag,
-                        showAxis = showAxis,
-                        fillStyle = neighborFillStyle)
-                if (nodes[n]['actLevel'] < len(nodes[n][neighborFieldName])):
-                    for k in range(nodes[n]['actLevel'] + 1, len(nodes[n][neighborFieldName])):
-                        fig, ax = plotPoly(
-                            fig = fig,
-                            ax = ax,
-                            poly = nodes[n][neighborFieldName][k],
-                            edgeWidth = 1,
-                            edgeColor = 'black',
-                            fillColor = neighborColor,
-                            opacity = neighborOpacity / len(nodes[n][neighborFieldName]),
-                            latLonFlag = latLonFlag,
-                            showAxis = showAxis,
-                            fillStyle = neighborFillStyle)
-            else:
-                for k in range(len(nodes[n][neighborFieldName])):
-                    fig, ax = plotPoly(
-                        fig = fig,
-                        ax = ax,
-                        poly = nodes[n][neighborFieldName][k],
-                        edgeWidth = 1,
-                        edgeColor = 'black',
-                        fillColor = neighborColor,
-                        opacity = neighborOpacity / len(nodes[n][neighborFieldName]),
-                        latLonFlag = latLonFlag,
-                        showAxis = showAxis,
-                        fillStyle = neighborFillStyle)            
-        if ('neiShape' in nodes[n] and 'radius' in nodes[n] and nodes[n]['neiShape'] == 'Circle'):
+                showAxis = showAxis)
+        
+        elif ('neiShape' in nodes[n] and nodes[n]['neiShape'] == 'Circle'):
+            if ('radius' not in nodes[n]):
+                raise MissingParameterError(f"ERROR: Missing radius for node {n}, specify with 'radius' in nodes[{n}].")
             neiPoly = circleByCenterXY(
                 center = nodes[n][locFieldName],
                 radius = nodes[n]['radius'])
@@ -552,11 +547,14 @@ def plotNodes(
                 poly = neiPoly,
                 edgeWidth = 1,
                 edgeColor = 'black',
-                fillColor = neighborColor,
-                opacity = neighborOpacity,
+                fillColor = nodeNeiStyle['neighborColor'],
+                fillStyle = nodeNeiStyle['neighborFillStyle'],
+                opacity = nodeNeiStyle['neighborOpacity'],
                 latLonFlag = latLonFlag,
-                showAxis = showAxis,
-                fillStyle = neighborFillStyle)
+                showAxis = showAxis)
+
+        elif ('neiShape' in nodes[n] and nodes[n]['neiShape'] == 'Isochrone'):
+            raise UnsupportedInputError("ERROR: Not implemented yet.") 
 
     # Axis on and off =========================================================
     if (not showAxis):
@@ -572,21 +570,18 @@ def plotNodes(
 
 def plotArcs(
     arcs: dict,
-    arcFieldName = 'arc',
-    arcStartLocFieldName = 'startLoc',
-    arcEndLocFieldName = 'endLoc',
     arcColor: str = 'Random',
     arcWidth: float = 1.0,
     arcLabel: str = None,
-    arcStyle: str = 'solid',
-    arcDashes: tuple = (5, 2),
+    arcLineStyle: str = 'solid',
+    arcDashes: tuple = (None, None),
+    arcStartColor: str = 'black',
+    arcEndColor: str = 'black',
+    arcMarkerSize: int|float = 2.0,
     arrowFlag: bool = True,
     arrowPosition: float = 0.5,
     arrowHeadWidth: float = 2.0,
     arrowHeadLength: float = 3.0,
-    startColor: str = 'black',
-    endColor: str = 'black',
-    bothEndSize: int|float = 2.0,
     neighborOpacity: float = 0.5,
     neighborEntWidth: float = 1.2,
     neighborEntColor: str = 'black',
@@ -594,13 +589,7 @@ def plotArcs(
     neighborBtwColor: str = 'gray',
     neighborFillStyle: str = '///',
     latLonFlag: bool = False,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
     
     """
@@ -642,6 +631,23 @@ def plotArcs(
         matplotlib.pyplot object
     """
 
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Field names =============================================================
+    arcFieldName = 'arc' if 'arcFieldName' not in kwargs else kwargs['arcFieldName']
+    arcStartLocFieldName = 'startLoc' if 'arcStartLocFieldName' not in kwargs else kwargs['arcStartLocFieldName']
+    arcEndLocFieldName = 'endLoc' if 'arcEndLocFieldName' not in kwargs else kwargs['arcEndLocFieldName']
+    neiAFieldName = 'neiA' if 'neiAFieldName' not in kwargs else kwargs['neiAFieldName']
+    neiBFieldName = 'neiB' if 'neiBFieldName' not in kwargs else kwargs['neiBFieldName']
+    neiBtwFieldName = 'neiBtw' if 'neiBtwFieldName' not in kwargs else kwargs['neiBtwFieldName']
+
     # Check for required fields ===============================================
     if (arcs == None):
         raise MissingParameterError("ERROR: Missing required field `arcs`.")
@@ -652,7 +658,7 @@ def plotArcs(
     # If no based matplotlib figure provided, define boundary =================
     if (fig == None or ax == None):
         fig, ax = plt.subplots()
-        boundingBox = findBoundingBox(
+        boundingBox = defaultBoundingBox(
             boundingBox = boundingBox, 
             arcs = arcs, 
             arcFieldName = arcFieldName,
@@ -660,94 +666,154 @@ def plotArcs(
             arcEndLocFieldName = arcEndLocFieldName, 
             latLonFlag = latLonFlag)
         (xMin, xMax, yMin, yMax) = boundingBox
-        (width, height) = findFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
+        (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
         if (isinstance(fig, plt.Figure)):
             fig.set_figwidth(width)
             fig.set_figheight(height)
             ax.set_xlim(xMin, xMax)
             ax.set_ylim(yMin, yMax)
 
-    # Draw arcs ===============================================================
-    for i in arcs:
-        x1, y1, x2, y2 = 0, 0, 0, 0
-        if (arcFieldName in arcs[i]):        
+    # Create arc styles =======================================================
+    arcStyle = {}
+    for n in arcs:
+        arcStyle[n] = {}
+
+        # x,y -----------------------------------------------------------------
+        if (arcFieldName in arcs[n]):        
             if (not latLonFlag):
-                x1 = arcs[i][arcFieldName][0][0]
-                x2 = arcs[i][arcFieldName][1][0]
-                y1 = arcs[i][arcFieldName][0][1]
-                y2 = arcs[i][arcFieldName][1][1]
+                arcStyle[n]['x1'] = arcs[n][arcFieldName][0][0]
+                arcStyle[n]['x2'] = arcs[n][arcFieldName][1][0]
+                arcStyle[n]['y1'] = arcs[n][arcFieldName][0][1]
+                arcStyle[n]['y2'] = arcs[n][arcFieldName][1][1]
             else:
-                x1 = arcs[i][arcFieldName][0][1]
-                x2 = arcs[i][arcFieldName][1][1]
-                y1 = arcs[i][arcFieldName][0][0]
-                y2 = arcs[i][arcFieldName][1][0]
-        elif (arcStartLocFieldName in arcs[i] and arcEndLocFieldName in arcs[i]):
+                arcStyle[n]['x1'] = arcs[n][arcFieldName][0][1]
+                arcStyle[n]['x2'] = arcs[n][arcFieldName][1][1]
+                arcStyle[n]['y1'] = arcs[n][arcFieldName][0][0]
+                arcStyle[n]['y2'] = arcs[n][arcFieldName][1][0]
+        elif (arcStartLocFieldName in arcs[n] and arcEndLocFieldName in arcs[n]):
             if (not latLonFlag):
-                x1 = arcs[i][arcStartLocFieldName][0]
-                y1 = arcs[i][arcStartLocFieldName][1]
-                x2 = arcs[i][arcEndLocFieldName][0]
-                y2 = arcs[i][arcEndLocFieldName][1]
+                arcStyle[n]['x1'] = arcs[n][arcStartLocFieldName][0]
+                arcStyle[n]['y1'] = arcs[n][arcStartLocFieldName][1]
+                arcStyle[n]['x2'] = arcs[n][arcEndLocFieldName][0]
+                arcStyle[n]['y2'] = arcs[n][arcEndLocFieldName][1]
             else:
-                x1 = arcs[i][arcStartLocFieldName][1]
-                y1 = arcs[i][arcStartLocFieldName][0]
-                x2 = arcs[i][arcEndLocFieldName][1]
-                y2 = arcs[i][arcEndLocFieldName][0]
+                arcStyle[n]['x1'] = arcs[n][arcStartLocFieldName][1]
+                arcStyle[n]['y1'] = arcs[n][arcStartLocFieldName][0]
+                arcStyle[n]['x2'] = arcs[n][arcEndLocFieldName][1]
+                arcStyle[n]['y2'] = arcs[n][arcEndLocFieldName][0]
         else:
             raise MissingParameterError("ERROR: Cannot find corresponded `arcFieldName` or (`arcStartLocFieldName` and `arcEndLocFieldName`) in given `arcs` structure.")
-        dx = x2 - x1
-        dy = y2 - y1
-        if (arcColor == 'Random'):
-            rndRGB = rndColor()
-            if (arcDashes == None):
-                ax.plot([x1, x2], [y1, y2], color = rndRGB, linewidth=arcWidth, linestyle = arcStyle)
-            else:
-                ax.plot([x1, x2], [y1, y2], color = rndRGB, linewidth=arcWidth, linestyle = arcStyle, dashes = arcDashes)
-            if (arrowFlag):
-                deg = headingXY([x1, y1], [x2, y2])
-                ptC = [x1 + (x2 - x1) * arrowPosition, y1 + (y2 - y1) * arrowPosition]
-                ptM = ptInDistXY(ptC, direction = deg + 180, dist = arrowHeadLength / 2)
-                ptH = ptInDistXY(ptC, direction = deg, dist = arrowHeadLength / 2)
-                pt1 = ptInDistXY(ptM, direction = deg + 90, dist = arrowHeadWidth / 2)
-                pt2 = ptInDistXY(ptM, direction = deg - 90, dist = arrowHeadWidth / 2)
-                ax.fill([ptH[0], pt1[0], pt2[0]], [ptH[1], pt1[1], pt2[1]], facecolor=rndRGB, edgecolor=rndRGB, linewidth=0)
-                # ax.arrow(x=x1, y=y1, dx=dx * arrowPosition, dy=dy * arrowPosition, linewidth=arcWidth, head_width=arrowHeadWidth, head_length=arrowHeadLength, color=rndRGB)
-        else:
-            if (arcDashes == None):
-                ax.plot([x1, x2], [y1, y2], color = arcColor, linewidth=arcWidth, linestyle = arcStyle)
-            else:
-                ax.plot([x1, x2], [y1, y2], color = arcColor, linewidth=arcWidth, linestyle = arcStyle, dashes = arcDashes)
-            if (arrowFlag):
-                deg = headingXY([x1, y1], [x2, y2])
-                ptC = [x1 + (x2 - x1) * arrowPosition, y1 + (y2 - y1) * arrowPosition]
-                ptM = ptInDistXY(ptC, direction = deg + 180, dist = arrowHeadLength / 2)
-                ptH = ptInDistXY(ptC, direction = deg, dist = arrowHeadLength / 2)
-                pt1 = ptInDistXY(ptM, direction = deg + 90, dist = arrowHeadWidth / 2)
-                pt2 = ptInDistXY(ptM, direction = deg - 90, dist = arrowHeadWidth / 2)
-                ax.fill([ptH[0], pt1[0], pt2[0]], [ptH[1], pt1[1], pt2[1]], facecolor=arcColor, edgecolor=arcColor, linewidth=0)
 
-        ax.plot(x1, y1, color = startColor, marker = 'o', markersize = bothEndSize)
-        ax.plot(x2, y2, color = endColor, marker = 'o', markersize = bothEndSize)
-        if (arcLabel == None and 'label' not in arcs[i]):
-            lbl = i
-        elif (arcLabel == None):
-            lbl = arcs[i]['label']
+        # Color ---------------------------------------------------------------
+        if ('color' in arcs[n]):
+            arcStyle[n]['color'] = arcs[n]['color']
+        elif (arcColor == 'Random'):
+            arcStyle[n]['color'] = rndColor()
         else:
-            lbl = arcLabel
-        ha = 'left'
-        if ('ha' in arcs[i]):
-            ha = arcs[i]['ha']
-        va = 'top'
-        if ('va' in arcs[i]):
-            va = arcs[i]['va']
-        ax.annotate(lbl, (x1 + dx / 2, y1 + dy / 2), ha=ha, va=va)
+            arcStyle[n]['color'] = arcColor
+
+        if ('startColor' in arcs[n]):
+            arcStyle[n]['startColor'] = arcs[n]['startColor']
+        elif (arcStartColor == 'Random'):
+            arcStyle[n]['startColor'] = rndColor()
+        else:
+            arcStyle[n]['startColor'] = arcStartColor
+
+        if ('endColor' in arcs[n]):
+            arcStyle[n]['endColor'] = arcs[n]['endColor']
+        elif (arcEndColor == 'Random'):
+            arcStyle[n]['endColor'] = rndColor()
+        else:
+            arcStyle[n]['endColor'] = arcEndColor
+
+        if ('markerSize' in arcs[n]):
+            arcStyle[n]['markerSize'] = arcs[n]['markerSize']
+        elif (arcEndColor == 'Random'):
+            arcStyle[n]['markerSize'] = rndColor()
+        else:
+            arcStyle[n]['markerSize'] = arcMarkerSize
+
+        # Dashes --------------------------------------------------------------
+        if ('dashes' in arcs[n]):
+            arcStyle[n]['dashes'] = arcs[n]['dashes']
+        elif (arcDashes == None):
+            arcStyle[n]['dashes'] = (None, None)
+        else:
+            arcStyle[n]['dashes'] = arcDashes
+
+        # Width ---------------------------------------------------------------
+        if ('width' in arcs[n]):
+            arcStyle[n]['width'] = arcs[n]['width']
+        else:
+            arcStyle[n]['width'] = arcWidth
+
+        # Style ---------------------------------------------------------------
+        if ('style' in arcs[n]):
+            arcStyle[n]['style'] = arcs[n]['style']
+        else:
+            arcStyle[n]['style'] = arcLineStyle
+
+        # Label ---------------------------------------------------------------
+        if ('label' in arcs[n]):
+            arcStyle[n]['label'] = arcs[n]['label']
+        else:
+            arcStyle[n]['label'] = None
+
+        if ('ha' in arcs[n]):
+            arcStyle[n]['ha'] = arcs[n]['ha']
+        else:
+            arcStyle[n]['ha'] = 'left'
+        
+        if ('va' in arcs[n]):
+            arcStyle[n]['va'] = arcs[n]['va']
+        else:
+            arcStyle[n]['va'] = 'top'
+
+    # Draw arcs ===============================================================
+    for n in arcs:
+        # Plot arcs
+        ax.plot(
+            [arcStyle[n]['x1'], arcStyle[n]['x2']], 
+            [arcStyle[n]['y1'], arcStyle[n]['y2']], 
+            color = arcStyle[n]['color'], 
+            linewidth=arcStyle[n]['width'], 
+            linestyle = arcStyle[n]['style'], 
+            dashes = arcStyle[n]['dashes'])
+        # Plot arrows
+        if (arrowFlag):
+            deg = headingXY([arcStyle[n]['x1'], arcStyle[n]['y1']], [arcStyle[n]['x2'], arcStyle[n]['y2']])
+            ptC = [arcStyle[n]['x1'] + (arcStyle[n]['x2'] - arcStyle[n]['x1']) * arrowPosition, arcStyle[n]['y1'] + (arcStyle[n]['y2'] - arcStyle[n]['y1']) * arrowPosition]
+            ptM = ptInDistXY(ptC, direction = deg + 180, dist = arrowHeadLength / 2)
+            ptH = ptInDistXY(ptC, direction = deg, dist = arrowHeadLength / 2)
+            pt1 = ptInDistXY(ptM, direction = deg + 90, dist = arrowHeadWidth / 2)
+            pt2 = ptInDistXY(ptM, direction = deg - 90, dist = arrowHeadWidth / 2)
+            ax.fill([ptH[0], pt1[0], pt2[0]], [ptH[1], pt1[1], pt2[1]], facecolor=arcStyle[n]['color'], edgecolor=arcStyle[n]['color'], linewidth=0)
+
+        # Plot both ends
+        ax.plot(arcStyle[n]['x1'], arcStyle[n]['y1'], 
+            color = arcStyle[n]['startColor'], 
+            marker = 'o', 
+            markersize = arcStyle[n]['markerSize'])
+        ax.plot(arcStyle[n]['x2'], arcStyle[n]['y2'], 
+            color = arcStyle[n]['endColor'], 
+            marker = 'o', 
+            markersize = arcStyle[n]['markerSize'])
+
+        # Plot label
+        dx = arcStyle[n]['x2'] - arcStyle[n]['x1']
+        dy = arcStyle[n]['y2'] - arcStyle[n]['y1']
+        ax.annotate(arcStyle[n]['label'], 
+            (arcStyle[n]['x1'] + dx / 2, arcStyle[n]['y1'] + dy / 2), 
+            ha=arcStyle[n]['ha'], 
+            va=arcStyle[n]['va'])
 
     # Draw arcs neighborhoods =================================================
-    for i in arcs:
-        if ('neiA' in arcs[i]):
+    for n in arcs:
+        if (neiAFieldName in arcs[n]):
             fig, ax = plotPoly(
                 fig = fig,
                 ax = ax,
-                poly = arcs[i]['neiA'],
+                poly = arcs[n][neiAFieldName],
                 edgeWidth = neighborEntWidth,
                 edgeColor = 'black',
                 fillColor = neighborEntColor,
@@ -755,11 +821,11 @@ def plotArcs(
                 latLonFlag = latLonFlag,
                 showAxis = showAxis,
                 fillStyle = neighborFillStyle)
-        if ('neiB' in arcs[i]):
+        if (neiBFieldName in arcs[n]):
             fig, ax = plotPoly(
                 fig = fig,
                 ax = ax,
-                poly = arcs[i]['neiB'],
+                poly = arcs[n][neiBFieldName],
                 edgeWidth = neighborEntWidth,
                 edgeColor = 'black',
                 fillColor = neighborEntColor,
@@ -767,11 +833,11 @@ def plotArcs(
                 latLonFlag = latLonFlag,
                 showAxis = showAxis,
                 fillStyle = neighborFillStyle)
-        if ('neiBtw' in arcs[i]):
+        if (neiBtwFieldName in arcs[n]):
             fig, ax = plotPoly(
                 fig = fig,
                 ax = ax,
-                poly = arcs[i]['neiBtw'],
+                poly = arcs[n][neiBtwFieldName],
                 edgeWidth = neighborBtwWidth,
                 edgeColor = 'black',
                 fillColor = neighborBtwColor,
@@ -800,14 +866,17 @@ def plotCurveArcs(
     lineDashes: tuple = (5, 2),
     arrowFlag: bool = True,
     lod: int = 30,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
     for a in curveArcs:
         # 计算夹角和拆分出来的边数
@@ -846,6 +915,13 @@ def plotCurveArcs(
             showAxis = showAxis,
             showFig = False
             )
+
+    # Save figure =============================================================
+    if (saveFigPath != None and isinstance(fig, plt.Figure)):
+        fig.savefig(saveFigPath)
+    if (not showFig):
+        plt.close(fig)
+
     return fig, ax
 
 def plotPathCover(
@@ -859,14 +935,17 @@ def plotPathCover(
     fillStyle: str = "///",
     opacity: float = 0.5,
     lod: int = 30,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
     # curveArcs = {}
     # # NOTE: 先记录每个segment的角度
@@ -1023,13 +1102,7 @@ def plotLocSeq(
     arrowHeadWidth: float = 0.1,
     arrowHeadLength: float = 0.2,
     latLonFlag: bool = False,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
     
     """Given a list of coordinates, plot a open polyline by sequences.
@@ -1069,6 +1142,15 @@ def plotLocSeq(
     fig, ax: matplotlib.pyplot object
     """
 
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
     # Check for required fields ===============================================
     if (locSeq == None):
         raise MissingParameterError("ERROR: Missing required field `locSeq`.")
@@ -1089,16 +1171,16 @@ def plotLocSeq(
         arcFieldName = 'arc',
         arcColor = lineColor,
         arcWidth = lineWidth,
-        arcStyle = lineStyle,
+        arcLineStyle = lineStyle,
         arcDashes = lineDashes if lineStyle == 'dashed' else (None, None),
         arcLabel = "",
         arrowFlag = arrowFlag,
         arrowPosition = arrowPosition,
         arrowHeadWidth = arrowHeadWidth,
         arrowHeadLength = arrowHeadLength,
-        startColor = nodeColor,
-        endColor = nodeColor ,
-        bothEndSize = nodeMarkerSize,
+        arcStartColor = nodeColor,
+        arcEndColor = nodeColor ,
+        arcMarkerSize = nodeMarkerSize,
         latLonFlag = latLonFlag,
         figSize = figSize,
         boundingBox = boundingBox,
@@ -1134,7 +1216,7 @@ def plotLocSeq3D(
         fig = plt.figure()
         ax = plt.axes(projection = '3d')
         (xMin, xMax, yMin, yMax, zMin, zMax) = boundingBox3D
-        # (width, height) = findFigSize(boundingBox3D, figSize[0], figSize[1], latLonFlag)
+        # (width, height) = defaultFigSize(boundingBox3D, figSize[0], figSize[1], latLonFlag)
         # fig.set_figwidth(width)
         # fig.set_figheight(height)
         ax.set_xlim(xMin, xMax)
@@ -1179,7 +1261,6 @@ def plotLocSeq3D(
 def plotNodeSeq(
     nodes: dict, 
     nodeSeq: list[int|str],
-    locFieldName: str = 'loc',
     lineColor: str = 'Random',
     lineWidth: float = 1,
     lineStyle: str = 'solid',
@@ -1191,13 +1272,7 @@ def plotNodeSeq(
     arrowHeadWidth: float = 0.1,
     arrowHeadLength: float = 0.2,
     latLonFlag: bool = False,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
 
     """Given a `nodes` dictionary and a sequence of node IDs, plot a route that visits each node by IDs.
@@ -1238,6 +1313,18 @@ def plotNodeSeq(
     fig, ax: matplotlib.pyplot object
     """
 
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Field names =============================================================
+    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+
     # Create arcs =============================================================
     if (nodeSeq == None):
         raise MissingParameterError("ERROR: Missing required field `nodeSeq`.")
@@ -1264,13 +1351,13 @@ def plotNodeSeq(
         arcStyle = lineStyle,
         arcDashes = lineDashes if lineStyle == 'dashed' else (None, None),
         arcLabel = "",
+        arcStartColor = nodeColor,
+        arcEndColor = nodeColor,
+        arcMarkerSize = nodeMarkerSize,
         arrowFlag = arrowFlag,
         arrowPosition = arrowPosition,
         arrowHeadWidth = arrowHeadWidth,
-        arrowHeadLength = arrowHeadLength,
-        startColor = nodeColor,
-        endColor = nodeColor ,
-        bothEndSize = nodeMarkerSize,
+        arrowHeadLength = arrowHeadLength,        
         latLonFlag = latLonFlag,
         figSize = figSize,
         boundingBox = boundingBox,
@@ -1288,13 +1375,7 @@ def plotPoly(
     fillStyle: str = "///",
     opacity: float = 0.5,
     latLonFlag: bool = False,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
 
     """Draw a polygon
@@ -1334,6 +1415,15 @@ def plotPoly(
     fig, ax: matplotlib.pyplot object
     """
 
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
     # Check for required fields ===============================================
     if (poly == None):
         raise MissingParameterError("ERROR: Missing required field `poly`.")
@@ -1341,7 +1431,7 @@ def plotPoly(
     # If no based matplotlib figure provided, define boundary =================
     if (fig == None or ax == None):
         fig, ax = plt.subplots()
-        boundingBox = findBoundingBox(
+        boundingBox = defaultBoundingBox(
             boundingBox = boundingBox, 
             poly = poly,
             latLonFlag = latLonFlag)
@@ -1350,7 +1440,7 @@ def plotPoly(
         width = None
         height = None
         if (figSize == None or figSize[0] == None or figSize[1] == None):
-            (width, height) = findFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
+            (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
         else:
             (width, height) = figSize
 
@@ -1403,25 +1493,6 @@ def plotPoly(
 
     return fig, ax
 
-def plotTimedPoly(
-    timedPoly: poly, 
-    edgeWidth: float = 0.5,
-    edgeColor: str|None = 'Random',
-    fillColor: str|None = None,
-    fillStyle: str = "///",
-    opacity: float = 0.5,
-    latLonFlag: bool = False,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
-    ):
-
-    return fig, ax
-
 def plotCircle(
     center: pt, 
     radius: float,
@@ -1432,20 +1503,25 @@ def plotCircle(
     fillStyle: str = "///",
     opacity: float = 0.5,
     latLonFlag: bool = False,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
 
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Create polygon ==========================================================
     polyCircle = [[
         center[0] + radius * math.sin(2 * d * math.pi / lod),
         center[1] + radius * math.cos(2 * d * math.pi / lod),
     ] for d in range(lod + 1)]
 
+    # Plot polygon ============================================================
     fig, ax = plotPoly(
         poly = polyCircle,
         edgeWidth = edgeWidth,
@@ -1478,11 +1554,11 @@ def plotCone3D(
     if (fig == None or ax == None):
         fig = plt.figure()
         ax = plt.axes(projection = '3d')
-        boundingBox3D = findBoundingBox3D(
+        boundingBox3D = defaultBoundingBox3D(
             boundingBox3D = boundingBox3D, 
             cone = cone)
         (xMin, xMax, yMin, yMax, zMin, zMax) = boundingBox3D
-        # (width, height) = findFigSize(boundingBox3D, figSize[0], figSize[1], latLonFlag)
+        # (width, height) = defaultFigSize(boundingBox3D, figSize[0], figSize[1], latLonFlag)
         # fig.set_figwidth(width)
         # fig.set_figheight(height)
         ax.set_xlim(xMin, xMax)
@@ -1534,14 +1610,17 @@ def plotPolygons(
     fillStyle: str = "///",
     opacity: float = 0.5,
     latLonFlag: bool = False,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
     # Sanity check ============================================================
     if (type(polygons) != dict):
@@ -1550,14 +1629,14 @@ def plotPolygons(
     # If no based matplotlib figure provided, define boundary =================
     if (fig == None or ax == None):
         fig, ax = plt.subplots()
-        boundingBox = findBoundingBox(
+        boundingBox = defaultBoundingBox(
             boundingBox = boundingBox, 
             polygons = polygons,
             anchorFieldName = anchorFieldName,
             polyFieldName = polyFieldName,
             latLonFlag = latLonFlag)
         (xMin, xMax, yMin, yMax) = boundingBox
-        (width, height) = findFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
+        (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
         if (isinstance(fig, plt.Figure)):
             fig.set_figwidth(width)
             fig.set_figheight(height)
@@ -1614,13 +1693,17 @@ def plotMapChina(
     fillColor: str|None = None,
     fillStyle: str = "///",
     opacity: float = 0.5,   
-    fig = None,
-    ax = None,
-    figSize: list[int|float|None] | tuple[int|float|None, int|float|None] = (None, 5), 
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
     multiPoly = []
 
@@ -1643,7 +1726,7 @@ def plotMapChina(
                 x.append(pt[0])
                 y.append(pt[1])
     boundingBox = (min(x), max(x), min(y), max(y))
-    figSize = findFigSize(boundingBox, figSize[0], figSize[1], True)
+    figSize = defaultFigSize(boundingBox, figSize[0], figSize[1], True)
 
     # 读取本地的
     for polys in multiPoly:
@@ -1673,13 +1756,18 @@ def plotMapUS(
     fillColor: str|None = None,
     fillStyle: str = "///",
     opacity: float = 0.5,   
-    fig = None,
-    ax = None,
-    figSize: list[int|float|None] | tuple[int|float|None, int|float|None] = (None, 5), 
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ):
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
     if (fig == None or ax == None):
         fig, ax = plt.subplots()
     
@@ -1754,14 +1842,18 @@ def plotRoads(
             'others': 'gray'
         },
     roadShowFlags: list[str, bool]|str|bool = 'All',
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
+    **kwargs
     ): 
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
     # FIXME: In future, we might want to distinguish roads by max speed or show the names of roads
     # If no based matplotlib figure, define boundary ==========================
     if (fig == None or ax == None):
@@ -1794,7 +1886,7 @@ def plotRoads(
         if (yMax == None):
             yMax = max(allY) + 0.05 * abs(max(allY) - min(allY))
         boundingBox = (xMin, xMax, yMin, yMax)
-        figSize = findFigSize(boundingBox, figSize[0], figSize[1], True)
+        figSize = defaultFigSize(boundingBox, figSize[0], figSize[1], True)
         (width, height) = figSize
 
         fig.set_figwidth(width)
@@ -1855,14 +1947,18 @@ def plotBuildings(
             'manufacture': 'orange'
         },
     buildingShowFlags: list[str, bool]|str|bool = False,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox = (None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
-    ): 
+    **kwargs
+    ):
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
     # FIXME: In future, we might want to distinguish roads by max speed or show the names of roads
     # If no based matplotlib figure, define boundary ==========================
     if (fig == None or ax == None):

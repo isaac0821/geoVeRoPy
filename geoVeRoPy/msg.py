@@ -4,10 +4,6 @@
 # PLEASE, PLEASE do NOT put any MSG into your dishes.
 # =============================================================================
 
-# Warning message - Overwrite inputted field
-WARNING_OVERWRITE_STARTTIME             = "WARNING: Field `startTime` has been overwritten"
-WARNING_OVERWRITE_ENDTIME               = "WARNING: Field `endTime` has been overwritten"
-
 # Error message - Missing required field
 ERROR_MISSING_N                         = "ERROR: Missing required field `N`, `N` is an integer indicating number of vertices"
 ERROR_MISSING_NODES                     =("ERROR: Missing required field `nodes`. The format of `nodes` is \n"
@@ -147,5 +143,3 @@ ERROR_MISSING_GANTT                     =("ERROR: Missing required field `gantt`
                                         + "    }]\n")
 ERROR_ZERO_VECTOR                       = "ERROR: Segment or Ray should be defined using two different points"
 
-# Error message - Time windows related
-ERROR_TW_OVERLAP                        = "ERROR: Overlapped time windows."

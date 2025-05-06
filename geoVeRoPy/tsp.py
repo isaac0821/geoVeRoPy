@@ -11,7 +11,6 @@ from .travel import *
 
 def solveTSP(
     nodes: dict, 
-    locFieldName: str = 'loc',
     depotID: int|str = 0,
     startID: int|str = None,
     endID: int|str = None,
@@ -129,6 +128,9 @@ def solveTSP(
     if (depotID == None and (startID == None or endID == None)):
         raise OutOfRangeError("ERROR: Need to specify depotID or both the startID and endID")
 
+    # Field names =============================================================
+    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+    
     # Check if detail information is needed ===================================
     if (detailFlag == True):
         # For animation propose
