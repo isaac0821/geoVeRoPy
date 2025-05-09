@@ -2,12 +2,14 @@ import math
 
 from .ring import *
 from .geometry import *
+from .common import *
 
 class CurveArcNode(object):
-    def __init__(self, key, loc, deg, prev=None, next=None):
+    def __init__(self, key, loc, deg, center, prev=None, next=None):
         self.key = key # key的值具体是多少不重要，只要可以通过prev和next检索到就行
         self.loc = loc
         self.deg = deg
+        self.center = center
         self.prev = prev if prev != None else CurveArcNilNode()
         self.next = next if next != None else CurveArcNilNode()
 
@@ -24,7 +26,7 @@ class CurveArcNilNode(CurveArcNode):
         return True
 
 class CurveArc(object):
-    def __init__(self, center, radius, startDeg, endDeg, lod = 6):
+    def __init__(self, center, radius, startDeg, endDeg, lod = 12):
         # 这里是顺时针， startDeg一定要小于endDeg，如果endDeg跨过了0°，就加上360°
         self.center = center
         self.radius = radius
@@ -43,6 +45,7 @@ class CurveArc(object):
                 key = i,
                 loc = ptInDistXY(self.center, d, self.radius),
                 deg = d,
+                center = self.center,
                 prev = None,
                 next = None
             ))        
@@ -51,6 +54,8 @@ class CurveArc(object):
             cvNodeList[i].next = cvNodeList[i + 1]
         for i in range(1, len(cvNodeList)):
             cvNodeList[i].prev = cvNodeList[i - 1]
+
+        self._count = len(cvNodeList)
 
         self.head = cvNodeList[0]
         self.tail = cvNodeList[-1]
@@ -62,7 +67,73 @@ class CurveArc(object):
             locs.append(ptInDistXY(self.center, d, self.radius))
         return shapely.LineString(locs)
 
-    def insertBefore(self, n):
+    def query(self, key) -> "CurveArcNode":
+        if (self.head.isNil):
+            raise EmptyError("ERROR: The CurveArc is empty.")
+        cur = self.head
+        queried = 0
+        while (not cur.isNil):
+            if (cur.key == key):
+                return cur
+            else:
+                cur = cur.next
+                queried += 1
+                if (queried > self._count):
+                    raise OutOfRangeError("ERROR: Unexpected loop")
+        return CurveArcNilNode()
+
+    @property
+    def count(self):
+        return self._count
+
+    def traverse(self) -> list:
+        cvNodes = []
+        cur = self.head
+        while (not cur.isNil):
+            if (len(cvNodes) > self._count):
+                raise OutOfRangeError("ERROR: Unexpected loop")
+            cvNodes.append(cur)
+            cur = cur.next
+
+        return cvNodes
+
+    def insertAround(self, n):
+        # 给定一个CurveArcNode，在前方和后方分别插入一个CurveArcNode
+
+        if (not n.prev.isNil):
+            newDeg = n.prev.deg + (n.deg - n.prev.deg) / 2
+
+            newCurveArcPrev = CurveArcNode(
+                key = self._count + 1,
+                loc = ptInDistXY(self.center, newDeg, self.radius),
+                deg = newDeg,
+                center = self.center)
+
+            nPrev = n.prev
+            nPrev.next = newCurveArcPrev
+            newCurveArcPrev.prev = nPrev
+            newCurveArcPrev.next = n
+            n.prev = newCurveArcPrev
+
+            self._count += 1
+
+        if (not n.next.isNil):
+            newDeg = n.deg + (n.next.deg - n.deg) / 2
+
+            newCurveArcNext = CurveArcNode(
+                key = self._count + 1,
+                loc = ptInDistXY(self.center, newDeg, self.radius),
+                deg = newDeg,
+                center = self.center)
+
+            nNext = n.next
+            n.next = newCurveArcNext
+            newCurveArcNext.prev = n
+            newCurveArcNext.next = nNext
+            nNext.prev = newCurveArcNext
+
+            self._count += 1
+
         return
 
 def intCurveArc2Circle(curveArc: CurveArc, circle: dict) -> CurveArc:

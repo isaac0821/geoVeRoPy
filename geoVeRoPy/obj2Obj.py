@@ -3,6 +3,7 @@ import gurobipy as grb
 
 from .geometry import *
 from .ring import *
+from .curveArc import *
 from .gridSurface import *
 from .common import *
 # from .plot import *
@@ -838,6 +839,124 @@ def _circle2CirclePathCOPT(startPt: pt, endPt: pt, circles: dict, outputFlag: bo
     return {
         'path': path,
         'dist': ofv
+    }
+
+def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], adaptErr = 0.002, atLeastTimeBtw = None, speed = 1):
+
+    tau = {}
+
+    G = nx.Graph()
+
+    if (atLeastTimeBtw == None):
+        atLeastTimeBtw = [0 for i in range(len(curveArcs) + 1)]
+
+    # Initial iteration =======================================================
+    # startPt to the first curveArc
+    cur = curveArcs[0].head
+    while (not cur.isNil):
+        d = distEuclideanXY(startPt, cur.loc)
+        tau['s', (0, cur.key)] = d
+        G.add_edge('s', (0, cur.key), weight = max(d / speed, atLeastTimeBtw[0]))
+        cur = cur.next
+
+    # Between startPt and endPt
+    for i in range(len(curveArcs) - 1):
+        curI = curveArcs[i].head
+        while (not curI.isNil):
+            curJ = curveArcs[i + 1].head
+            while (not curJ.isNil):
+                d = distEuclideanXY(curI.loc, curJ.loc)
+                tau[(i, curI.key), (i + 1, curJ.key)] = d
+                G.add_edge((i, curI.key), (i + 1, curJ.key), weight = max(d / speed, atLeastTimeBtw[i + 1]))
+                curJ = curJ.next
+            curI = curI.next
+
+    # last curveArc to endPt
+    cur = curveArcs[-1].head
+    while (not cur.isNil):
+        d = distEuclideanXY(cur.loc, endPt)
+        tau[(len(curveArcs) - 1, cur.key), 'e'] = d
+        G.add_edge((len(curveArcs) - 1, cur.key), 'e', weight = max(d / speed, atLeastTimeBtw[-1]))
+        cur = cur.next
+
+    sp = nx.dijkstra_path(G, 's', 'e')
+
+    dist = distEuclideanXY(startPt, curveArcs[sp[1][0]].query(sp[1][1]).loc)
+    for i in range(1, len(sp) - 2):
+        dist += tau[(sp[i][0], sp[i][1]), (sp[i + 1][0], sp[i + 1][1])]
+    dist += distEuclideanXY(curveArcs[sp[-2][0]].query(sp[-2][1]).loc, endPt)
+
+    # dist = 0
+    # for i in range(1, len(sp)):
+    #     dist += 
+
+    # Refine ==================================================================
+    refineFlag = True
+    while (refineFlag):
+        # sp[0] is startLoc
+        # sp[-1] is endLoc
+        for i in range(1, len(sp) - 1):
+            cvIdx = sp[i][0]
+            cvKey = sp[i][1]
+
+            # Insert two pts before and after this cvNode
+            n = curveArcs[cvIdx].query(cvKey)
+            curveArcs[cvIdx].insertAround(n)
+
+            # Update graph
+            # startPt to the first curveArc
+            cur = curveArcs[0].head
+            while (not cur.isNil):
+                if (('s', (0, cur.key)) not in G.edges):
+                    d = distEuclideanXY(startPt, cur.loc)
+                    tau['s', (0, cur.key)] = d
+                    G.add_edge('s', (0, cur.key), weight = max(d / speed, atLeastTimeBtw[0]))
+                cur = cur.next
+
+            # Between startPt and endPt
+            for i in range(len(curveArcs) - 1):
+                curI = curveArcs[i].head
+                while (not curI.isNil):
+                    curJ = curveArcs[i + 1].head
+                    while (not curJ.isNil):
+                        if (((i, curI.key), (i + 1, curJ.key)) not in G.edges):
+                            d = distEuclideanXY(curI.loc, curJ.loc)
+                            tau[(i, curI.key), (i + 1, curJ.key)] = d
+                            G.add_edge((i, curI.key), (i + 1, curJ.key), weight = max(d / speed, atLeastTimeBtw[i + 1]))
+                        curJ = curJ.next
+                    curI = curI.next
+
+            # last curveArc to endPt
+            cur = curveArcs[-1].head
+            while (not cur.isNil):
+                if (((len(curveArcs) - 1, cur.key), 'e') not in G.edges):
+                    d = distEuclideanXY(cur.loc, endPt)
+                    tau[(len(curveArcs) - 1, cur.key), 'e'] = d
+                    G.add_edge((len(curveArcs) - 1, cur.key), 'e', weight = max(d / speed, atLeastTimeBtw[-1]))
+                cur = cur.next
+
+            newDist = distEuclideanXY(startPt, curveArcs[sp[1][0]].query(sp[1][1]).loc)
+            for i in range(1, len(sp) - 2):
+                newDist += distEuclideanXY(
+                    curveArcs[sp[i][0]].query(sp[i][1]).loc,
+                    curveArcs[sp[i + 1][0]].query(sp[i + 1][1]).loc)
+            newDist += distEuclideanXY(curveArcs[sp[-2][0]].query(sp[-2][1]).loc, endPt)
+
+            if (abs(newDist - dist) <= adaptErr):
+                refineFlag = False
+
+            dist = newDist
+
+    # Collect results =========================================================
+    path = [startPt]
+    for p in sp:
+        if (p != 's' and p != 'e'):
+            path.append(curveArcs[p[0]].query(p[1]).loc)
+    path.append(endPt)
+
+    return {
+        'path': path,
+        'dist': dist
     }
 
 def cone2ConePath(startPt: pt, endPt: pt, cones: dict, repSeq: list, tanAlpha: float, config = None):

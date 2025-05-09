@@ -3,11 +3,12 @@ from .common import *
 
 # Basic tree objects
 class TreeNode(object):
-    def __init__(self, key, value, parent: 'TreeNode' = None, treeNodes: list['TreeNode'] = None):
+    def __init__(self, key, value, parent: 'TreeNode' = None, treeNodes: list['TreeNode'] = None, **kwargs):
         self.key = key
         self.value = value
         self.parent = parent if parent != None else TreeNilNode()
         self.treeNodes = treeNodes if treeNodes != None else [TreeNilNode()]
+        self.__dict__.update(kwargs)
 
     @property
     def isNil(self):

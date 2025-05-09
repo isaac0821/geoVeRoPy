@@ -152,8 +152,6 @@ def seqRemoveDegen(seq: list[pt]):
 
 def ptSetSeq2CircleBak(seq: list, circles: dict, seqDegenedFlag: bool = True):
 
-
-
     return
 
 def ptSetSeq2Poly(seq, polygons:dict, polyFieldName = 'polygon', seqDegenedFlag: bool = True):
@@ -331,15 +329,10 @@ def segSetSeq2Circle(seq: list, circles: dict, seqDegenedFlag: bool = True):
                 if (abs(d2Circle - circles[p]['radius']) < closestToBoundaryError):
                     closestToBoundaryIdx = p
                     closestToBoundaryError = abs(d2Circle - circles[p]['radius'])
-            # print(i, p, d2Circle)
         if (len(tangCircle) == 0):
             tangCircle.append(closestToBoundaryIdx)
             inerCircle.append(closestToBoundaryIdx)
             warnings.warn(f"WARNING: Did not find the corresponding circle for node {i}, the smallest error is {closestToBoundaryError}, to circle {closestToBoundaryIdx}")
-            # if (closestToBoundaryError > 10):
-            #     print("seq: ", seq)
-            #     print("circles: ", circles)
-            #     raise RuntimeError
         turnPts[i] = {
             'loc': seq[i],
             'tangCircle': tangCircle,
@@ -360,13 +353,15 @@ def segSetSeq2Circle(seq: list, circles: dict, seqDegenedFlag: bool = True):
             'startMileage': accMileage,
             'intCircles': [],
             'stTangPt': None,
+            'segID': i
         }
         if (len(turnPts[i]['tangCircle']) > 0):
             segIntCircle[i]['stTangPt'] = {
                 'shape': seq[i],
                 'type': 'Point',
                 'belong': turnPts[i]['inerCircle'],
-                'mileage': accMileage
+                'mileage': accMileage,
+                'segID': i
             }
         accMileage += distEuclideanXY(seq[i], seq[i + 1])
         segIntCircle[i]['endMileage'] = accMileage
@@ -428,7 +423,8 @@ def segSetSeq2Circle(seq: list, circles: dict, seqDegenedFlag: bool = True):
                     'shape': [curPt, newPt],
                     'type': 'Segment',
                     'belong': [k for k in circleInside],
-                    'mileage': [curMileage, newMileage]
+                    'mileage': [curMileage, newMileage],
+                    'segID': i
                     })
                 curMileage = newMileage
                 curPt = newPt

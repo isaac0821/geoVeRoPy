@@ -1,5 +1,8 @@
+import networkx as nx
+
 from .geometry import *
 from .polyTour import *
+from .curveArc import *
 
 def ptSetSeq2Circle(seq: list, circles: dict, seqDegenedFlag: bool = True):
 
