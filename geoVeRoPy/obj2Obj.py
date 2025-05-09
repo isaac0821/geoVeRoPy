@@ -1322,11 +1322,59 @@ def timedCircle2timedCirclePath(startPt: pt, endPt: pt, vecs: list[dict], radius
         'runtime': runtime
     }
 
-def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:list[TriGridSurface], vehSpeed):
+def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:list[TriGridSurface], vehSpeed, startTime: float = 0):
     
-    # 先用贪婪的方法，找到由一个点出发最短的到下一个surface的
-    
+    # 前向Greedy，给定一个初始的path3D，保留前startImpFrom项，从第s+1开始用最短距离计算
+    def forwardPureGreedy(path3D = None, startImpFrom = 1):
+        # 先用贪婪的方法，找到由一个点出发最短的到下一个surface的
+        curPt = startPt  # 开始总是不变的
+        curZ = startTime # 开始总是不变的
+        newPath3D = [(curPt, curZ)]
+        # print((curPt, curZ))
+        for i in range(len(triGridSurfaces)):
+            if (i <= startImpFrom and path3D != None):
+                newPath3D.append(path3D[i + 1])
+            else:
+                (curPt, curZ) = newPath3D[-1]
+                p2F = triGridSurfaces[i].fastestPt2Facet(curPt, curZ, vehSpeed)
+                curPt = p2F['pt']
+                curZ = p2F['zVeh']
+                newPath3D.append((curPt, curZ))
+                # print((curPt, curZ))
+        distLast = distEuclideanXY(curPt, endPt)
+        timeLast = distLast / vehSpeed
+        newPath3D.append((endPt, curZ + timeLast))
+        # print((endPt, curZ + timeLast))
+        return newPath3D
 
-    # 开始迭代调整，从头到尾挤压
+    # NOTE: len(triGridSurface) >= 2
+    def forwardAdjustment(path3D):
+        # 初始化
+        curPt = startPt
+        curZ = startTime
+        curIdx = 0
+        newPath3D = [(curPt, curZ)]
 
-    return
+        for i in range(len(triGridSurfaces)):
+            # NOTE: 根据第i+1个triGridSurface的pt，更新第i个triGridSurface的pt和z
+            # 第i+1个的pt
+            ptIPlus = path3D[i + 2][0]
+            # try:
+            pt2F2P = triGridSurfaces[i].fastestPt2Facet2Pt(pt1 = curPt, z1 = curZ, pt2 = ptIPlus, vehSpeed = vehSpeed)
+            # except:
+                # print(i, curPt, curZ, ptIPlus)
+
+            curPt = pt2F2P['pt']
+            curZ = pt2F2P['zVeh1']
+            newPath3D.append((curPt, curZ))
+
+        # 最后两个
+        distLast = distEuclideanXY(curPt, endPt)
+        timeLast = distLast / vehSpeed
+        newPath3D.append((endPt, curZ + timeLast))
+        return newPath3D
+
+    path3D = forwardPureGreedy()
+    newPath3D = forwardAdjustment(path3D)
+
+    return newPath3D

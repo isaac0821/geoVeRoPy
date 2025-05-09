@@ -166,7 +166,7 @@ class TriGridSurface(object):
     def buildCoreProfile(self):
         return polysIntersect(polys = [self.timedPoly[i][0] for i in range(len(self.timedPoly))])[0]
 
-    def buildAccProfile(self, t1, t2):
+    def buildBtwCoreProfile(self, t1, t2):
         z1 = None
         z2 = None
         for i in range(len(self.timedPoly) - 1):
@@ -177,7 +177,7 @@ class TriGridSurface(object):
             if (abs(tau0 - t2) <= ERRTOL['vertical'] or tau0 <= t2 < tau1):
                 z2 = i
                 break
-        return polysUnion(polys = [timedPoly[i][0] for i in range(z1, z2)])[0]        
+        return polysIntersect(polys = [timedPoly[i][0] for i in range(z1, z2)])[0]        
 
     def pt2Facet(self, pt, z, vehSpeed, facetID):
         # Step 1: 计算水平方向距离
@@ -344,28 +344,28 @@ class TriGridSurface(object):
                     pt2F = self.pt2Facet(pt, z, vehSpeed, k)
 
                     # 接下来判断是不是比当前的好
-                    keepFlag = False
+                    keepFlag = True
                     
-                    # Case 1: 当前的不可行，邻居也不可行，保存距离短的，距离一样的，保存z更大的
-                    if (cur2F['reachable'] == "NotReachable" and pt2F["reachable"] == "NotReachable"):
-                        if (cur2F['dist'] > pt2F['dist']):
-                            keepFlag = True
-                        elif (cur2F['zVeh'] < pt2F['zVeh']):
-                            keepFlag = True
+                    # # Case 1: 当前的不可行，邻居也不可行，保存距离短的，距离一样的，保存z更大的
+                    # if (cur2F['reachable'] == "NotReachable" and pt2F["reachable"] == "NotReachable"):
+                    #     if (cur2F['dist'] > pt2F['dist']):
+                    #         keepFlag = True
+                    #     elif (cur2F['zVeh'] < pt2F['zVeh']):
+                    #         keepFlag = True
 
-                    # Case 2: 当前的不可行，邻居可行，保存
-                    elif (cur2F['reachable'] == "NotReachable" and pt2F["reachable"] != "NotReachable"):
-                        keepFlag = True
+                    # # Case 2: 当前的不可行，邻居可行，保存
+                    # elif (cur2F['reachable'] == "NotReachable" and pt2F["reachable"] != "NotReachable"):
+                    #     keepFlag = True
                     
-                    # Case 3: 当前的速度慢但可达，邻居也可达，保存速度快的
-                    elif (cur2F['reachable'] == "CanGoFaster" and pt2F["reachable"] == "ArrMaxSpeed"):
-                        keepFlag = True
-                    elif (cur2F['reachable'] == "CanGoFaster" and pt2F["reachable"] == "CanGoFaster"):
-                        if (cur2F['speed'] < pt2F['speed']):
-                            keepFlag = True
-                    elif (cur2F['reachable'] == "ArrMaxSpeed" and pt2F["reachable"] == "ArrMaxSpeed"):
-                        if (cur2F['dist'] > pt2F['dist']):
-                            keepFlag = True
+                    # # Case 3: 当前的速度慢但可达，邻居也可达，保存速度快的
+                    # elif (cur2F['reachable'] == "CanGoFaster" and pt2F["reachable"] == "ArrMaxSpeed"):
+                    #     keepFlag = True
+                    # elif (cur2F['reachable'] == "CanGoFaster" and pt2F["reachable"] == "CanGoFaster"):
+                    #     if (cur2F['speed'] < pt2F['speed']):
+                    #         keepFlag = True
+                    # elif (cur2F['reachable'] == "ArrMaxSpeed" and pt2F["reachable"] == "ArrMaxSpeed"):
+                    #     if (cur2F['dist'] > pt2F['dist']):
+                    #         keepFlag = True
 
                     # 如果比当前这个好，那么加入，在searchTree上作为当前的子节点
                     if (keepFlag):
@@ -381,13 +381,14 @@ class TriGridSurface(object):
 
                 arr = sorted(arr, key = lambda d: d['time'])                   # ArrMaxSpeed按照时间排列，因为都已经是最快速度了
                 cgf = sorted(cgf, key = lambda d: d['speed'], reverse = True)  # CanGoFaster按照速度排列，速度快的更好
-                nrb = sorted(nrb, key = lambda d: d['dist'])                   # NotReachable按照dist排列，离得越近越好
+                nrb = sorted(nrb, key = lambda d: d['zVeh'], reverse = True)                   # NotReachable按照dist排列，离得越近越好
 
                 lstNei2F = [i for i in arr]
                 lstNei2F.extend([i for i in cgf])
                 lstNei2F.extend([i for i in nrb])
 
                 for n in lstNei2F:
+                    # print("New Child: ", n)
                     neiTreeNode = TreeNode(key = n['facetID'], value = n, openFlag = True)
                     searchTree.insert(neiTreeNode, curTreeNode)
                     if (n['reachable'] != "NotReachable" and n['time'] <= bestTime):
@@ -401,6 +402,8 @@ class TriGridSurface(object):
                     if (not child.isNil and child.openFlag == True):
                         trace.append(child.value.copy())
                         curTreeNode = child
+                        # print(curTreeNode.value['time'], curTreeNode.value['speed'], curTreeNode.value['dist'])
+                        # print("Go Deeper: ", curTreeNode.value['facetID'])
                         cur2F = curTreeNode.value
                         hasOpenChildFlag = True
                         canImproveFlag = True
@@ -412,6 +415,8 @@ class TriGridSurface(object):
                     canImproveFlag = False
                 else:
                     curTreeNode = curTreeNode.parent
+                    # print(curTreeNode.value['time'], curTreeNode.value['speed'], curTreeNode.value['dist'])
+                    # print("Backtrack: ", curTreeNode.value['facetID'])
                     cur2F = curTreeNode.value
 
         bestNode = searchTree.query(bestFacetID)
@@ -475,28 +480,28 @@ class TriGridSurface(object):
                     pt2F = self.pt2Facet2Pt(pt1, z1, pt2, vehSpeed, k)
 
                     # 接下来判断是不是比当前的好
-                    keepFlag = False
+                    keepFlag = True
                     
-                    # Case 1: 当前的不可行，邻居也不可行，保存距离短的，距离一样的，保存z更大的
-                    if (cur2F['reachable'] == "NotReachable" and pt2F["reachable"] == "NotReachable"):
-                        if (cur2F['dist'] > pt2F['dist']):
-                            keepFlag = True
-                        elif (cur2F['zVeh2'] < pt2F['zVeh2']):
-                            keepFlag = True
+                    # # Case 1: 当前的不可行，邻居也不可行，保存距离短的，距离一样的，保存z更大的
+                    # if (cur2F['reachable'] == "NotReachable" and pt2F["reachable"] == "NotReachable"):
+                    #     if (cur2F['dist'] > pt2F['dist']):
+                    #         keepFlag = True
+                    #     elif (cur2F['zVeh2'] < pt2F['zVeh2']):
+                    #         keepFlag = True
 
-                    # Case 2: 当前的不可行，邻居可行，保存
-                    elif (cur2F['reachable'] == "NotReachable" and pt2F["reachable"] != "NotReachable"):
-                        keepFlag = True
+                    # # Case 2: 当前的不可行，邻居可行，保存
+                    # elif (cur2F['reachable'] == "NotReachable" and pt2F["reachable"] != "NotReachable"):
+                    #     keepFlag = True
                     
-                    # Case 3: 当前的速度慢但可达，邻居也可达，保存速度快的
-                    elif (cur2F['reachable'] == "CanGoFaster" and pt2F["reachable"] == "ArrMaxSpeed"):
-                        keepFlag = True
-                    elif (cur2F['reachable'] == "CanGoFaster" and pt2F["reachable"] == "CanGoFaster"):
-                        if (cur2F['speed1'] < pt2F['speed1']):
-                            keepFlag = True
-                    elif (cur2F['reachable'] == "ArrMaxSpeed" and pt2F["reachable"] == "ArrMaxSpeed"):
-                        if (cur2F['dist'] > pt2F['dist']):
-                            keepFlag = True
+                    # # Case 3: 当前的速度慢但可达，邻居也可达，保存速度快的
+                    # elif (cur2F['reachable'] == "CanGoFaster" and pt2F["reachable"] == "ArrMaxSpeed"):
+                    #     keepFlag = True
+                    # elif (cur2F['reachable'] == "CanGoFaster" and pt2F["reachable"] == "CanGoFaster"):
+                    #     if (cur2F['speed1'] < pt2F['speed1']):
+                    #         keepFlag = True
+                    # elif (cur2F['reachable'] == "ArrMaxSpeed" and pt2F["reachable"] == "ArrMaxSpeed"):
+                    #     if (cur2F['dist'] > pt2F['dist']):
+                    #         keepFlag = True
 
                     # 如果比当前这个好，那么加入，在searchTree上作为当前的子节点
                     if (keepFlag):
@@ -512,7 +517,7 @@ class TriGridSurface(object):
 
                 arr = sorted(arr, key = lambda d: d['time'])                   # ArrMaxSpeed按照时间排列，因为都已经是最快速度了
                 cgf = sorted(cgf, key = lambda d: d['speed1'], reverse = True)  # CanGoFaster按照速度排列，速度快的更好
-                nrb = sorted(nrb, key = lambda d: d['dist'])                   # NotReachable按照dist排列，离得越近越好
+                nrb = sorted(nrb, key = lambda d: d['zVeh1'], reverse = True)                   # NotReachable按照dist排列，离得越近越好
 
                 lstNei2F = [i for i in arr]
                 lstNei2F.extend([i for i in cgf])
@@ -532,6 +537,8 @@ class TriGridSurface(object):
                     if (not child.isNil and child.openFlag == True):
                         trace.append(child.value.copy())
                         curTreeNode = child
+                        # print(curTreeNode.value['time'], curTreeNode.value['speed1'], curTreeNode.value['dist'])
+                        # print("Go Deeper: ", curTreeNode.value['facetID'])
                         cur2F = curTreeNode.value
                         hasOpenChildFlag = True
                         canImproveFlag = True
@@ -543,6 +550,8 @@ class TriGridSurface(object):
                     canImproveFlag = False
                 else:
                     curTreeNode = curTreeNode.parent
+                    # print(curTreeNode.value['time'], curTreeNode.value['speed1'], curTreeNode.value['dist'])
+                    # print("Backtrack: ", curTreeNode.value['facetID'])
                     cur2F = curTreeNode.value
 
         bestNode = searchTree.query(bestFacetID)
@@ -562,4 +571,14 @@ class TriGridSurface(object):
         return isPtInPoly(pt, zProj)
 
     def isSegTrespass(self, pt1, z1, pt2, z2):
-        return
+        # Case 1: [pt1, pt2]的投影穿过了coreProfile，一定相交
+        if (isSegIntPoly(seg = [pt1, pt2], poly = self.coreProj)):
+            return True
+
+        # Case 2: [pt1, pt2]的投影没穿过unionProfile，一定不相交
+        if (not isSegIntPoly(seg = [pt1, pt2], poly = self.unionProj)):
+            return False
+
+        # Case 3: 二分查找，看看有没有穿过的部分
+        # FIXME: 暂且认为不相交，保守估计，之后换成二分查找
+        return True
