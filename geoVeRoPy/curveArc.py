@@ -60,6 +60,10 @@ class CurveArc(object):
         self.head = cvNodeList[0]
         self.tail = cvNodeList[-1]
 
+    def clone(self):
+        c = CurveArc(self.center, self.radius, self.startDeg, self.endDeg, lod = 12)
+        return c
+
     def getLineString(self, lod = 60):
         locs = []
         for i in range(lod + 1):
