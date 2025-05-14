@@ -869,7 +869,7 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
             curJ = curveArcs[i + 1].head
             while (not curJ.isNil):
                 d = distEuclideanXY(curI.loc, curJ.loc)
-                if (d > 0.5):
+                if (d > 0.005):
                     tau[(i, curI.key), (i + 1, curJ.key)] = d
                     G.add_edge((i, curI.key), (i + 1, curJ.key), weight = max(d / speed, atLeastTimeBtw[i + 1]))
                 curJ = curJ.next
