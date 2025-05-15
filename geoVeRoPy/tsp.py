@@ -100,6 +100,8 @@ def solveTSP(
             ... }
 
     """
+    # Field names =============================================================
+    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
 
     # Sanity check ============================================================
     if (nodes == None or type(nodes) != dict):
@@ -127,9 +129,6 @@ def solveTSP(
             raise OutOfRangeError("ERROR: Cannot find `endID` in given `nodes`/`nodeIDs`")
     if (depotID == None and (startID == None or endID == None)):
         raise OutOfRangeError("ERROR: Need to specify depotID or both the startID and endID")
-
-    # Field names =============================================================
-    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
     
     # Check if detail information is needed ===================================
     if (detailFlag == True):

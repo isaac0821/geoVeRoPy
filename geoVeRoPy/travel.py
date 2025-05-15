@@ -114,14 +114,14 @@ def matrixDist(nodes: dict, locFieldName: str = 'loc', nodeIDs: list|str = 'All'
     elif (edges == 'RoadNetwork'):
         if ('source' not in kwargs or kwargs['source'] == None):
             raise MissingParameterError("ERROR: 'source' is not specified")
-        if ('APIkey' not in kwargs or kwargs['APIkey'] == None):
+        if ('APIKey' not in kwargs or kwargs['APIKey'] == None):
             raise MissingParameterError("ERROR: 'APIkey' is not specified")
         if (kwargs['source'] == 'Baidu'):
             if (detailFlag):
                 raise UnsupportedInputError("ERROR: Stay tune")
             else:
                 try:
-                    res = _matrixBaiduSimple(nodes, nodeIDs, API, locFieldName)
+                    res = _matrixBaiduSimple(nodes, nodeIDs, kwargs['APIKey'], locFieldName)
                 except:
                     raise UnsupportedInputError("ERROR: Failed to fetch data, check network connection and API key")
         else:
@@ -154,6 +154,27 @@ def _matrixBaiduSimple(nodes: dict, nodeIDs: list, API, locFieldName = 'loc'):
                 k += 1
 
     return tau
+
+def _detailBaiduSimple(startLoc, endLoc, API):
+    url = "https://api.map.baidu.com/direction/v2/driving"
+
+    # 此处填写你在控制台-应用管理-创建应用后获取的AK
+    ak = "您的AK"
+
+    params = {
+        "origin": startLoc,
+        "destination": endLoc,
+        "ak": API,
+
+    }
+
+    path = []
+
+    response = requests.get(url=url, params=params)
+    if response:
+        pass
+
+    return path
 
 def _matrixDistEuclideanXY(nodes: dict, nodeIDs: list, locFieldName = 'loc', detailFlag: bool = False):
     tau = {}

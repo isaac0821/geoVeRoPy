@@ -1155,38 +1155,77 @@ def plotLocSeq(
     if (locSeq == None):
         raise MissingParameterError("ERROR: Missing required field `locSeq`.")
 
-    arcs = {}
-    for i in range(len(locSeq) - 1):
-        if (not is2PtsSame(locSeq[i], locSeq[i + 1])):
-            arcs[i] = {'arc': [locSeq[i], locSeq[i + 1]]}
+    if (arrowFlag):
+        arcs = {}
+        for i in range(len(locSeq) - 1):
+            if (not is2PtsSame(locSeq[i], locSeq[i + 1])):
+                arcs[i] = {'arc': [locSeq[i], locSeq[i + 1]]}
 
-    # Color ===================================================================
-    if (lineColor == 'Random'):
-        lineColor = rndColor()
+        # Color ===================================================================
+        if (lineColor == 'Random'):
+            lineColor = rndColor()
 
-    fig, ax = plotArcs(
-        fig = fig,
-        ax = ax,
-        arcs = arcs,
-        arcFieldName = 'arc',
-        arcColor = lineColor,
-        arcWidth = lineWidth,
-        arcLineStyle = lineStyle,
-        arcDashes = lineDashes if lineStyle == 'dashed' else (None, None),
-        arcLabel = "",
-        arrowFlag = arrowFlag,
-        arrowPosition = arrowPosition,
-        arrowHeadWidth = arrowHeadWidth,
-        arrowHeadLength = arrowHeadLength,
-        arcStartColor = nodeColor,
-        arcEndColor = nodeColor ,
-        arcMarkerSize = nodeMarkerSize,
-        latLonFlag = latLonFlag,
-        figSize = figSize,
-        boundingBox = boundingBox,
-        showAxis = showAxis,
-        saveFigPath = saveFigPath,
-        showFig = showFig)
+        fig, ax = plotArcs(
+            fig = fig,
+            ax = ax,
+            arcs = arcs,
+            arcFieldName = 'arc',
+            arcColor = lineColor,
+            arcWidth = lineWidth,
+            arcLineStyle = lineStyle,
+            arcDashes = lineDashes if lineStyle == 'dashed' else (None, None),
+            arcLabel = "",
+            arrowFlag = arrowFlag,
+            arrowPosition = arrowPosition,
+            arrowHeadWidth = arrowHeadWidth,
+            arrowHeadLength = arrowHeadLength,
+            arcStartColor = nodeColor,
+            arcEndColor = nodeColor ,
+            arcMarkerSize = nodeMarkerSize,
+            latLonFlag = latLonFlag,
+            figSize = figSize,
+            boundingBox = boundingBox,
+            showAxis = showAxis,
+            saveFigPath = saveFigPath,
+            showFig = showFig)
+    else:
+        if (fig == None or ax == None):
+            fig, ax = plt.subplots()
+            boundingBox = defaultBoundingBox(
+                boundingBox = boundingBox, 
+                pts = locSeq,
+                latLonFlag = latLonFlag)
+            (xMin, xMax, yMin, yMax) = boundingBox
+            (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
+
+            if (not latLonFlag):
+                fig.set_figwidth(width)
+                fig.set_figheight(height)
+                ax.set_xlim(xMin, xMax)
+                ax.set_ylim(yMin, yMax)
+            else:
+                fig.set_figwidth(height)
+                fig.set_figheight(width)
+                ax.set_xlim(yMin, yMax)
+                ax.set_ylim(xMin, xMax)
+
+        x = []
+        y = []
+        for pt in locSeq:
+            if (latLonFlag):
+                x.append(pt[1])
+                y.append(pt[0])
+            else:
+                x.append(pt[0])
+                y.append(pt[1])
+
+        color = None
+        if (lineColor == 'Random'):
+            color = rndColor()
+        elif (type(lineColor) == str):
+            color = lineColor
+        ax.plot(x, y, color = color, linewidth = lineWidth)
+
     return fig, ax
 
 def plotLocSeq3D(
