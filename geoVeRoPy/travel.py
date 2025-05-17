@@ -1,4 +1,6 @@
 import requests
+import time
+import random
 
 from .common import *
 from .geometry import *
@@ -121,7 +123,7 @@ def matrixDist(nodes: dict, locFieldName: str = 'loc', nodeIDs: list|str = 'All'
                 raise UnsupportedInputError("ERROR: Stay tune")
             else:
                 try:
-                    res = _matrixBaiduSimple(nodes, nodeIDs, kwargs['APIKey'], locFieldName)
+                    res = _matrixBaidu(nodes, nodeIDs, kwargs['APIKey'], locFieldName)
                 except:
                     raise UnsupportedInputError("ERROR: Failed to fetch data, check network connection and API key")
         else:
@@ -131,48 +133,114 @@ def matrixDist(nodes: dict, locFieldName: str = 'loc', nodeIDs: list|str = 'All'
 
     return res
 
-def _matrixBaiduSimple(nodes: dict, nodeIDs: list, API, locFieldName = 'loc'):
-    locStr = ""
-    for i in range(len(nodeIDs)):
-        locStr += str(nodes[nodeIDs[i]][locFieldName][0]) + "," + str(nodes[nodeIDs[i]][locFieldName][1]) + "|"
-    locStr = locStr[:-1]
+def _matrixBaidu(nodes, nodeIDs, API, locFieldName = 'loc'):
+    # 分解成block
+    subList = None
+    if (len(nodeIDs) > 5):
+        numBin = math.ceil(len(nodeIDs) / 5)
+        subList = splitList(nodeIDs, numBin)
+    else:
+        return _matrixBaiduBlock(nodes, nodeIDs, nodeIDs, API, locFieldName)
+
+    m = {}
+    for i in range(len(subList)):
+        for j in range(len(subList)):
+            # print(subList[i], subList[j])
+            rnd = random.random() * 4
+            print(5 + rnd)
+            time.sleep(5 + rnd)
+            print(subList[i], subList[j])
+            block = _matrixBaiduBlock(nodes, subList[i], subList[j], API, locFieldName)
+            for key in block:
+                m[key] = block[key]
+
+    return m
+
+def _matrixBaiduBlock(nodes: dict, oriIDs: list, desIDs: list, API, locFieldName = 'loc'):
+    oriStr = ""
+    for i in range(len(oriIDs)):
+        oriStr += str(nodes[oriIDs[i]][locFieldName][0]) + "," + str(nodes[oriIDs[i]][locFieldName][1]) + "|"
+    oriStr = oriStr[:-1]
+
+    desStr = ""
+    for i in range(len(desIDs)):
+        desStr += str(nodes[desIDs[i]][locFieldName][0]) + "," + str(nodes[desIDs[i]][locFieldName][1]) + "|"
+    desStr = desStr[:-1]
 
     url = "https://api.map.baidu.com/routematrix/v2/driving"
     params = {
-        "origins": locStr,
-        "destinations": locStr,
+        "origins": oriStr,
+        "destinations": desStr,
         "ak": API,
     }
     response = requests.get(url=url, params=params)
     
     tau = {}
-    if (response):
-        k = 0
-        for i in range(len(nodeIDs)):
-            for j in range(len(nodeIDs)):
-                tau[nodeIDs[i], nodeIDs[j]] = response.json()['result'][k]['distance']['value']
-                k += 1
+    try:
+        if (response):
+            k = 0
+            for i in range(len(oriIDs)):
+                for j in range(len(desIDs)):
+                    tau[oriIDs[i], desIDs[j]] = response.json()['result'][k]['distance']['value']
+                    k += 1
+    except:
+        print(response)
+        raise
 
     return tau
 
-def _detailBaiduSimple(startLoc, endLoc, API):
-    url = "https://api.map.baidu.com/direction/v2/driving"
-
-    # 此处填写你在控制台-应用管理-创建应用后获取的AK
-    ak = "您的AK"
-
-    params = {
-        "origin": startLoc,
-        "destination": endLoc,
-        "ak": API,
-
-    }
+def _shapepointBaidu(startLoc, endLoc, API, waypoints):
+    seq = [startLoc]
+    seq.extend(waypoints)
+    seq.append(endLoc)
+    subSeqs = None
+    if (len(seq) > 18):
+        numBin = math.ceil((len(seq) + 2) / 20)
+        subSeqs = splitList(seq, numBin)
+    else:
+        return _shapepointBaiduSeq(startLoc, endLoc, API, waypoints)
 
     path = []
+    for sub in subSeqs:
+        rnd = random.random() * 4
+        time.sleep(5 + rnd)
+        waypoints = None
+        if (len(sub) > 2):
+            waypoints = [sub[i] for i in range(1, len(sub) - 1)]
+        sp = _shapepointBaiduSeq(sub[0], sub[-1], API, waypoints)
+        path.extend(sp)
+
+    return path
+
+def _shapepointBaiduSeq(startLoc, endLoc, API, waypoints=None):
+    url = "https://api.map.baidu.com/direction/v2/driving"
+
+    params = {
+        "origin": f"{startLoc[0]},{startLoc[1]}",
+        "destination": f"{endLoc[0]},{endLoc[1]}",
+        "ak": API
+    }
+
+    wp = []
+    if (waypoints != None):
+        for p in waypoints:
+            wp.append(f"{p[0]},{p[1]}|")
 
     response = requests.get(url=url, params=params)
-    if response:
-        pass
+
+    path = []
+    try:
+        if response:
+            path = []
+            for route in j['result']['routes']:
+                for step in route['steps']:
+                    coords = step['path'].split(";")
+                    for c in range(len(coords) - 1):
+                        xy = coords[c].split(',')
+                        path.append((xy[0], xy[1]))
+    except:
+        print(response)
+        raise
 
     return path
 

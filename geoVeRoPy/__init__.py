@@ -42,11 +42,11 @@ from .op import *
 
 # Close enough TSP
 from .cetsp import *
-from .ceop import *
+# from .ceop import *
 # from .gceop import *
 from .serviceTime import *
 
 # Moving target TSP
-from .mttsp import *
+# from .mttsp import *
 
 from .bak import *
