@@ -1377,13 +1377,13 @@ def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:li
     path3D = forwardPureGreedy()
 
     oldT = path3D[-1][1]
-    print(oldT)
+    # print(oldT)
     stopFlag = False
     while (not stopFlag):
         # Update
         path3D = forwardAdjustment(path3D)
         newT = path3D[-1][1]
-        print(newT)
+        # print(newT)
         if (abs(oldT - newT) < 0.01):
             stopFlag = True
         oldT = newT

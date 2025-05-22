@@ -2499,7 +2499,7 @@ def distPoly2Seq(poly: poly, seq: list[pt], closedFlag: bool = False, detailFlag
     # 先实现再优化
     distPerPt = []
     for i in range(len(poly)):
-        distPerPt.append(distPt2Seq(pt = poly[i], seq = seq, closeFlag = closedFlag, detailFlag = detailFlag))
+        distPerPt.append(distPt2Seq(pt = poly[i], seq = seq, closedFlag = closedFlag, detailFlag = detailFlag))
 
     shortest = None
     if (not detailFlag):

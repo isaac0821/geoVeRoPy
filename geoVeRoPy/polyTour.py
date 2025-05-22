@@ -91,6 +91,10 @@ def seqRemoveDegen(seq: list[pt]):
 
         if (is2PtsSame(preLoc, sucLoc)):
             removedFlag.append(False)
+        elif (is2PtsSame(preLoc, curLoc)):
+            removedFlag.append(False)
+        elif (is2PtsSame(curLoc, sucLoc)):
+            removedFlag.append(False)
         else:
             dev = distPt2Seg(curLoc, [preLoc, sucLoc])
             if (dev <= ERRTOL['distPt2Seg']):
@@ -149,10 +153,6 @@ def seqRemoveDegen(seq: list[pt]):
         'removedFlag': removedFlag,
         'locatedSeg': locatedSeg
     }
-
-def ptSetSeq2CircleBak(seq: list, circles: dict, seqDegenedFlag: bool = True):
-
-    return
 
 def ptSetSeq2Poly(seq, polygons:dict, polyFieldName = 'polygon', seqDegenedFlag: bool = True):
     """Given a sequence and a dictionary of polygons, finds the intersection points between seq and polygons

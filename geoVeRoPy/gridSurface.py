@@ -572,15 +572,24 @@ class TriGridSurface(object):
         zProj = self.buildZProfile(z)
         return isPtInPoly(pt, zProj)
 
-    def isSegTrespass(self, pt1, z1, pt2, z2):
+    def dist2Seg(self, pt1, z1, pt2, z2):
         # Case 1: [pt1, pt2]的投影穿过了coreProfile，一定相交
         if (isSegIntPoly(seg = [pt1, pt2], poly = self.coreProj)):
-            return True
+            return {
+                'trespass': True,
+                'trespassSemi': True,
+                'dist': 0
+            }
 
-        # Case 2: [pt1, pt2]的投影没穿过unionProfile，一定不相交
+        # Case 2: [pt1, pt2]的投影没穿过unionProfile，一定不相交，这个时候距离的计算按照poly到seg的距离
         intSeg = intSeg2Poly(seg = [pt1, pt2], poly = self.unionProj)
         if (intSeg['status'] == 'NoCross'):
-            return False
+            dist = distPoly2Seq(seq = [pt1, pt2], poly = self.unionProj)
+            return {
+                'trespass': False,
+                'trespassSemi': False,
+                'dist': dist
+            }
 
         # 把可能相交的时间段列出来
         possOverlap = []
@@ -609,6 +618,7 @@ class TriGridSurface(object):
             ptY = pt1[1] + (pt2[1] - pt1[1]) * ((z - z1) / (z2 - z1))
             return (ptX, ptY)
 
+        closestDist = float('inf')
         # Case 3: 简单处理，直接按切片
         # FIXME: 如果没有一个切片相交，就认为不相交
         for tpoly in self.timedPoly:
@@ -618,6 +628,17 @@ class TriGridSurface(object):
                     pt = getPt(tpoly[1])
                     poly = tpoly[0]
                     if (isPtInPoly(pt, poly)):
-                        return True
-
-        return False
+                        return {
+                            'trespass': True,
+                            'trespassSemi': True,
+                            'dist': 0
+                        }
+                    else:
+                        dist = distPt2Poly(pt, poly)
+                        if (dist < closestDist):
+                            closestDist = dist
+        return {
+            'trespass': False,
+            'trespassSemi': True,
+            'dist': closestDist
+        }
