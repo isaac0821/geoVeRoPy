@@ -1328,22 +1328,19 @@ def timedCircle2timedCirclePath(startPt: pt, endPt: pt, vecs: list[dict], radius
 def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:list[TriGridSurface], vehSpeed, startTime: float = 0):
     
     # 前向Greedy，给定一个初始的path3D，保留前startImpFrom项，从第s+1开始用最短距离计算
-    def forwardPureGreedy(path3D = None, startImpFrom = 1):
+    def forwardPureGreedy():
         # 先用贪婪的方法，找到由一个点出发最短的到下一个surface的
         curPt = startPt  # 开始总是不变的
         curZ = startTime # 开始总是不变的
         newPath3D = [(curPt, curZ)]
         # print((curPt, curZ))
         for i in range(len(triGridSurfaces)):
-            if (i <= startImpFrom and path3D != None):
-                newPath3D.append(path3D[i + 1])
-            else:
-                (curPt, curZ) = newPath3D[-1]
-                p2F = triGridSurfaces[i].fastestPt2Facet(curPt, curZ, vehSpeed)
-                curPt = p2F['pt']
-                curZ = p2F['zVeh']
-                newPath3D.append((curPt, curZ))
-                # print((curPt, curZ))
+            (curPt, curZ) = newPath3D[-1]
+            p2F = triGridSurfaces[i].fastestPt2Facet(curPt, curZ, vehSpeed)
+            curPt = p2F['pt']
+            curZ = p2F['zVeh']
+            newPath3D.append((curPt, curZ))
+            # print((curPt, curZ))
         distLast = distEuclideanXY(curPt, endPt)
         timeLast = distLast / vehSpeed
         newPath3D.append((endPt, curZ + timeLast))
@@ -1378,6 +1375,28 @@ def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:li
         return newPath3D
 
     path3D = forwardPureGreedy()
-    newPath3D = forwardAdjustment(path3D)
 
-    return newPath3D
+    oldT = path3D[-1][1]
+    print(oldT)
+    stopFlag = False
+    while (not stopFlag):
+        # Update
+        path3D = forwardAdjustment(path3D)
+        newT = path3D[-1][1]
+        print(newT)
+        if (abs(oldT - newT) < 0.01):
+            stopFlag = True
+        oldT = newT
+
+    dist = 0
+    for i in range(len(path3D) - 1):
+        dist += distEuclideanXY(path3D[i][0], path3D[i + 1][0])
+
+    time = path3D[-1][1] - path3D[0][1]
+
+    return {
+        'dist': dist,
+        'time': time,
+        'path': [i[0] for i in path3D],
+        'path3D': path3D,
+    }

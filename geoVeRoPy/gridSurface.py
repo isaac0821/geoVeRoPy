@@ -161,10 +161,12 @@ class TriGridSurface(object):
         return poly
 
     def buildUnionProfile(self):
-        return polysUnion(polys = [self.timedPoly[i][0] for i in range(len(self.timedPoly))])[0]
+        poly = polysUnion(polys = [self.timedPoly[i][0] for i in range(len(self.timedPoly))])[0]
+        return poly
 
     def buildCoreProfile(self):
-        return polysIntersect(polys = [self.timedPoly[i][0] for i in range(len(self.timedPoly))])[0]
+        poly = polysIntersect(polys = [self.timedPoly[i][0] for i in range(len(self.timedPoly))])[0]
+        return poly
 
     def buildBtwCoreProfile(self, t1, t2):
         z1 = None
@@ -576,9 +578,46 @@ class TriGridSurface(object):
             return True
 
         # Case 2: [pt1, pt2]的投影没穿过unionProfile，一定不相交
-        if (not isSegIntPoly(seg = [pt1, pt2], poly = self.unionProj)):
+        intSeg = intSeg2Poly(seg = [pt1, pt2], poly = self.unionProj)
+        if (intSeg['status'] == 'NoCross'):
             return False
 
-        # Case 3: 二分查找，看看有没有穿过的部分
-        # FIXME: 暂且认为不相交，保守估计，之后换成二分查找
-        return True
+        # 把可能相交的时间段列出来
+        possOverlap = []
+        if (type(intSeg) == list):
+            for inte in intSeg:
+                if (inte['intersectType'] == 'Point'):
+                    possOverlap.append([inte['intersect'], inte['intersect']])
+                elif (inte['intersectType'] == 'Segment'):
+                    possOverlap.append([inte['intersect'][0], inte['intersect'][1]])
+        else:
+            if (type(intSeg) == dict):
+                if (intSeg['intersectType'] == 'Point'):
+                    possOverlap.append([intSeg['intersect'], intSeg['intersect']])
+                elif (intSeg['intersectType'] == 'Segment'):
+                    possOverlap.append([intSeg['intersect'][0], intSeg['intersect'][1]])
+
+        possTWs = []
+        for s in possOverlap:
+            ts = z1 + (z2 - z1) * ((s[0][0] - pt1[0]) / (pt2[0] - pt1[0]))
+            te = z1 + (z2 - z1) * ((s[1][0] - pt1[0]) / (pt2[0] - pt1[0]))
+            possTWs.append([ts, te])
+
+        # 如果可能相交，相交只可能发生在投影与unionProj相交的区域，计算与时间切面的相交点
+        def getPt(z):
+            ptX = pt1[0] + (pt2[0] - pt1[0]) * ((z - z1) / (z2 - z1))
+            ptY = pt1[1] + (pt2[1] - pt1[1]) * ((z - z1) / (z2 - z1))
+            return (ptX, ptY)
+
+        # Case 3: 简单处理，直接按切片
+        # FIXME: 如果没有一个切片相交，就认为不相交
+        for tpoly in self.timedPoly:
+            # 先确定下在不在possTWs内，不在的话就没必要计算了
+            for tw in possTWs:
+                if (tw[0] <= tpoly[1] <= tw[1]):
+                    pt = getPt(tpoly[1])
+                    poly = tpoly[0]
+                    if (isPtInPoly(pt, poly)):
+                        return True
+
+        return False
