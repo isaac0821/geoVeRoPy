@@ -635,6 +635,12 @@ class TriGridSurface(object):
                         }
                     else:
                         dist = distPt2Poly(pt, poly)
+                        if (dist <= ERRTOL['distPt2Poly']):
+                            return {
+                            'trespass': True,
+                            'trespassSemi': True,
+                            'dist': 0
+                        }
                         if (dist < closestDist):
                             closestDist = dist
         return {
