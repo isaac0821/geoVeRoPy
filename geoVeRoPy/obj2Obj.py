@@ -1379,6 +1379,8 @@ def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:li
     oldT = path3D[-1][1]
     # print(oldT)
     stopFlag = False
+
+    c = 0
     while (not stopFlag):
         # Update
         path3D = forwardAdjustment(path3D)
@@ -1387,6 +1389,10 @@ def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:li
         if (abs(oldT - newT) < 0.01):
             stopFlag = True
         oldT = newT
+
+        c += 1
+        if (c > 100):
+            raise print("ERROR: Too many iterations for triGridSurfaces2TridGridSurfaces")
 
     dist = 0
     for i in range(len(path3D) - 1):

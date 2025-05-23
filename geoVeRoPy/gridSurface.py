@@ -583,7 +583,7 @@ class TriGridSurface(object):
 
         # Case 2: [pt1, pt2]的投影没穿过unionProfile，一定不相交，这个时候距离的计算按照poly到seg的距离
         intSeg = intSeg2Poly(seg = [pt1, pt2], poly = self.unionProj)
-        if (intSeg['status'] == 'NoCross'):
+        if (type(intSeg) != list and intSeg['status'] == 'NoCross'):
             dist = distPoly2Seq(seq = [pt1, pt2], poly = self.unionProj)
             return {
                 'trespass': False,

@@ -12,6 +12,7 @@ from .color import *
 from .msg import *
 from .province import *
 from .geometry import *
+from .gridSurface import *
 
 def aniRouting(
     timeRange: tuple[int, int],
@@ -289,40 +290,50 @@ def aniRouting(
                 pX = []
                 pY = []
                 if (plotPolyFlag):
-                    for p in polygons[pID][polyFieldName]:
-                        pt = None
-                        if (polyAnchorFieldName in polygons[pID] and polyTimedSeqFieldName in polygons[pID]):
-                            # 如果还没开始动，在原点不动
-                            if (clock < polygons[pID][polyTimedSeqFieldName][0][1]):
-                                pt = p
-                            # 如果到达终点了，在终点不动
-                            elif (clock > polygons[pID][polyTimedSeqFieldName][-1][1]):
-                                dx = (polygons[pID][polyTimedSeqFieldName][-1][0][0] - polygons[pID][polyAnchorFieldName][0])
-                                dy = (polygons[pID][polyTimedSeqFieldName][-1][0][1] - polygons[pID][polyAnchorFieldName][1])
-                                pt = (p[0] + dx, p[1] + dy)
-                            else: 
-                                curSnap = snapInTimedSeq(
-                                    timedSeq = polygons[pID][polyTimedSeqFieldName],
-                                    t = clock)
-                                dx = (curSnap['loc'][0] - polygons[pID][polyAnchorFieldName][0])
-                                dy = (curSnap['loc'][1] - polygons[pID][polyAnchorFieldName][1])
-                                pt = (p[0] + dx, p[1] + dy)
-                        elif ('direction' in polygons[pID] and 'speed' in polygons[pID]):
-                            if (clock < polygons[pID][polyTimeWindowFieldName][0]):
-                                pt = p
-                            elif (clock < polygons[pID][polyTimeWindowFieldName][1]):
-                                pt = ptInDistXY(p, polygons[pID]['direction'], polygons[pID]['speed'] * clock)
+                    if (type(polygons[pID][polyFieldName]) == TriGridSurface):
+                        poly = polygons[pID][polyFieldName].buildZProfile(clock)
+                        for pt in poly:
+                            if (not xyReverseFlag):
+                                pX.append(pt[0])
+                                pY.append(pt[1])
                             else:
-                                pt = ptInDistXY(p, polygons[pID]['direction'], polygons[pID]['speed'] * (polygons[pID]['timeRange'][1] - polygons[pID]['timeRange'][0]))
-                        else:
-                            pt = p
+                                pX.append(pt[1])
+                                pY.append(pt[0])
+                    else:
+                        for p in polygons[pID][polyFieldName]:
+                            pt = None
+                            if (polyAnchorFieldName in polygons[pID] and polyTimedSeqFieldName in polygons[pID]):
+                                # 如果还没开始动，在原点不动
+                                if (clock < polygons[pID][polyTimedSeqFieldName][0][1]):
+                                    pt = p
+                                # 如果到达终点了，在终点不动
+                                elif (clock > polygons[pID][polyTimedSeqFieldName][-1][1]):
+                                    dx = (polygons[pID][polyTimedSeqFieldName][-1][0][0] - polygons[pID][polyAnchorFieldName][0])
+                                    dy = (polygons[pID][polyTimedSeqFieldName][-1][0][1] - polygons[pID][polyAnchorFieldName][1])
+                                    pt = (p[0] + dx, p[1] + dy)
+                                else: 
+                                    curSnap = snapInTimedSeq(
+                                        timedSeq = polygons[pID][polyTimedSeqFieldName],
+                                        t = clock)
+                                    dx = (curSnap['loc'][0] - polygons[pID][polyAnchorFieldName][0])
+                                    dy = (curSnap['loc'][1] - polygons[pID][polyAnchorFieldName][1])
+                                    pt = (p[0] + dx, p[1] + dy)
+                            elif ('direction' in polygons[pID] and 'speed' in polygons[pID]):
+                                if (clock < polygons[pID][polyTimeWindowFieldName][0]):
+                                    pt = p
+                                elif (clock < polygons[pID][polyTimeWindowFieldName][1]):
+                                    pt = ptInDistXY(p, polygons[pID]['direction'], polygons[pID]['speed'] * clock)
+                                else:
+                                    pt = ptInDistXY(p, polygons[pID]['direction'], polygons[pID]['speed'] * (polygons[pID]['timeRange'][1] - polygons[pID]['timeRange'][0]))
+                            else:
+                                pt = p
 
-                        if (not xyReverseFlag):
-                            pX.append(pt[0])
-                            pY.append(pt[1])
-                        else:
-                            pX.append(pt[1])
-                            pY.append(pt[0])
+                            if (not xyReverseFlag):
+                                pX.append(pt[0])
+                                pY.append(pt[1])
+                            else:
+                                pX.append(pt[1])
+                                pY.append(pt[0])
 
                 # Plot polygons with styling
                 if (plotPolyFlag):
