@@ -149,6 +149,7 @@ def intCurveArc2Circle(curveArc: CurveArc, circle: dict) -> CurveArc:
     intLine = shapely.intersection(ls, cc)
 
     if (intLine.is_empty):
+        # print(ls, cc)
         return None
 
     nl = []

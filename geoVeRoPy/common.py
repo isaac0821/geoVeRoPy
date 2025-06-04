@@ -278,3 +278,16 @@ def runtime(key1, key2=None, key3=None):
             return result
         return fun
     return deco
+
+def tellRuntime(funcName, indentLevel=0):
+    def deco(func):
+        @functools.wraps(func)
+        def fun(*args, **kwargs):
+            t = datetime.datetime.now()
+            result = func(*args, **kwargs)
+            dt = (datetime.datetime.now() - t).total_seconds()
+            indent = "----" * indentLevel
+            print(f"**{indent}Func {funcName} runtime: {dt}")
+            return result
+        return fun
+    return deco

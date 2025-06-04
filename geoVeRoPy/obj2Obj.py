@@ -1,6 +1,7 @@
 import networkx as nx
 import gurobipy as grb
 import datetime
+import warnings
 
 from .geometry import *
 from .ring import *
@@ -954,6 +955,7 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
             path.append(curveArcs[p[0]].query(p[1]).loc)
     path.append(endPt)
 
+    # print("New dist: ", dist)
     # print("Adapt Iter Time: ", (datetime.datetime.now() - startTime).total_seconds())
     # print("Adapt Iter Num: ", iterNum)
 
@@ -1325,6 +1327,8 @@ def timedCircle2timedCirclePath(startPt: pt, endPt: pt, vecs: list[dict], radius
         'runtime': runtime
     }
 
+@tellRuntime("surface2Surface", 1)
+@runtime("surface2Surface")
 def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:list[TriGridSurface], vehSpeed, startTime: float = 0):
     
     # 前向Greedy，给定一个初始的path3D，保留前startImpFrom项，从第s+1开始用最短距离计算
@@ -1388,11 +1392,13 @@ def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:li
         # print(newT)
         if (abs(oldT - newT) < 0.01):
             stopFlag = True
-        oldT = newT
-
+        
         c += 1
-        if (c > 100):
-            raise print("ERROR: Too many iterations for triGridSurfaces2TridGridSurfaces")
+        if (c > 10):
+            warnings.warn("WARNING: Too many iterations for triGridSurfaces2TridGridSurfaces. Current dt = %s" % (newT - oldT))
+            break
+
+        oldT = newT
 
     dist = 0
     for i in range(len(path3D) - 1):

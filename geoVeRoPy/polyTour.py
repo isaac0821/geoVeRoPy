@@ -91,9 +91,9 @@ def seqRemoveDegen(seq: list[pt]):
 
         if (is2PtsSame(preLoc, sucLoc)):
             removedFlag.append(False)
-        elif (is2PtsSame(preLoc, curLoc)):
+        elif (distEuclideanXY(preLoc, curLoc) <= 0.2):
             removedFlag.append(False)
-        elif (is2PtsSame(curLoc, sucLoc)):
+        elif (distEuclideanXY(curLoc, sucLoc) <= 0.2):
             removedFlag.append(False)
         else:
             dev = distPt2Seg(curLoc, [preLoc, sucLoc])
