@@ -551,10 +551,7 @@ def plotNodes(
                 fillStyle = nodeNeiStyle['neighborFillStyle'],
                 opacity = nodeNeiStyle['neighborOpacity'],
                 latLonFlag = latLonFlag,
-                showAxis = showAxis)
-
-        elif ('neiShape' in nodes[n] and nodes[n]['neiShape'] == 'Isochrone'):
-            raise UnsupportedInputError("ERROR: Not implemented yet.") 
+                showAxis = showAxis) 
 
     # Axis on and off =========================================================
     if (not showAxis):

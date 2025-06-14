@@ -1327,8 +1327,8 @@ def timedCircle2timedCirclePath(startPt: pt, endPt: pt, vecs: list[dict], radius
         'runtime': runtime
     }
 
-@tellRuntime("surface2Surface", 1)
-@runtime("surface2Surface")
+# @tellRuntime("surface2Surface", 1)
+# @runtime("surface2Surface")
 def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:list[TriGridSurface], vehSpeed, startTime: float = 0):
     
     # 前向Greedy，给定一个初始的path3D，保留前startImpFrom项，从第s+1开始用最短距离计算
