@@ -11,6 +11,17 @@ from .common import *
 # from .plot import *
 
 # obj2ObjPath =================================================================
+def multiPoly2MultiPolyPath(startPt: pt, endPt: pt, multiPolys: list[polys], **kwargs):
+    outputFlag = False if 'outputFlag' not in kwargs else kwargs['outputFlag']
+    gapTol = None if 'gapTol' not in kwargs else kwargs['gapTol']
+    timeLimit = None if 'timeLimit' not in kwargs else kwargs['timeLimit']
+    
+    res = _multiPoly2MultiPolyPathGurobi(startPt, endPt, multiPolys, outputFlag, gapTol, timeLimit)
+    return {
+        'path': res['path'],
+        'dist': res['dist']
+    }
+
 def poly2PolyPath(startPt: pt, endPt: pt, polys: polys, algo: str = 'SOCP', **kwargs):
     
     """Given a starting point, a list of polys, and an ending point, returns a shortest route that starts from startPt, visits every polys in given order, and returns to the ending point.
@@ -220,17 +231,38 @@ def _poly2PolyPathAdaptIter(startPt: pt, endPt: pt, polys: polys, adaptErr):
         'dist': dist
     }
 
-def _poly2PolyPathGurobi(startPt: pt, endPt: pt, polys: polys,  outputFlag = False, gapTol = None, timeLimit = None):
+def _poly2PolyPathGurobi(startPt: pt, endPt: pt, polys: polys, outputFlag = False, gapTol = None, timeLimit = None):
+    segs = []
+    for i in range(len(polys)):
+        segs.append([])
+        for k in range(-1, len(polys[i]) - 1):
+            segs[i].append([polys[i][k], polys[i][k + 1]])
+            
     return _seg2SegPathGurobi(
         startPt = startPt, 
         endPt = endPt, 
-        segs = polys, 
-        closedFlag = True, 
+        segs = segs, 
         outputFlag = outputFlag, 
         gapTol = gapTol, 
         timeLimit = timeLimit)
 
-def _seg2SegPathGurobi(startPt: pt, endPt: pt, segs, closedFlag = False, outputFlag = False, gapTol = None, timeLimit = None):
+def _multiPoly2MultiPolyPathGurobi(startPt: pt, endPt: pt, multiPolys: list[polys], outputFlag = False, gapTol = None, timeLimit = None):
+    segs = []
+    for i in range(len(multiPolys)):
+        segs.append([])
+        for j in range(len(multiPolys[i])):
+            for k in range(-1, len(multiPolys[i][j]) - 1):
+                segs[i].append([multiPolys[i][j][k], multiPolys[i][j][k + 1]])
+
+    return _seg2SegPathGurobi(
+        startPt = startPt, 
+        endPt = endPt, 
+        segs = segs, 
+        outputFlag = outputFlag, 
+        gapTol = gapTol, 
+        timeLimit = timeLimit)
+
+def _seg2SegPathGurobi(startPt: pt, endPt: pt, segs: list[line], outputFlag = False, gapTol = None, timeLimit = None):
     try:
         import gurobipy as grb
     except(ImportError):
@@ -250,35 +282,32 @@ def _seg2SegPathGurobi(startPt: pt, endPt: pt, segs, closedFlag = False, outputF
     allY = [startPt[1], endPt[1]]
     for i in range(len(segs)):
         for j in range(len(segs[i])):
-            allX.append(segs[i][j][0])
-            allY.append(segs[i][j][1])
+            allX.append(segs[i][j][0][0])
+            allY.append(segs[i][j][0][1])
+            allX.append(segs[i][j][1][0])
+            allY.append(segs[i][j][1][1])
     lbX = min(allX) - 1
     lbY = min(allY) - 1
     ubX = max(allX) + 1
     ubY = max(allY) + 1
-
-    # close seg flag ==========================================================
-    if (closedFlag):
-        for seg in segs:
-            seg.append(seg[0])
 
     # Decision variables ======================================================
     # (xi, yi) 为第i个seg上的坐标
     # index = 1, 2, ..., len(segs)
     x = {}
     y = {}
-    for i in range(1, len(segs) + 1):
+    for i in range(len(segs)):
         x[i] = model.addVar(vtype=grb.GRB.CONTINUOUS, name = "x_%s" % i, lb=lbX, ub=ubX)
         y[i] = model.addVar(vtype=grb.GRB.CONTINUOUS, name = "y_%s" % i, lb=lbY, ub=ubY)
 
     # e[i, j] 为binary，表示(xi, yi)处于第i个seg上的第j段
     # index i = 1, 2, ..., len(segs)
-    # index j = 1, ..., len(segs[i]) - 1
+    # index j = 0, ..., len(segs[i]) - 1
     # lam[i, j] 为[0, 1]之间的值，表示第i段是处于对应e[i, j]上的位置，若e[i, j] = 0，则lam[i, j] = 0
     e = {}
     lam = {}    
-    for i in range(1, len(segs) + 1):
-        for j in range(1, len(segs[i - 1])):
+    for i in range(len(segs)):
+        for j in range(len(segs[i])):
             e[i, j] = model.addVar(vtype=grb.GRB.BINARY, name="e_%s_%s" % (i, j))
             lam[i, j] = model.addVar(vtype=grb.GRB.CONTINUOUS, name="lam_%s_%s" % (i, j))
 
@@ -299,29 +328,29 @@ def _seg2SegPathGurobi(startPt: pt, endPt: pt, segs, closedFlag = False, outputF
 
     # Constraints =============================================================
     # (xi, yi)必须在其中一段上
-    for i in range(1, len(segs) + 1):
-        model.addConstr(grb.quicksum(e[i, j] for j in range(1, len(segs[i - 1]))) == 1)
+    for i in range(len(segs)):
+        model.addConstr(grb.quicksum(e[i, j] for j in range(len(segs[i]))) == 1)
 
     # 具体(xi, yi)的位置，lam[i, j]在e[i, j] = 0的段上不激活
-    for i in range(1, len(segs) + 1):
+    for i in range(len(segs)):
         model.addConstr(x[i] == grb.quicksum(
-            e[i, j] * segs[i - 1][j - 1][0] + lam[i, j] * (segs[i - 1][j][0] - segs[i - 1][j - 1][0])
-            for j in range(1, len(segs[i - 1]))))
+            e[i, j] * segs[i][j][0][0] + lam[i, j] * (segs[i][j][1][0] - segs[i][j][0][0])
+            for j in range(len(segs[i]))))
         model.addConstr(y[i] == grb.quicksum(
-            e[i, j] * segs[i - 1][j - 1][1] + lam[i, j] * (segs[i - 1][j][1] - segs[i - 1][j - 1][1])
-            for j in range(1, len(segs[i - 1]))))
-    for i in range(1, len(segs) + 1):
-        for j in range(1, len(segs[i - 1])):
+            e[i, j] * segs[i][j][0][1] + lam[i, j] * (segs[i][j][1][1] - segs[i][j][0][1])
+            for j in range(len(segs[i]))))
+    for i in range(len(segs)):
+        for j in range(len(segs[i])):
             model.addConstr(lam[i, j] <= e[i, j])
 
     # Aux constr - dx dy
-    model.addConstr(dx[0] == x[1] - startPt[0])
-    model.addConstr(dy[0] == y[1] - startPt[1])
-    for i in range(1, len(segs)):
-        model.addConstr(dx[i] == x[i] - x[i + 1])
-        model.addConstr(dy[i] == y[i] - y[i + 1])
-    model.addConstr(dx[len(segs)] == endPt[0] - x[len(segs)])
-    model.addConstr(dy[len(segs)] == endPt[1] - y[len(segs)])
+    model.addConstr(dx[0] == x[0] - startPt[0])
+    model.addConstr(dy[0] == y[0] - startPt[1])
+    for i in range(len(segs) - 1):
+        model.addConstr(dx[i + 1] == x[i + 1] - x[i])
+        model.addConstr(dy[i + 1] == y[i + 1] - y[i])
+    model.addConstr(dx[len(segs)] == endPt[0] - x[len(segs) - 1])
+    model.addConstr(dy[len(segs)] == endPt[1] - y[len(segs) - 1])
 
     # Distance btw visits
     for i in range(len(segs) + 1):
@@ -329,11 +358,6 @@ def _seg2SegPathGurobi(startPt: pt, endPt: pt, segs, closedFlag = False, outputF
 
     # model.write("SOCP.lp")
     model.optimize()
-
-    # close seg flag ==========================================================
-    if (closedFlag):
-        for seg in segs:
-            del seg[-1]
 
     # Post-processing =========================================================
     ofv = None
@@ -1327,8 +1351,6 @@ def timedCircle2timedCirclePath(startPt: pt, endPt: pt, vecs: list[dict], radius
         'runtime': runtime
     }
 
-# @tellRuntime("surface2Surface", 1)
-# @runtime("surface2Surface")
 def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:list[TriGridSurface], vehSpeed, startTime: float = 0):
     
     # 前向Greedy，给定一个初始的path3D，保留前startImpFrom项，从第s+1开始用最短距离计算
@@ -1412,3 +1434,4 @@ def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:li
         'path': [i[0] for i in path3D],
         'path3D': path3D,
     }
+

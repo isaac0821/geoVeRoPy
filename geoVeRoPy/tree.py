@@ -523,14 +523,6 @@ class BnBTreeNode(object):
     def isNil(self):
         return False
 
-    # Add a node to current node
-    def branch(self, node):
-        return
-
-    def prun(self, newLB, newUB):
-        # 对于最小化问题，如果在树上的其他节点找到了一个新的下界，
-        return
-
 class BnBTreeNilNode(BnBTreeNode):
     def __init__(self):
         return
@@ -539,20 +531,31 @@ class BnBTreeNilNode(BnBTreeNode):
     def isNil(self):
         return True
 
-class BnBTree(Tree):
-    def __init__(self, minFlag: bool = True, **kwargs):
-        self.nil = BnBTreeNilNode()
-        self.root = self.nil
-        self.__dict__.update(kwargs)
+# class BnBTree(Tree):
+#     def __init__(self, minFlag: bool = True, **kwargs):
+#         self.nil = BnBTreeNilNode()
+#         self.root = self.nil
+#         self.__dict__.update(kwargs)
 
-        # BB树的上下界
-        self.upperBound = float('inf')
-        self.lowerBound = -float('inf')
-        # BB树是最小化还是最大化
-        self.minFlag = minFlag
+#         # BB树的上下界
+#         self.upperBound = float('inf')
+#         self.lowerBound = -float('inf')
+#         # BB树是最小化还是最大化
+#         self.minFlag = minFlag
 
-    def insert(self, n, treeNode):
-        # 先正常插入
-        super().insert(n, treeNode)
+#     # 插入新node作为n的子节点
+#     def insert(self, n, bnb):
+#         # 先正常插入
+#         super().insert(n, bnb)
 
-        # 更新LB/UB并执行prun
+#         # 更新LB/UB并执行prun
+
+#     # 分支
+#     def branch(self, n):
+#         return
+
+#     # 定界
+#     def updateBounds(self, n):
+#         # 最小化时
+#         if (self.minFlag):
+#             if (self.upperBound > n.upperBound)

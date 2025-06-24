@@ -492,6 +492,7 @@ def _solveCETSPGBDPoly(
     endLoc: pt,
     nodes: dict, # Index from 1
     polyFieldName: str = 'poly',
+    c2cAlgo: str = 'SOCP',
     timeLimit: int | None = None
     ) -> dict | None:
 

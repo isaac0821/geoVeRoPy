@@ -2066,7 +2066,7 @@ def isSegIntPoly(seg: line, poly: poly, interiorOnly: bool=False) -> bool:
             return True
     # Step 2: If no edge is intersect with seg, see if any end is inside
     # NOTE: 只要看seg[0]就行了
-    if (isPtInPoly(seg[0], poly, interiorOnly)):
+    if (isPtInPoly(ptMid(seg), poly, interiorOnly)):
         return True
     return False
 
@@ -3114,6 +3114,7 @@ def polysVisibleGraph(polys:polys) -> dict:
         for e in range(len(polys[p])):
             vg[(p, e)] = {'loc': polys[p][e], 'visible': []}
             W = _visPtAmongPolys((p, e), polys, knownVG=vg)
+            # print(p, e, W)
             for w in W:
                 vg[(p, e)]['visible'].append(w)
     return vg
@@ -3200,6 +3201,7 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
 
         # 判断是否是相邻节点，相邻节点直接返回可见
         if (polyV == polyW and (wi == vNext or wi == vPrev)):
+            # print("Visible by neighboring: ", v, wi)
             return True
 
         # 需要w_{i-1}不存在，或者w_{i-1}不在线段vwi上
@@ -3241,8 +3243,8 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
                 seg = vwi,
                 poly = polyW,
                 interiorOnly = True)):
+            # print("No blocking: ", v, wi)
             visibleFlag = True        
-
 
         if (visibleFlag):
             return True
@@ -3720,7 +3722,7 @@ def nodeSeqByDist(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'loc', 
     sortedSeq = []
     sortedSeqHeap = []
     for n in nodeIDs:
-        dist = scaleDist(loc1 = refLoc, loc2 = nodes[n][locFieldName], edges = 'Euclidean')
+        dist = distEuclideanXY(refLoc, nodes[n][locFieldName])
         heapq.heappush(sortedSeqHeap, (dist, n))
     while (len(sortedSeqHeap) > 0):
         sortedSeq.append(heapq.heappop(sortedSeqHeap)[1])  
@@ -3871,6 +3873,7 @@ def distManhattenXY(pt1: pt, pt2: pt, detailFlag: bool=False) -> dict:
     else:
         return dist
 
+# @tellRuntime("distBtwPolysXY")
 def distBtwPolysXY(pt1:pt, pt2:pt, polys:polys, polyVG: dict = None, detailFlag: bool=False) -> dict:
     """
     Gives a Manhatten distance based on two coords.
@@ -3946,7 +3949,11 @@ def distBtwPolysXY(pt1:pt, pt2:pt, polys:polys, polyVG: dict = None, detailFlag:
     for v in vertices:
         for e in vertices[v]['visible']:
             vg.add_edge(v, e, weight=distEuclideanXY(vertices[v]['loc'], vertices[e]['loc']))
-    sp = nx.dijkstra_path(vg, 's', 'e')
+    try:
+        sp = nx.dijkstra_path(vg, 's', 'e')
+    except:
+        print("ERROR: No path.")
+        return None
 
     dist = 0
     for i in range(len(sp) - 1):

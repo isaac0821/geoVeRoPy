@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 
 from matplotlib import rcParams
+from matplotlib import patches
 from matplotlib.animation import FuncAnimation
 from matplotlib.animation import PillowWriter
 from mpl_toolkits.mplot3d import Axes3D
@@ -1574,6 +1575,123 @@ def plotCircle(
         saveFigPath = saveFigPath,
         showFig = showFig,
     )
+    return fig, ax
+
+def plotRing(
+    center: pt,
+    innerRadius: float,
+    outerRadius: float,
+    lod: int = 30,
+    edgeWidth: float = 0.5,
+    edgeColor: str|None = 'Random',
+    fillColor: str|None = 'gray',
+    fillStyle: str = "///",
+    opacity: float = 0.5,
+    latLonFlag: bool = False,
+    **kwargs
+    ):
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # # If no based matplotlib figure provided, define boundary =================
+    # if (fig == None or ax == None):
+    #     fig, ax = plt.subplots()
+    #     (xMin, xMax, yMin, yMax) = (center[0] - outerRadius, center[0] + outerRadius, center[1] - outerRadius, center[1] + outerRadius)
+    #     boundingBox = (xMin, xMax, yMin, yMax)
+    #     width = None
+    #     height = None
+    #     if (figSize == None or figSize[0] == None or figSize[1] == None):
+    #         (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
+    #     else:
+    #         (width, height) = figSize
+
+    #     fig.set_figwidth(width)
+    #     fig.set_figheight(height)
+    #     ax.set_xlim(xMin, xMax)
+    #     ax.set_ylim(yMin, yMax)
+
+    # Get the x, y list =======================================================
+    outerCircle = [[
+        center[0] + outerRadius * math.sin(2 * d * math.pi / lod),
+        center[1] + outerRadius * math.cos(2 * d * math.pi / lod),
+    ] for d in range(lod + 1)]
+    innerCircle = [[
+        center[0] + innerRadius * math.sin(2 * d * math.pi / lod),
+        center[1] + innerRadius * math.cos(2 * d * math.pi / lod),
+    ] for d in range(lod + 1)]
+    innerCircle.reverse()
+
+    ring = [pt for pt in outerCircle]
+    ring.extend([pt for pt in innerCircle])
+
+    fig, ax = plotPoly(
+        poly = ring,
+        edgeWidth = 0,
+        fillColor = fillColor,
+        fillStyle = fillStyle,
+        opacity = opacity,
+        latLonFlag = latLonFlag,
+        fig = fig,
+        ax = ax,
+        figSize = figSize,
+        boundingBox = boundingBox,
+        showAxis = showAxis,
+        saveFigPath = saveFigPath,
+        showFig = showFig,
+    )
+
+    if (edgeColor == 'Random'):
+        edgeColor = rndColor()
+        
+    fig, ax = plotCircle(
+        center = center, 
+        radius = innerRadius,
+        lod = 30,
+        edgeWidth = edgeWidth,
+        edgeColor = edgeColor,
+        fillColor = None,
+        latLonFlag = latLonFlag,
+        fig = fig,
+        ax = ax,
+        figSize = figSize,
+        boundingBox = boundingBox,
+        showAxis = showAxis,
+        saveFigPath = saveFigPath,
+        showFig = showFig)
+
+    fig, ax = plotCircle(
+        center = center, 
+        radius = outerRadius,
+        lod = 45,
+        edgeWidth = edgeWidth,
+        edgeColor = edgeColor,
+        fillColor = None,
+        latLonFlag = latLonFlag,
+        fig = fig,
+        ax = ax,
+        figSize = figSize,
+        boundingBox = boundingBox,
+        showAxis = showAxis,
+        saveFigPath = saveFigPath,
+        showFig = showFig)
+
+    # Axis on and off =========================================================
+    if (not showAxis):
+        plt.axis('off')
+
+    # Save figure =============================================================
+    if (saveFigPath != None and isinstance(fig, plt.Figure)):
+        fig.savefig(saveFigPath)
+    if (not showFig):
+        plt.close(fig)
+
     return fig, ax
 
 def plotCone3D(

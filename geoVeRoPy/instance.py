@@ -888,8 +888,8 @@ def rndNodeNeighbors(
 
 def rndNodeIsoNeighbors(
     nodes: dict,
+    radiusList: list,
     nodeIDs: list[int|str]|str = 'All', 
-    shape: str = 'IsoCircle',
     **kwargs
     ) -> dict:
 
@@ -906,26 +906,21 @@ def rndNodeIsoNeighbors(
                 if (i not in nodes):
                     raise OutOfRangeError("ERROR: Node %s is not in `nodes`." % i)
 
-    if (shape == 'IsoCircle'):
-        for n in nodeIDs:
-            if ('radiusList' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'radiusList'")
-            # By default, a circle is plotted by a 30-gon
-            lod = 30
-            if ('lod' in kwargs and type(kwargs['lod']) == int):
-                lod = kwargs['lod']
+    for n in nodeIDs:
+        # By default, a circle is plotted by a 30-gon
+        lod = 30
+        if ('lod' in kwargs and type(kwargs['lod']) == int):
+            lod = kwargs['lod']
 
-            nodes[n][neighborFieldName] = []
-            nodes[n]['neiShape'] = 'Isochrone'
-            nodes[n]['radiusList'] = kwargs['radiusList']
-            for r in kwargs['radiusList']:
-                poly = [[
-                    nodes[n][locFieldName][0] + r * math.sin(2 * d * math.pi / lod),
-                    nodes[n][locFieldName][1] + r * math.cos(2 * d * math.pi / lod),
-                ] for d in range(lod + 1)]
-                nodes[n][neighborFieldName].append([poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']])
-    else:
-        raise UnsupportedInputError("ERROR: Unsupported option for `shape`.")
+        nodes[n][neighborFieldName] = []
+        nodes[n]['neiShape'] = 'Isochrone'
+        nodes[n]['radiusList'] = kwargs['radiusList']
+        for r in kwargs['radiusList']:
+            poly = [[
+                nodes[n][locFieldName][0] + r * math.sin(2 * d * math.pi / lod),
+                nodes[n][locFieldName][1] + r * math.cos(2 * d * math.pi / lod),
+            ] for d in range(lod + 1)]
+            nodes[n][neighborFieldName].append([poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']])
 
     return nodes
 
@@ -1036,6 +1031,74 @@ def rndNodeTimedNeighbors(
     else:
         raise UnsupportedInputError("ERROR: Unsupported option for `shape`.")
 
+    return nodes
+
+def rndNodeRingNeighbors(
+    nodes: dict,
+    innerRadius: float,
+    outerRadius: float,
+    nodeIDs: list[int|str]|str = 'All',
+    **kwargs
+    ) -> dict:
+    # Field names =============================================================
+    if (innerRadius >= outerRadius):
+        raise UnsupportedInputError("ERROR: innerRadius should be smaller than outerRadius.")
+
+    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+    neighborFieldName = 'neighbor' if 'neighborFieldName' not in kwargs else kwargs['neighborFieldName']
+
+    # Sanity check ============================================================
+    if (type(nodeIDs) is not list):
+        if (nodeIDs == 'All'):
+            nodeIDs = [i for i in nodes]
+        else:
+            for i in nodeIDs:
+                if (i not in nodes):
+                    raise OutOfRangeError("ERROR: Node %s is not in `nodes`." % i)
+
+    # Create ring =============================================================
+    for n in nodes:
+        nodes[n]['neiShape'] = 'Ring'
+        nodes[n]['innerRadius'] = innerRadius
+        nodes[n]['outerRadius'] = outerRadius
+
+    # Create neighborhoods ====================================================
+    lod = 30 if 'lod' not in kwargs else kwargs['lod']
+    for n in nodes:
+        outerCircle = [[
+            nodes[n][locFieldName][0] + outerRadius * math.sin(2 * d * math.pi / lod),
+            nodes[n][locFieldName][1] + outerRadius * math.cos(2 * d * math.pi / lod),
+        ] for d in range(lod + 1)]
+        innerCircle = [[
+            nodes[n][locFieldName][0] + innerRadius * math.sin(2 * d * math.pi / lod),
+            nodes[n][locFieldName][1] + innerRadius * math.cos(2 * d * math.pi / lod),
+        ] for d in range(lod + 1)]
+        nodes[n]['neighborRing'] = shapely.Polygon(
+            shell = outerCircle,
+            holes = [innerCircle])
+
+        innerNoFly = [[
+            nodes[n][locFieldName][0] + (innerRadius - ERRTOL['distPt2Poly']) * math.sin(2 * d * math.pi / lod),
+            nodes[n][locFieldName][1] + (innerRadius - ERRTOL['distPt2Poly']) * math.cos(2 * d * math.pi / lod),
+        ] for d in range(lod + 1)]
+        nodes[n]['innerNoFly'] = shapely.Polygon(innerNoFly)
+
+    allNoFly = shapely.union_all([nodes[k]['innerNoFly'] for k in nodes])
+
+    # Transform into list of polygons =========================================
+    for n in nodes:
+        nodes[n]['neiShell'] = []
+        nodes[n]['neighborShapely'] = shapely.difference(nodes[n]['neighborRing'], allNoFly)
+        if (type(nodes[n]['neighborShapely']) == shapely.Polygon):
+            shl = [i for i in nodes[n]['neighborShapely'].exterior.coords]
+            shl = [shl[i] for i in range(len(shl)) if distEuclideanXY(shl[i], shl[i - 1]) > ERRTOL['distPt2Pt']]
+            nodes[n]['neiShell'] = [shl]
+        elif (type(nodes[n]['neighborShapely']) == shapely.MultiPolygon):
+            for g in nodes[n]['neighborShapely'].geoms:                
+                if (type(g) == shapely.Polygon):
+                    shl = [i for i in g.exterior.coords]
+                    shl = [shl[i] for i in range(len(shl)) if distEuclideanXY(shl[i], shl[i - 1]) > ERRTOL['distPt2Pt']]
+                    nodes[n]['neiShell'].append(shl)
     return nodes
 
 def rndArcs(

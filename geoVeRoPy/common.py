@@ -12,7 +12,7 @@ except(ImportError):
 ERRTOL = {
     # The distance between two points to be considered as the same point.
     'distPt2Pt': 0.01, 
-    'distPt2Seg': 0.02,
+    'distPt2Seg': 0.05,
     'distPt2Poly': 0.03,
     'deltaDist': 0.01,
     'collinear': 0.001,
@@ -207,6 +207,11 @@ def writeLog(string, logPath = None):
         print(string)
     return
 
+def printLog(*args):
+    if (DEBUG_PRINT_LOG):
+        print(*args)
+    return
+
 def is2IntervalOverlap(interval1, interval2):
     i = [min(interval1), max(interval1)]
     j = [min(interval2), max(interval2)]
@@ -219,6 +224,27 @@ def is2IntervalOverlap(interval1, interval2):
     if (iB < jA):
         return False
     if (jB < iA):
+        return False
+    return True
+
+def sortListByList(list1, list2):
+    """
+    Given list2, list1 is a sublist of list2, sort list1 by ordering in list2
+    """
+    sortedList1 = []
+    list1IdxInList2 = []
+    for i in list1:
+        heapq.heappush(list1IdxInList2, (list2.index(i), i))
+    while (len(list1IdxInList2) > 0):
+        sortedList1.append(heapq.heappop(list1IdxInList2)[1])
+    return sortedList1
+
+def twOverlap(tw1, tw2):
+    if (tw1[0] > tw1[1] or tw2[0] > tw2[1]):
+        raise UnsupportedInputError("ERROR: Time windows error.")
+    if (tw1[0] < tw1[1] < tw2[0] < tw2[1]):
+        return False
+    if (tw2[0] < tw2[1] < tw1[0] < tw1[1]):
         return False
     return True
 

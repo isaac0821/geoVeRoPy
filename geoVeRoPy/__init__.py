@@ -48,5 +48,3 @@ from .serviceTime import *
 
 # Moving target TSP
 # from .mttsp import *
-
-from .bak import *
