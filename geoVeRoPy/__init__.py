@@ -33,6 +33,7 @@ from .geometry import *
 from .obj2Obj import *
 from .polyTour import *
 from .vector import *
+from .grid import *
 
 # TSP/VRP
 from .tsp import *

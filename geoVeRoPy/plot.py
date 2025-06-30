@@ -1,3 +1,7 @@
+import numpy as np
+
+from scipy.interpolate import splprep, splev
+
 import matplotlib.pyplot as plt
 
 from matplotlib import rcParams
@@ -485,6 +489,11 @@ def plotNodes(
         else:
             nodeStyle[n]['va'] = 'top'
 
+        if ('fontsize' in nodes[n]):
+            nodeStyle[n]['fontsize'] = nodes[n]['fontsize']
+        else:
+            nodeStyle[n]['fontsize'] = 10
+
     # Draw nodes ==============================================================
     for n in nodes:
         ax.plot(
@@ -497,7 +506,8 @@ def plotNodes(
             nodeStyle[n]['label'], 
             (nodeStyle[n]['x'], nodeStyle[n]['y']), 
             ha=nodeStyle[n]['ha'], 
-            va=nodeStyle[n]['va'])
+            va=nodeStyle[n]['va'],
+            fontsize=nodeStyle[n]['fontsize'])
 
     # Neighborhood style ======================================================
     nodeNeiStyle = {}
@@ -584,7 +594,7 @@ def plotArcs(
     neighborEntWidth: float = 1.2,
     neighborEntColor: str = 'black',
     neighborBtwWidth: float = 1,
-    neighborBtwColor: str = 'gray',
+    neighborBtwColor: str = 'black',
     neighborFillStyle: str = '///',
     latLonFlag: bool = False,
     **kwargs
@@ -1152,6 +1162,8 @@ def plotLocSeq(
     # Check for required fields ===============================================
     if (locSeq == None):
         raise MissingParameterError("ERROR: Missing required field `locSeq`.")
+    if (lineStyle == 'solid'):
+        lineDashes = (None, None)
 
     if (arrowFlag):
         arcs = {}
@@ -1222,7 +1234,7 @@ def plotLocSeq(
             color = rndColor()
         elif (type(lineColor) == str):
             color = lineColor
-        ax.plot(x, y, color = color, linewidth = lineWidth)
+        ax.plot(x, y, color = color, linewidth = lineWidth, linestyle = lineStyle, dashes = lineDashes)
 
     return fig, ax
 
@@ -1292,6 +1304,63 @@ def plotLocSeq3D(
         fig.savefig(saveFigPath)
     if (not showFig):
         plt.close(fig)
+
+    return fig, ax
+
+def plotLocSeqCurve(
+    locSeq: list[pt],
+    lineColor: str = 'Random',
+    lineWidth: float = 1.0,
+    lineStyle: str = 'solid',
+    lineDashes: tuple = (5, 2),
+    nodeColor: str = 'black',
+    nodeMarkerSize: float = 1,
+    latLonFlag: bool = False,
+    lod: int = 500,
+    **kwargs
+    ):
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Check for required fields ===============================================
+    if (locSeq == None):
+        raise MissingParameterError("ERROR: Missing required field `locSeq`.")
+    if (lineStyle == 'solid'):
+        lineDashes = (None, None)
+
+    points = np.array(locSeq)
+    tck, u = splprep(points.T, u=None, s=0.0, per=False)
+    u_new = np.linspace(0, 1, lod)
+    x_smooth, y_smooth = splev(u_new, tck, der=0)
+
+    curve = []
+    for i in range(len(x_smooth)):
+        curve.append((x_smooth[i], y_smooth[i]))
+
+    fig, ax = plotLocSeq(
+        fig = fig,
+        ax = ax,
+        locSeq = curve,
+        lineColor = lineColor,
+        lineWidth = lineWidth,
+        lineStyle = lineStyle,
+        lineDashes = lineDashes,
+        nodeColor = None,
+        nodeMarkerSize = None,
+        arrowFlag = False,
+        latLonFlag = False,
+        figSize = figSize,
+        boundingBox = boundingBox,
+        showAxis = showAxis,
+        saveFigPath = saveFigPath,
+        showFig = showFig)
 
     return fig, ax
 
@@ -1600,23 +1669,6 @@ def plotRing(
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
-    # # If no based matplotlib figure provided, define boundary =================
-    # if (fig == None or ax == None):
-    #     fig, ax = plt.subplots()
-    #     (xMin, xMax, yMin, yMax) = (center[0] - outerRadius, center[0] + outerRadius, center[1] - outerRadius, center[1] + outerRadius)
-    #     boundingBox = (xMin, xMax, yMin, yMax)
-    #     width = None
-    #     height = None
-    #     if (figSize == None or figSize[0] == None or figSize[1] == None):
-    #         (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
-    #     else:
-    #         (width, height) = figSize
-
-    #     fig.set_figwidth(width)
-    #     fig.set_figheight(height)
-    #     ax.set_xlim(xMin, xMax)
-    #     ax.set_ylim(yMin, yMax)
-
     # Get the x, y list =======================================================
     outerCircle = [[
         center[0] + outerRadius * math.sin(2 * d * math.pi / lod),
@@ -1649,7 +1701,7 @@ def plotRing(
 
     if (edgeColor == 'Random'):
         edgeColor = rndColor()
-        
+
     fig, ax = plotCircle(
         center = center, 
         radius = innerRadius,
