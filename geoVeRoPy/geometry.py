@@ -3909,7 +3909,7 @@ def distBtwPolysXY(pt1:pt, pt2:pt, polys:polys, polyVG: dict = None, detailFlag:
     # Quick checkout ==========================================================
     visibleDirectly = True
     for poly in polys:
-        if (isSegIntPoly([pt1, pt2], poly)):
+        if (isSegIntPoly([pt1, pt2], poly, interiorOnly=True)):
             visibleDirectly = False
             break
     if (visibleDirectly):

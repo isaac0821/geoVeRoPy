@@ -11,12 +11,12 @@ from .common import *
 # from .plot import *
 
 # obj2ObjPath =================================================================
-def multiPoly2MultiPolyPath(startPt: pt, endPt: pt, multiPolys: list[polys], **kwargs):
+def multiPoly2MultiPolyPath(startPt: pt, endPt: pt, multiPolys: list[polys], holes: list[polys]|None, **kwargs):
     outputFlag = False if 'outputFlag' not in kwargs else kwargs['outputFlag']
     gapTol = None if 'gapTol' not in kwargs else kwargs['gapTol']
     timeLimit = None if 'timeLimit' not in kwargs else kwargs['timeLimit']
     
-    res = _multiPoly2MultiPolyPathGurobi(startPt, endPt, multiPolys, outputFlag, gapTol, timeLimit)
+    res = _multiPoly2MultiPolyPathGurobi(startPt, endPt, multiPolys, holes, outputFlag, gapTol, timeLimit)
     return {
         'path': res['path'],
         'dist': res['dist']
@@ -246,14 +246,29 @@ def _poly2PolyPathGurobi(startPt: pt, endPt: pt, polys: polys, outputFlag = Fals
         gapTol = gapTol, 
         timeLimit = timeLimit)
 
-def _multiPoly2MultiPolyPathGurobi(startPt: pt, endPt: pt, multiPolys: list[polys], outputFlag = False, gapTol = None, timeLimit = None):
+def _multiPoly2MultiPolyPathGurobi(startPt: pt, endPt: pt, multiPolys: list[polys], holes: list[polys]|None = None, outputFlag = False, gapTol = None, timeLimit = None):
     segs = []
+    if (holes != None):
+        if (len(multiPolys) != len(holes)):
+            raise UnsupportedInputError("ERROR: `multiPolys` should have the same length as `holes`.")
+
     for i in range(len(multiPolys)):
         segs.append([])
+        # Multipolys
         for j in range(len(multiPolys[i])):
             for k in range(-1, len(multiPolys[i][j]) - 1):
                 segs[i].append([multiPolys[i][j][k], multiPolys[i][j][k + 1]])
-
+        # Holes
+        # holes => list[polys]
+        if (holes != None and holes[i] != None and len(holes[i]) > 0):
+            # hole => polys
+            for hole in holes[i]:
+                # print("hole", hole)
+                # h => poly
+                for h in hole:
+                    for k in range(-1, len(h) - 1):
+                        segs[i].append([h[k], h[k + 1]])
+    # print("seg", segs)
     return _seg2SegPathGurobi(
         startPt = startPt, 
         endPt = endPt, 
@@ -1230,127 +1245,6 @@ def vec2VecPath(startPt: pt, endPt: pt, vecs: list[dict], vehSpeed: float, confi
         'runtime': runtime
     }
 
-# [Working]
-def timedCircle2timedCirclePath(startPt: pt, endPt: pt, vecs: list[dict], radius: float, vehSpeed: float, config: dict = {'outputFlag': False}, closedFlag = False):
-    try:
-        import gurobipy as grb
-    except(ImportError):
-        raise ImportError("ERROR: Cannot find Gurobi")
-
-    model = grb.Model("SOCP")
-    if (config == None or 'outputFlag' not in config or config['outputFlag'] == False):
-        model.setParam('OutputFlag', 0)
-    else:
-        model.setParam('OutputFlag', 1)
-
-    if (config != None and 'gapTol' in config):
-        model.setParam('MIPGap', config['gapTol'])
-
-    model.setParam(grb.GRB.Param.TimeLimit, 15)
-
-    # Parameters ==============================================================
-    sx = {}
-    sy = {}
-    vx = {}
-    vy = {}
-    for i in range(1, len(vecs) + 1):
-        sx[i] = vecs[i - 1]['loc'][0]
-        sy[i] = vecs[i - 1]['loc'][1]
-        vx[i] = vecs[i - 1]['vec'][0]
-        vy[i] = vecs[i - 1]['vec'][1]
-
-    # Decision variables ======================================================
-    # (x[i], y[i]) 为第i个vec上相遇时的坐标
-    # NOTE: 只有vec上的是决策变量
-    # index = 1, 2, ..., len(vecs)
-    x = {}
-    y = {}
-    for i in range(1, len(vecs) + 1):
-        x[i] = model.addVar(vtype=grb.GRB.CONTINUOUS, name = "x_%s" % i, lb=-float('inf'), ub=float('inf'))
-        y[i] = model.addVar(vtype=grb.GRB.CONTINUOUS, name = "y_%s" % i, lb=-float('inf'), ub=float('inf'))
-
-    # d[i] 是 (x[i], y[i]) 到 (x[i + 1], y[i + 1])之间的距离
-    d = {}
-    for i in range(len(vecs) + 1):
-        d[i] = model.addVar(vtype = grb.GRB.CONTINUOUS, name = 'd_%s' % i)
-    model.setObjective(grb.quicksum(d[i] for i in range(len(vecs) + 1)), grb.GRB.MINIMIZE)
-
-    # Aux vars - distance between (x, y)
-    dx = {}
-    dy = {}
-    for i in range(len(vecs) + 1):
-        dx[i] = model.addVar(vtype = grb.GRB.CONTINUOUS, name = 'dx_%s' % i, lb = -float('inf'), ub = float('inf'))
-        dy[i] = model.addVar(vtype = grb.GRB.CONTINUOUS, name = 'dy_%s' % i, lb = -float('inf'), ub = float('inf'))
-
-    t = {}
-    for i in range(len(vecs) + 2):
-        t[i] = model.addVar(vtype=grb.GRB.CONTINUOUS, name = "t_%s" % i, lb=0, ub=float('inf'))
-
-    # Constraints =============================================================
-    # Aux constr - dx dy
-    model.addConstr(dx[0] == x[1] - startPt[0])
-    model.addConstr(dy[0] == y[1] - startPt[1])
-    for i in range(1, len(vecs)):
-        model.addConstr(dx[i] == x[i + 1] - x[i])
-        model.addConstr(dy[i] == y[i + 1] - y[i])
-    model.addConstr(dx[len(vecs)] == endPt[0] - x[len(vecs)])
-    model.addConstr(dy[len(vecs)] == endPt[1] - y[len(vecs)])
-
-    # 相遇时的位置
-    for i in range(1, len(vecs) + 1):
-        model.addConstr(x[i] == sx[i] + t[i] * vx[i])
-        model.addConstr(y[i] == sy[i] + t[i] * vy[i])
-
-    # Distance btw visits
-    for i in range(len(vecs) + 1):
-        model.addQConstr(d[i] ** 2 >= dx[i] ** 2 + dy[i] ** 2)
-
-    # 相遇点之间的距离
-    model.addConstr(t[0] == 0)
-    for i in range(len(vecs) + 1):
-        model.addConstr(t[i + 1] == t[i] + d[i] * (1 / vehSpeed))
-
-    model.modelSense = grb.GRB.MINIMIZE
-    # model.write("SOCP.lp")
-    model.optimize()
-
-    # Post-processing =========================================================
-    ofv = None
-    path = [startPt]
-    timedSeq = [(startPt, 0)]
-    if (model.status == grb.GRB.status.OPTIMAL):
-        solType = 'IP_Optimal'
-        ofv = model.getObjective().getValue()
-        for i in x:
-            path.append((x[i].x, y[i].x))
-            timedSeq.append(((x[i].x, y[i].x), t[i].x))
-        path.append(endPt)
-        timedSeq.append((endPt, t[len(vecs) + 1].x))
-        gap = 0
-        lb = ofv
-        ub = ofv
-        runtime = model.Runtime
-    elif (model.status == grb.GRB.status.TIME_LIMIT):
-        solType = 'IP_TimeLimit'
-        ofv = model.ObjVal
-        for i in x:
-            path.append((x[i].x, y[i].x))
-            timedSeq.append(((x[i].x, y[i].x), t[i].x))
-        path.append(endPt)
-        timedSeq.append((endPt, t[len(vecs) + 1].x))
-        gap = model.MIPGap
-        lb = model.ObjBoundC
-        ub = model.ObjVal
-        runtime = model.Runtime
-
-    return {
-        'dist': ofv,
-        'time': t[len(vecs)].x,
-        'path': path,
-        'timedSeq': timedSeq,
-        'runtime': runtime
-    }
-
 def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:list[TriGridSurface], vehSpeed, startTime: float = 0):
     
     # 前向Greedy，给定一个初始的path3D，保留前startImpFrom项，从第s+1开始用最短距离计算
@@ -1433,5 +1327,185 @@ def triGridSurface2TriGridSurfacePath(startPt: pt, endPt: pt, triGridSurfaces:li
         'time': time,
         'path': [i[0] for i in path3D],
         'path3D': path3D,
+    }
+
+def ring2RingPath(startPt: pt, endPt: pt, seq: list, nodes: dict, noFlyShell: list[poly], polyVG: dict, **kwargs):
+
+    # NOTE: 迭代的方法
+    # Step 1: 先使用multiPoly2MultiPoly生成一个路径
+    # Step 2: 固定所有的转折点，由于已经可以保证转折点不在禁飞区内，只要路上不经过就行了
+    # Step 3: 固定转折点前后的点，局部搜索转折点新的位置，如果总长变化很小，结束，否则转到Step 2
+
+    # 先构造multiPolys
+    multiPolys = []
+    for i in range(len(seq)):
+        multiPoly = []
+        for k in nodes[seq[i]]['neiShell']:
+            multiPoly.append(k)
+        multiPolys.append(multiPoly)
+
+    # 然后构造holes
+    holes = None
+    hasHoleFlag = False
+    for i in range(len(seq)):
+        if (nodes[seq[i]]['neiHoles'] != None):
+            hasHoleFlag = True
+    if (hasHoleFlag):
+        holes = []
+        for i in range(len(seq)):
+            holes.append([])
+            if (nodes[seq[i]]['neiHoles'] != None):
+                holes[i].append(nodes[seq[i]]['neiHoles'])
+
+    # 构造初始路径
+    m2m = multiPoly2MultiPolyPath(startPt, endPt, multiPolys, holes, **kwargs)
+    
+    # 记录seq对应的每一个点
+    # len(visitLocs) == len(seq)
+    visitLocs = [{
+        'nodeID': 0,
+        'loc': startPt,
+        'needUpdate': False
+    }]
+    for i in range(1, len(m2m['path']) - 1):
+        visitLocs.append({
+            'nodeID': seq[i - 1],
+            'loc': m2m['path'][i],
+            'needUpdate': True
+        })
+    visitLocs.append({
+        'nodeID': -1,
+        'loc': endPt,
+        'needUpdate': False
+    })
+
+    # len(sps) == len(seq) - 1
+    sps = []
+    for i in range(len(m2m['path']) - 1):
+        if (is2PtsSame(m2m['path'][i], m2m['path'][i + 1])):
+            sps.append([])
+        else:
+            path = distBtwPolysXY(
+                pt1 = m2m['path'][i], 
+                pt2 = m2m['path'][i + 1], 
+                polys = noFlyShell,
+                polyVG = polyVG, 
+                detailFlag = True)
+            if (len(path['path']) > 2):
+                sps.append(path['path'][1:-1])
+            else:
+                sps.append([])
+
+    oldDist = 0
+    oldPath = []
+    for k in range(len(visitLocs) - 1):
+        oldPath.append(visitLocs[k]['loc'])
+        oldPath.extend(sps[k])
+    oldPath.append(visitLocs[-1]['loc'])
+    for k in range(len(oldPath) - 1):
+        oldDist += distEuclideanXY(oldPath[k], oldPath[k + 1])
+    newPath = []
+    
+    # 迭代调整visitLocs和sps，直到不能改进为止
+    iterNum = 0
+    contFlag = True
+    while (contFlag):
+        contFlag = False
+        iterNum += 1
+
+        # 每个visit point更新一轮
+        for i in range(1, len(visitLocs) - 1):
+            if (visitLocs[i]['needUpdate']):
+                # 旧位置
+                oldLoc = visitLocs[i]['loc']
+                
+                prevLoc = None
+                if (len(sps[i - 1]) > 0):
+                    prevLoc = sps[i - 1][-1]
+                else:
+                    prevLoc = visitLocs[i - 1]['loc']
+                nextLoc = None
+                if (len(sps[i]) > 0):
+                    nextLoc = sps[i][0]
+                else:
+                    nextLoc = visitLocs[i + 1]['loc']
+
+                s2sHole = None
+                if (holes != None and holes[i - 1] != None and len(holes[i - 1]) > 0):
+                    s2sHole = [holes[i - 1]]
+
+                s2s = multiPoly2MultiPolyPath(
+                    startPt = prevLoc, 
+                    endPt = nextLoc, 
+                    multiPolys = [multiPolys[i - 1]],
+                    holes = s2sHole)
+                
+                # 新位置
+                # print(s2s['path'])
+                newLoc = s2s['path'][1]
+                visitLocs[i]['loc'] = newLoc
+               
+                if (not is2PtsSame(oldLoc, newLoc)):
+                    contFlag = True
+                    # print(i)
+                    # print(visitLocs)
+                    if (is2PtsSame(visitLocs[i - 1]['loc'], newLoc)):
+                        sps[i - 1] = []
+                    else:
+                        prevSP = distBtwPolysXY(
+                            pt1 = visitLocs[i - 1]['loc'], 
+                            pt2 = newLoc, 
+                            polys = noFlyShell,
+                            polyVG = polyVG, 
+                            detailFlag = True)
+                        if (len(prevSP['path']) > 2):
+                            sps[i - 1] = prevSP['path'][1:-1]
+                        else:
+                            sps[i - 1] = []
+
+                    if (is2PtsSame(visitLocs[i + 1]['loc'], newLoc)):
+                        sps[i - 1] = []
+                    else:
+                        nextSP = distBtwPolysXY(
+                            pt1 = newLoc, 
+                            pt2 = visitLocs[i + 1]['loc'], 
+                            polys = noFlyShell,
+                            polyVG = polyVG, 
+                            detailFlag = True)
+                        if (len(nextSP['path']) > 2):
+                            sps[i] = nextSP['path'][1:-1]
+                        else:
+                            sps[i] = []
+
+                    # Update necessary
+                    visitLocs[i]['needUpdate'] = True
+                    if (i > 1):
+                        visitLocs[i - 1]['needUpdate'] = True
+                    if (i < len(visitLocs) - 1):
+                        visitLocs[i + 1]['needUpdate'] = True
+                else:
+                    visitLocs[i]['needUpdate'] = False
+
+        newDist = 0
+        newPath = []
+        for k in range(len(visitLocs) - 1):
+            newPath.append(visitLocs[k]['loc'])
+            newPath.extend(sps[k])
+        newPath.append(visitLocs[-1]['loc'])
+        for k in range(len(newPath) - 1):
+            newDist += distEuclideanXY(newPath[k], newPath[k + 1])
+
+        print(iterNum, "oldDist => newDist: ", oldDist, newDist)
+
+        if (oldDist - newDist < 0.0001):
+            contFlag = False
+
+        oldDist = newDist
+
+    return {
+        'dist': newDist,
+        'visitLocs': visitLocs,
+        'sps': sps,
+        'path': newPath
     }
 

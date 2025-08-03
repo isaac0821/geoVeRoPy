@@ -8,15 +8,19 @@ import gurobipy as grb
 from .common import *
 from .geometry import *
 from .travel import *
+from .ring import *
 from .polyTour import *
 from .obj2Obj import *
+from .tsp import *
 
 def solveCETSP(
-    startLoc: pt,
-    endLoc: pt,
     nodes: dict, 
+    depotLoc: pt = None,
+    startLoc: pt = None,
+    endLoc: pt = None,    
     neighbor: str = "Circle",
     algo: str = "Metaheuristic",
+    method: str = 'ILS',
     **kwargs):
 
     """Use MISOCP(GBD)/metaheuristic to find shortest CETSP tour
@@ -61,10 +65,18 @@ def solveCETSP(
     # Sanity check ============================================================
     if (nodes == None or type(nodes) != dict):
         raise MissingParameterError(ERROR_MISSING_NODES)
-    if (startLoc == None):
-        raise MissingParameterError("ERROR: Missing start location.")
-    if (endLoc == None):
-        raise MissingParameterError("ERROR: Missing end location.")
+    # depotLoc和startLoc/endLoc必须有一个，depotLoc会覆盖另外俩
+    if (depotLoc == None and startLoc == None and endLoc == None):
+        raise MissingParameterError("ERROR: Missing depotLoc. Use `depotLoc` or (`startLoc` and `endLoc').")
+    else:
+        if (depotLoc != None):
+            startLoc = depotLoc
+            endLoc = depotLoc
+        else:
+            if (startLoc == None):
+                raise MissingParameterError("ERROR: Missing start location.")
+            if (endLoc == None):
+                raise MissingParameterError("ERROR: Missing end location.")
 
     # Check required for neighbor options =====================================
     if (neighbor in ['Circle', 'Poly', 'CircleLatLon', 'PolyLatLon']):
@@ -88,12 +100,14 @@ def solveCETSP(
     # Check required information for different solution approach ==============
     if (algo == 'Exact'):
         # Add cut configuration after submitting paper
-        pass
+        if (method == 'GBD'):
+            pass
+        elif (method == 'MISOCP'):
+            pass
+        else:
+            raise UnsupportedInputError("ERROR: Options for `method` includes ['GBD', 'MISOCP']")
     elif (algo == 'Metaheuristic'):
-        if ('method' not in kwargs):
-            warnings.warn("WARNING: A specific metaheuristic approach needs to be assigned by 'method'. Set to be default as 'GA'")
-            kwargs['method'] == 'GA'
-        if (kwargs['method'] == 'GA' or kwargs['method'] == 'GeneticAlgorithm'):
+        if (method == 'GA' or method == 'GeneticAlgorithm'):
             if ('popSize' not in kwargs):
                 raise MissingParameterError("ERROR: Need to specify the size of population in GA by 'popSize'.")
             if ('neighRatio' not in kwargs):
@@ -109,6 +123,27 @@ def solveCETSP(
                 kwargs['stop'] = {
                     'runtime': 120
                 }
+        elif (method == 'ILS' or method == 'IteratedLocalSearch'):
+            if ('initTemp' not in kwargs):
+                kwargs['initTemp'] = 100
+            if ('coolRate' not in kwargs):
+                kwargs['coolRate'] = 0.95
+            if ('neighRatio' not in kwargs):
+                warnings.warn("WARNING: Missing ratios of each local search operator, set to be default.")
+                kwargs['neighRatio'] = {
+                    'Swap': 0.1,
+                    'Exchange': 0.1,
+                    'Rotate': 0.3,
+                    'rndDestroy': 0.4,
+                    'semiTSP': 0.1
+                }
+            if ('stop' not in kwargs):
+                warnings.warn("WARNING: Missing stopping criteria, set to be default.")
+                kwargs['stop'] = {
+                    'numNoImproveIter': 200
+                }
+        else:
+            raise UnsupportedInputError("ERROR: Options for `method` includes ['GA', 'ILS']")
     else:
         raise UnsupportedInputError("ERROR: Options for `algo` includes ['Exact', 'Metaheuristic']")
 
@@ -160,7 +195,7 @@ def solveCETSP(
                 timeLimit = kwargs['timeLimit'] if 'timeLimit' in kwargs else None)
 
     elif (algo == 'Metaheuristic'):
-        if (kwargs['method'] == 'GA' or kwargs['method'] == 'GeneticAlgorithm'):
+        if (method == 'GA' or method == 'GeneticAlgorithm'):
             if (neighbor == 'Circle'):
                 cetsp = _solveCETSPGACircle(
                     startLoc = startLoc,
@@ -171,8 +206,6 @@ def solveCETSP(
                     popSize = kwargs['popSize'],
                     neighRatio = kwargs['neighRatio'],
                     stop = kwargs['stop'])
-            elif (neighbor == 'Poly'):
-                pass
             elif (neighbor == 'CircleLatLon'):
                 polyXYMercator = {}
                 for i in nodes:
@@ -203,7 +236,23 @@ def solveCETSP(
                     popSize = kwargs['popSize'],
                     neighRatio = kwargs['neighRatio'],
                     stop = kwargs['stop'])
-
+            else:
+                raise UnsupportedInputError(f"ERROR: {neighbor} not supported yet.")
+        elif (method == 'ILS' or method == 'IteratedLocalSearch'):
+            if (neighbor == 'Circle'):
+                if (depotLoc == None):
+                    raise MissingParameterError("ERROR: `depotLoc` is needed for `ILS` algorithm.")
+                cetsp = _solveCETSPILSCircle(
+                    depotLoc = depotLoc,
+                    nodes = nodes,
+                    radius = kwargs['radius'] if 'radius' in kwargs else None,
+                    radiusFieldName = kwargs['radiusFieldName'] if 'radiusFieldName' in kwargs else None,
+                    initTemp = kwargs['initTemp'],
+                    coolRate = kwargs['coolRate'],
+                    neighRatio = kwargs['neighRatio'],
+                    stop = kwargs['stop'])
+            else:
+                raise UnsupportedInputError(f"ERROR: {neighbor} not supported yet.")
     return cetsp
 
 def _solveCETSPGBDCircle(
@@ -1670,3 +1719,313 @@ def _solveCETSPGALatLon(
         'runtime': runtime,
         'convergence': convergence,
     }
+
+def _solveCETSPILSCircle(
+    depotLoc: pt,
+    nodes: dict, # Index from 1
+    radius: float | None = None,
+    radiusFieldName: str = 'radius',
+    initTemp: float = 100,
+    coolRate: float = 0.95,
+    neighRatio: dict = {},
+    stop: dict = {},
+    **kwargs
+    ) -> dict | None:
+
+    class chromosomeCETSP:
+        def __init__(self, depotLoc, nodes, seq):
+            # NOTE: seq以depotID开始和结束
+            # NOTE: 每个seq都需要补全为一条合法的cetsp路径
+            # Complete logic:
+            # STEP 1: 记录得到所有的转折点
+            # STEP 2: 记录所有未经过的点，计算距离，若没有未经过点，结束
+            # STEP 3: 将最近的未经过点插入，转入STEP 2
+            
+            # 记录nodes的信息
+            self.depotLoc = depotLoc
+            self.nodes = nodes
+            self.initSeq = [i for i in seq]
+
+            # 原始输入的seq
+            self.seq = Ring()
+            for i in seq:
+                n = RingNode(i)
+                self.seq.append(n)
+            self.seq.rehead(0)
+
+            # 转折点列表
+            self.turning = []
+            self.aggTurning = []
+            # 穿越点列表
+            self.trespass = []
+            # 未访问点及距离，暂存用，最终需要为空
+            self.dist2NotInclude = {}
+            # 补全
+            self.seq2Path()
+
+        def update(self):
+            # 需要先得到一组turn point
+            circles = []
+            seqTra = [n.key for n in self.seq.traverse()]
+            seqTra.append(0)
+            for i in range(1, len(seqTra) - 1):
+                circles.append({
+                    'center': self.nodes[seqTra[i]]['loc'],
+                    'radius': radius if radius != None else self.nodes[seqTra[i]][radiusFieldName]
+                })
+
+            # 得到路径，然后进行去重
+            c2c = circle2CirclePath(
+                startPt = self.depotLoc,
+                endPt = self.depotLoc,
+                circles = circles,
+                algo = 'SOCP')
+            degen = seqRemoveDegen(seq = c2c['path'])          
+
+            # 计算转折点，重合转折点，穿越点等
+            # self.turning - 转折点，注意这里的转折点可能重合
+            self.turning = []
+            # self.aggTurning - 聚合点，list of list，每个元素是一组重合的转折点
+            self.aggTurning = []
+            # 根据去重翻译
+            for i in range(len(degen['aggNodeList'])):
+                if (degen['removedFlag'][i] == False):
+                    self.turning.extend([seqTra[k] for k in degen['aggNodeList'][i]])
+                    self.aggTurning.append([seqTra[k] for k in degen['aggNodeList'][i]])
+            # 新的路径，去重后，长度应当与self.aggTurning一致
+            self.path = degen['newSeq']
+            # 总长度
+            self.dist = c2c['dist']
+
+            # 判断剩余的点是否为trespass点
+            self.dist2NotInclude = {}
+            # 现在针对每个点来判断是否穿越
+            self.trespass = []
+            # 是否所有点都覆盖
+            self.completeFlag = True
+            for i in self.nodes:
+                if (i not in self.turning):
+                    res = distPt2Seq(
+                        pt = self.nodes[i]['loc'], 
+                        seq = self.path,
+                        closedFlag = False,
+                        detailFlag = True)
+                    if (i in seqTra):
+                        self.trespass.append(i)
+                    elif (res['dist'] <= (radius if radius != None else self.nodes[i][radiusFieldName]) + 1.01 * ERRTOL["distPt2Seg"]):
+                        self.trespass.append(i)
+                    else:
+                        self.dist2NotInclude[i] = res
+                        self.completeFlag = False
+            # 检查一下degen的过程有没有把本来是相交的点给无意中移除掉了
+            sameFlag = True
+            for k in seqTra:
+                if (k != 0 and k not in self.turning and k not in self.trespass):
+                    self.trespass.append(k)
+                    warnings.warn(f"WARNING: Customer {k} is dropped.")
+
+        def seq2Path(self):
+            completeFlag = False
+            # 现在开始补齐        
+            while (not completeFlag):
+                completeFlag = True                
+                self.update()
+
+                # 将一个最近的点加入self.aggTurning
+                if (not self.completeFlag):
+                    completeFlag = False
+
+                    # 找最近的邻域
+                    closestIdx = None
+                    closestDist = float('inf')
+                    closestInsertID = None
+                    for i in self.dist2NotInclude:
+                        if (self.dist2NotInclude[i]['dist'] < closestDist):
+                            closestIdx = i
+                            closestDist = self.dist2NotInclude[i]['dist']
+                            closestInsertID = self.dist2NotInclude[i]['nearestIdx'][1]
+                    self.aggTurning.insert(closestInsertID, [closestIdx])
+                    self.turning = []
+                    for k in range(len(self.aggTurning)):
+                        self.turning.extend(self.aggTurning[k])
+
+                    # 更新seq为新的turning point
+                    self.seq = Ring()
+                    for i in range(len(self.turning) - 1):
+                        n = RingNode(self.turning[i])
+                        self.seq.append(n)
+                    self.seq.rehead(0)
+
+    def swap(chromo, idxI):
+        seq = [i.key for i in chromo.seq.traverse()]
+        if (idxI < len(seq) - 1):
+            seq[idxI], seq[idxI + 1] = seq[idxI + 1], seq[idxI]
+        else:
+            seq[idxI], seq[0] = seq[0], seq[idxI]
+        return chromosomeCETSP(depotLoc, nodes, seq)
+
+    def exchange(chromo, idxI, idxJ):
+        seq = [i.key for i in chromo.seq.traverse()]
+        seq[idxI], seq[idxJ] = seq[idxJ], seq[idxI]
+        return chromosomeCETSP(depotLoc, nodes, seq)
+
+    def rotate(chromo, idxI, idxJ):
+        seq = [i.key for i in chromo.seq.traverse()]
+        if (idxI > idxJ):
+            idxI, idxJ = idxJ, idxI
+        newSeq = [seq[i] for i in range(idxI)]
+        newSeq.extend([seq[idxJ - i] for i in range(idxJ - idxI + 1)])
+        newSeq.extend([seq[i] for i in range(idxJ + 1, len(seq))])
+        return chromosomeCETSP(depotLoc, nodes, newSeq)
+    
+    def rndDestroy(chromo):
+        seq = [i.key for i in chromo.seq.traverse()]
+        numRemove = int(len(seq) * random.random() * 0.3)
+        newSeq = [i for i in seq]
+        for i in range(numRemove):
+            newSeq.remove(newSeq[random.randint(0, len(newSeq) - 1)])
+        if (0 not in newSeq):
+            newSeq.append(0)
+        return chromosomeCETSP(depotLoc, nodes, newSeq)
+    
+    def semiTSP(chromo):
+        # 思路是把转折点目前的位置列出来，TSP一下得到序列
+        curNodes = {}
+        path = [i for i in chromo.path]
+        curNodes[0] = {
+            'loc': depotLoc
+        }
+        traSeq = [tuple(i) for i in chromo.aggTurning if i != [0]]
+        for i in range(len(traSeq) - 1):
+            curNodes[traSeq[i]] = {'loc': path[i]}
+        tsp = solveTSP(
+            depotID = 0,
+            nodes = curNodes)
+        newSeq = []
+        for i in tsp['seq']:
+            if (type(i) == int):
+                newSeq.append(i)
+            else:
+                newSeq.extend(list(i))
+        return chromosomeCETSP(depotLoc, nodes, newSeq)
+
+    # Initialize ==============================================================
+    startTime = datetime.datetime.now()
+    convergence = []
+
+    seq = [i for i in nodes]
+    seq.append(0)
+    random.shuffle(seq) # 没事，会rehead
+    
+    chromo = chromosomeCETSP(depotLoc, nodes, seq)
+    printLog("Initial Solution: ", chromo.dist, chromo.turning, chromo.trespass)
+
+    dashboard = {}
+    dashboard['bestDist'] = chromo.dist
+    dashboard['bestSeq'] = [i.key for i in chromo.seq.traverse()]
+    dashboard['bestChromo'] = chromo
+
+    contFlag = True
+    iterTotal = 0
+    iterNoImp = 0
+    while (contFlag):
+        # Select operator according to ratio
+        opt = rndPickFromDict(neighRatio)
+
+        newChromo = chromo
+
+        # swap
+        if (opt == 'Swap'):
+            idx = random.randint(0, chromo.seq.count - 1)
+            newChromo = swap(chromo, idx)
+            printLog("InterSwap: ", newChromo.dist)
+
+        # exchange
+        if (opt == 'Exchange'):
+            if (chromo.seq.count > 4):
+                [idxI, idxJ] = random.sample([i for i in range(chromo.seq.count)], 2)
+                while (abs(idxJ - idxI) <= 2
+                    or idxI == 0 and idxJ == chromo.seq.count - 1
+                    or idxI == chromo.seq.count - 1 and idxJ == 0):
+                    [idxI, idxJ] = random.sample([i for i in range(chromo.seq.count)], 2)
+                newChromo = exchange(chromo, idxI, idxJ)
+                printLog("Exchange: ", newChromo.dist)
+
+        # rotate
+        if (opt == 'Rotate'):
+            if (chromo.seq.count > 4):
+                [idxI, idxJ] = random.sample([i for i in range(chromo.seq.count)], 2)
+                while (abs(idxJ - idxI) <= 2
+                    or idxI == 0 and idxJ == chromo.seq.count - 1
+                    or idxI == chromo.seq.count - 1 and idxJ == 0):
+                    [idxI, idxJ] = random.sample([i for i in range(chromo.seq.count)], 2)
+                newChromo = rotate(chromo, idxI, idxJ)
+                printLog("Rotate: ", newChromo.dist)
+
+        # random destroy and recreate
+        if (opt == 'rndDestroy'):
+            newChromo = rndDestroy(chromo)
+            printLog("Random destroy: ", newChromo.dist)
+
+        # random destroy and recreate
+        if (opt == 'semiTSP'):
+            newChromo = semiTSP(chromo)
+            printLog("semiTSP: ", newChromo.dist)
+
+        # Update dashboard
+        newOfvFound = False
+        if (newChromo.dist < dashboard['bestDist'] - 0.00001):
+            newOfvFound = True
+            dashboard['bestDist'] = newChromo.dist
+            dashboard['bestSeq'] = [i.key for i in newChromo.seq.traverse()]
+            dashboard['bestChromo'] = newChromo
+            chromo = newChromo
+        else:
+            if (random.random() < np.exp((newChromo.dist - dashboard['bestDist']) / initTemp)):
+                chromo = newChromo
+
+        printLog("\n")
+        printLog(hyphenStr())
+        printLog("Iter: ", iterTotal, 
+            "\nRuntime [s]: ", round((datetime.datetime.now() - startTime).total_seconds(), 2), 
+            "\nTurning", dashboard['bestChromo'].turning,
+            "\nTrespass", dashboard['bestChromo'].trespass,
+            "\nDist: ", dashboard['bestDist'])
+        if (newOfvFound):
+            iterNoImp = 0
+        else:
+            iterNoImp += 1
+        iterTotal += 1
+
+        convergence.append({
+            'dist': dashboard['bestDist'],
+            'seq': dashboard['bestSeq'],
+            'path': dashboard['bestChromo'].path,
+            'runtime': (datetime.datetime.now() - startTime).total_seconds()
+        })
+
+        # Check stopping criteria
+        if ('numNoImproveIter' in stop):
+            if (iterNoImp > stop['numNoImproveIter']):
+                contFlag = False
+                break
+        if ('numIter' in stop):
+            if (iterTotal > stop['numIter']):
+                contFlag = False
+                break
+        if ('runtime' in stop):
+            if ((datetime.datetime.now() - startTime).total_seconds() > stop['runtime']):
+                contFlag = False
+                break
+
+    return {
+        'ofv': dashboard['bestDist'],
+        'dist': dashboard['bestDist'],
+        'seq': dashboard['bestSeq'],
+        'path': dashboard['bestChromo'].path,
+        'turning': dashboard['bestChromo'].turning,
+        'trespass': dashboard['bestChromo'].trespass,
+        'runtime': (datetime.datetime.now() - startTime).total_seconds(),
+        'convergence': convergence,
+    }
+

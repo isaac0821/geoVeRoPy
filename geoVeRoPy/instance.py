@@ -269,7 +269,7 @@ def _rndPtUniformAvoidPolyXY(poly: poly, xRange: list[int]|list[float], yRange: 
     while (True):
         x = random.uniform(xRange[0], xRange[1])
         y = random.uniform(yRange[0], yRange[1])
-        if (isPtInPoly((x, y), poly)):
+        if (not isPtInPoly((x, y), poly)):
             return (x, y)
 
 def _rndPtUniformAvoidPolyXYs(polys: polys, xRange: list[int]|list[float], yRange: list[int]|list[float]) -> pt:
@@ -888,7 +888,6 @@ def rndNodeNeighbors(
 
 def rndNodeIsoNeighbors(
     nodes: dict,
-    radiusList: list,
     nodeIDs: list[int|str]|str = 'All', 
     **kwargs
     ) -> dict:
@@ -1037,6 +1036,7 @@ def rndNodeRingNeighbors(
     nodes: dict,
     innerRadius: float,
     outerRadius: float,
+    barriers: polys = [],
     nodeIDs: list[int|str]|str = 'All',
     **kwargs
     ) -> dict:
@@ -1046,6 +1046,7 @@ def rndNodeRingNeighbors(
 
     locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
     neighborFieldName = 'neighbor' if 'neighborFieldName' not in kwargs else kwargs['neighborFieldName']
+    lod = 30 if 'lod' not in kwargs else kwargs['lod']
 
     # Sanity check ============================================================
     if (type(nodeIDs) is not list):
@@ -1061,10 +1062,27 @@ def rndNodeRingNeighbors(
         nodes[n]['neiShape'] = 'Ring'
         nodes[n]['innerRadius'] = innerRadius
         nodes[n]['outerRadius'] = outerRadius
+   
+    # Create all no-fly =======================================================
+    nofly = []
+    for p in barriers:
+        nofly.append(shapely.Polygon(p))
+    for n in nodes:
+        inner = [[
+            nodes[n][locFieldName][0] + (innerRadius - ERRTOL['distPt2Poly'] * 10) * math.sin(2 * d * math.pi / lod),
+            nodes[n][locFieldName][1] + (innerRadius - ERRTOL['distPt2Poly'] * 10) * math.cos(2 * d * math.pi / lod),
+        ] for d in range(lod + 1)]
+        nofly.append(shapely.Polygon(inner))
+    allNoFly = shapely.union_all(nofly)
 
     # Create neighborhoods ====================================================
-    lod = 30 if 'lod' not in kwargs else kwargs['lod']
     for n in nodes:
+        # nodes[n]['neiShell'] => list[poly]
+        nodes[n]['neiShell'] = []
+        # nodes[n]['neiHoles'] => list[poly]
+        nodes[n]['neiHoles'] = None
+
+        # Ring, before cutting nofly
         outerCircle = [[
             nodes[n][locFieldName][0] + outerRadius * math.sin(2 * d * math.pi / lod),
             nodes[n][locFieldName][1] + outerRadius * math.cos(2 * d * math.pi / lod),
@@ -1073,32 +1091,67 @@ def rndNodeRingNeighbors(
             nodes[n][locFieldName][0] + innerRadius * math.sin(2 * d * math.pi / lod),
             nodes[n][locFieldName][1] + innerRadius * math.cos(2 * d * math.pi / lod),
         ] for d in range(lod + 1)]
-        nodes[n]['neighborRing'] = shapely.Polygon(
+        ring = shapely.Polygon(
             shell = outerCircle,
             holes = [innerCircle])
 
-        innerNoFly = [[
-            nodes[n][locFieldName][0] + (innerRadius - ERRTOL['distPt2Poly']) * math.sin(2 * d * math.pi / lod),
-            nodes[n][locFieldName][1] + (innerRadius - ERRTOL['distPt2Poly']) * math.cos(2 * d * math.pi / lod),
-        ] for d in range(lod + 1)]
-        nodes[n]['innerNoFly'] = shapely.Polygon(innerNoFly)
-
-    allNoFly = shapely.union_all([nodes[k]['innerNoFly'] for k in nodes])
-
-    # Transform into list of polygons =========================================
-    for n in nodes:
-        nodes[n]['neiShell'] = []
-        nodes[n]['neighborShapely'] = shapely.difference(nodes[n]['neighborRing'], allNoFly)
-        if (type(nodes[n]['neighborShapely']) == shapely.Polygon):
-            shl = [i for i in nodes[n]['neighborShapely'].exterior.coords]
+        nei = shapely.difference(ring, allNoFly)
+        if (type(nei) == shapely.Polygon):
+            shl = [i for i in nei.exterior.coords]
             shl = [shl[i] for i in range(len(shl)) if distEuclideanXY(shl[i], shl[i - 1]) > ERRTOL['distPt2Pt']]
             nodes[n]['neiShell'] = [shl]
-        elif (type(nodes[n]['neighborShapely']) == shapely.MultiPolygon):
-            for g in nodes[n]['neighborShapely'].geoms:                
+            if (len(nei.interiors) > 0):
+                nodes[n]['neiHoles'] = []
+                for p in nei.interiors:
+                    itr = [i for i in p.coords]
+                    itr = [itr[i] for i in range(len(itr)) if distEuclideanXY(itr[i], itr[i - 1]) > ERRTOL['distPt2Pt']]
+                    nodes[n]['neiHoles'].append(itr)
+        elif (type(nei) == shapely.MultiPolygon):
+            for g in nei.geoms:
                 if (type(g) == shapely.Polygon):
                     shl = [i for i in g.exterior.coords]
                     shl = [shl[i] for i in range(len(shl)) if distEuclideanXY(shl[i], shl[i - 1]) > ERRTOL['distPt2Pt']]
                     nodes[n]['neiShell'].append(shl)
+
+    # Check if all neighborhoods are accessible ===============================
+    noFlyShell = []
+    if (type(allNoFly) == shapely.Polygon):
+        shl = [i for i in allNoFly.exterior.coords]
+        shl = [shl[i] for i in range(len(shl)) if distEuclideanXY(shl[i], shl[i - 1]) > ERRTOL['distPt2Pt']]
+        noFlyShell = [shl]
+    elif (type(allNoFly) == shapely.MultiPolygon):
+        for g in allNoFly.geoms:
+            shl = [i for i in g.exterior.coords]
+            shl = [shl[i] for i in range(len(shl)) if distEuclideanXY(shl[i], shl[i - 1]) > ERRTOL['distPt2Pt']]
+            if (type(g) == shapely.Polygon):
+                noFlyShell.append(shl)
+
+    # Find a point that is ``outside'' the area ===============================
+    corner = []
+    allX = []
+    allY = []
+    for n in nodes:
+        allX.append(nodes[n][locFieldName][0])
+        allY.append(nodes[n][locFieldName][1])
+    corner = [min(allX) - outerRadius, min(allY) - outerRadius]
+
+    # Check accessibility =====================================================
+    polyVG = polysVisibleGraph(noFlyShell)
+    for n in nodes:
+        reachable = False
+        for k in range(len(nodes[n]['neiShell'])):
+            try:
+                d = distBtwPolysXY(corner, nodes[n]['neiShell'][k][0], noFlyShell, polyVG = polyVG)
+                if (d != None):
+                    reachable = True
+                    break
+            except:
+                pass
+
+        if (reachable == False):
+            print("ERROR: Include inaccessible region.")
+            return None
+
     return nodes
 
 def rndArcs(

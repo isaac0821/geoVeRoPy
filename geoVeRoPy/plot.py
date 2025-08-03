@@ -1040,9 +1040,8 @@ def plotPathCover(
             c2 = circleByCenterXY(locSeq[i + 1], radius, lod)
             poly = polysSubtract(polys = [poly], subPolys = [c1])[0]
             polys = polysSubtract(polys = [poly], subPolys = [c2])
-            poly1 = polys[0]
-            poly2 = polys[1]
 
+            poly1 = polys[0]
             fig, ax = plotPoly(
                 fig = fig,
                 ax = ax,
@@ -1053,47 +1052,56 @@ def plotPathCover(
                 fillStyle = '///',
                 boundingBox = boundingBox,
                 opacity = 0.3)
-            fig, ax = plotPoly(
-                fig = fig,
-                ax = ax,
-                poly = poly2,
-                edgeWidth = 0.1,
-                edgeColor = 'gray',
-                fillColor = 'gray',
-                fillStyle = '///',
-                boundingBox = boundingBox,
-                opacity = 0.3)
+
+            try:
+                poly2 = polys[1]
+                fig, ax = plotPoly(
+                    fig = fig,
+                    ax = ax,
+                    poly = poly2,
+                    edgeWidth = 0.1,
+                    edgeColor = 'gray',
+                    fillColor = 'gray',
+                    fillStyle = '///',
+                    boundingBox = boundingBox,
+                    opacity = 0.3)
+            except:
+                pass
+                
         # Case 3: L < R
         elif (L < radius):
-            poly = [pt1, pt2, pt3, pt4]
-            c1 = circleByCenterXY(locSeq[i], radius, lod)
-            c2 = circleByCenterXY(locSeq[i + 1], radius, lod)
-            polys = polysSubtract(polys = [poly], subPolys = [c1])
-            poly1 = polys[0]
-            poly2 = polys[1]
-            poly1 = polysSubtract(polys = [poly1], subPolys = [c2])[0]
-            poly2 = polysSubtract(polys = [poly2], subPolys = [c2])[0]
+            try:
+                poly = [pt1, pt2, pt3, pt4]
+                c1 = circleByCenterXY(locSeq[i], radius, lod)
+                c2 = circleByCenterXY(locSeq[i + 1], radius, lod)
+                polys = polysSubtract(polys = [poly], subPolys = [c1])
+                poly1 = polys[0]
+                poly2 = polys[1]
+                poly1 = polysSubtract(polys = [poly1], subPolys = [c2])[0]
+                poly2 = polysSubtract(polys = [poly2], subPolys = [c2])[0]
 
-            fig, ax = plotPoly(
-                fig = fig,
-                ax = ax,
-                poly = poly1,
-                edgeWidth = 0.1,
-                edgeColor = 'gray',
-                fillColor = 'gray',
-                fillStyle = '///',
-                boundingBox = boundingBox,
-                opacity = 0.3)
-            fig, ax = plotPoly(
-                fig = fig,
-                ax = ax,
-                poly = poly2,
-                edgeWidth = 0.1,
-                edgeColor = 'gray',
-                fillColor = 'gray',
-                fillStyle = '///',
-                boundingBox = boundingBox,
-                opacity = 0.3)
+                fig, ax = plotPoly(
+                    fig = fig,
+                    ax = ax,
+                    poly = poly1,
+                    edgeWidth = 0.1,
+                    edgeColor = 'gray',
+                    fillColor = 'gray',
+                    fillStyle = '///',
+                    boundingBox = boundingBox,
+                    opacity = 0.3)
+                fig, ax = plotPoly(
+                    fig = fig,
+                    ax = ax,
+                    poly = poly2,
+                    edgeWidth = 0.1,
+                    edgeColor = 'gray',
+                    fillColor = 'gray',
+                    fillStyle = '///',
+                    boundingBox = boundingBox,
+                    opacity = 0.3)
+            except:
+                pass
 
     return fig, ax
 

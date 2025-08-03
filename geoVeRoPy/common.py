@@ -208,7 +208,7 @@ def writeLog(string, logPath = None):
     return
 
 def printLog(*args):
-    if (DEBUG_PRINT_LOG):
+    if (DEBUG['DEBUG_PRINT_LOG']):
         print(*args)
     return
 
