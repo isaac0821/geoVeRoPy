@@ -26,39 +26,74 @@ class CurveArcNilNode(CurveArcNode):
         return True
 
 class CurveArc(object):
-    def __init__(self, center, radius, startDeg, endDeg, lod = 12):
+    def __init__(self, center, radius, startDeg, endDeg, lod = 3):
         # 这里是顺时针， startDeg一定要小于endDeg，如果endDeg跨过了0°，就加上360°
         self.center = center
         self.radius = radius
         self.startDeg = startDeg
         self.endDeg = endDeg
 
-        # 初始化生成一系列的curveArcNode，至少3个，按照lod生成
-        if (lod < 2):
-            lod = 2
+        self.circleFlag = False
+        if (abs(startDeg - endDeg) >= 360):
+            self.circleFlag = True
 
-        # 先生成一个列表的CurveArcNode
-        cvNodeList = []
-        for i in range(lod + 1):
-            d = startDeg + i * (endDeg - startDeg) / lod
-            cvNodeList.append(CurveArcNode(
-                key = i,
-                loc = ptInDistXY(self.center, d, self.radius),
-                deg = d,
-                center = self.center,
-                prev = None,
-                next = None
-            ))        
+        # 如果是弧的话，是一个链表，首尾都是从nil开始
+        if (not self.circleFlag):
+            # 初始化生成一系列的curveArcNode，至少3个，按照lod生成
+            if (lod < 2):
+                lod = 2
 
-        for i in range(len(cvNodeList) - 1):
-            cvNodeList[i].next = cvNodeList[i + 1]
-        for i in range(1, len(cvNodeList)):
-            cvNodeList[i].prev = cvNodeList[i - 1]
+            # 先生成一个列表的CurveArcNode
+            cvNodeList = []
+            for i in range(lod + 1):
+                d = startDeg + i * (endDeg - startDeg) / lod
+                cvNodeList.append(CurveArcNode(
+                    key = i,
+                    loc = ptInDistXY(self.center, d, self.radius),
+                    deg = d,
+                    center = self.center,
+                    prev = None,
+                    next = None
+                ))        
 
-        self._count = len(cvNodeList)
+            for i in range(len(cvNodeList) - 1):
+                cvNodeList[i].next = cvNodeList[i + 1]
+            for i in range(1, len(cvNodeList)):
+                cvNodeList[i].prev = cvNodeList[i - 1]
 
-        self.head = cvNodeList[0]
-        self.tail = cvNodeList[-1]
+            self._count = len(cvNodeList)
+
+            self.head = cvNodeList[0]
+            self.tail = cvNodeList[-1]
+
+        # 如果是个圆的话，是一个环形链表，首位相接
+        else:
+            if (lod < 3):
+                lod = 3
+
+            cvNodeList = []
+            for i in range(lod):
+                d = startDeg + i * (endDeg - startDeg) / lod
+                cvNodeList.append(CurveArcNode(
+                    key = i,
+                    loc = ptInDistXY(self.center, d, self.radius),
+                    deg = d,
+                    center = self.center,
+                    prev = None,
+                    next = None
+                ))
+
+            for i in range(len(cvNodeList) - 1):
+                cvNodeList[i].next = cvNodeList[i + 1]
+            for i in range(1, len(cvNodeList)):
+                cvNodeList[i].prev = cvNodeList[i - 1]
+            cvNodeList[0].prev = cvNodeList[-1]
+            cvNodeList[-1].next = cvNodeList[0]
+
+            self._count = len(cvNodeList)
+
+            self.head = cvNodeList[0]
+            self.tail = cvNodeList[-1]
 
     def clone(self):
         c = CurveArc(self.center, self.radius, self.startDeg, self.endDeg, lod = 12)
@@ -98,44 +133,93 @@ class CurveArc(object):
                 raise OutOfRangeError("ERROR: Unexpected loop")
             cvNodes.append(cur)
             cur = cur.next
+            if (cur == self.head):
+                break
 
         return cvNodes
 
     def insertAround(self, n):
         # 给定一个CurveArcNode，在前方和后方分别插入一个CurveArcNode
 
-        if (not n.prev.isNil):
-            newDeg = n.prev.deg + (n.deg - n.prev.deg) / 2
+        # 如果是个弧，很容易，前中后是增序的
+        if (not self.circleFlag):
+            # 插入前面的点，如果是第一个点就不插入前面的
+            if (not n.prev.isNil):
+                newDeg = n.prev.deg + (n.deg - n.prev.deg) / 2
+                newCurveArcPrev = CurveArcNode(
+                    key = self._count,
+                    loc = ptInDistXY(self.center, newDeg, self.radius),
+                    deg = newDeg,
+                    center = self.center)
+                nPrev = n.prev
+                nPrev.next = newCurveArcPrev
+                newCurveArcPrev.prev = nPrev
+                newCurveArcPrev.next = n
+                n.prev = newCurveArcPrev
+                self._count += 1
+            # 插入后面的点，如果是最后一个点就不插入后面的
+            if (not n.next.isNil):
+                newDeg = n.deg + (n.next.deg - n.deg) / 2
+                newCurveArcNext = CurveArcNode(
+                    key = self._count,
+                    loc = ptInDistXY(self.center, newDeg, self.radius),
+                    deg = newDeg,
+                    center = self.center)
+                nNext = n.next
+                n.next = newCurveArcNext
+                newCurveArcNext.prev = n
+                newCurveArcNext.next = nNext
+                nNext.prev = newCurveArcNext
+                self._count += 1
 
+        # 如果是个圆，就麻烦很多了...
+        else:
+            # 插入前面的点
+            newDeg = None
+            # Case 1: 前面那个点的度数大于自己，0度夹在自己和前面之间
+            if (n.prev.deg > n.deg):
+                newDeg = (n.prev.deg - 360) + (n.deg - (n.prev.deg - 360)) / 2
+                if (newDeg < 0):
+                    newDeg += 360
+                if (newDeg > 360):
+                    newDeg -= 360
+            # Case 2: 前面那个点的度数小于自己，0度不夹在自己和前面之间
+            else:
+                newDeg = n.prev.deg + (n.deg - n.prev.deg) / 2                
             newCurveArcPrev = CurveArcNode(
-                key = self._count + 1,
+                key = self._count,
                 loc = ptInDistXY(self.center, newDeg, self.radius),
                 deg = newDeg,
                 center = self.center)
-
             nPrev = n.prev
             nPrev.next = newCurveArcPrev
             newCurveArcPrev.prev = nPrev
             newCurveArcPrev.next = n
             n.prev = newCurveArcPrev
-
             self._count += 1
 
-        if (not n.next.isNil):
-            newDeg = n.deg + (n.next.deg - n.deg) / 2
-
+            # 插入后面的点
+            newDeg = None
+            # Case 1: 后面的度数小于自己，0度夹在自己后后面之间
+            if (n.next.deg < n.deg):
+                newDeg = n.deg + (n.next.deg + 360 - n.deg) / 2
+                if (newDeg < 0):
+                    newDeg += 360
+                if (newDeg >= 360):
+                    newDeg -= 360
+            # Case 2: 后面的度数大于自己，0度不夹在自己和后面之间
+            else:
+                newDeg = n.deg + (n.next.deg - n.deg) / 2
             newCurveArcNext = CurveArcNode(
-                key = self._count + 1,
+                key = self._count,
                 loc = ptInDistXY(self.center, newDeg, self.radius),
                 deg = newDeg,
                 center = self.center)
-
             nNext = n.next
             n.next = newCurveArcNext
             newCurveArcNext.prev = n
             newCurveArcNext.next = nNext
             nNext.prev = newCurveArcNext
-
             self._count += 1
 
         return

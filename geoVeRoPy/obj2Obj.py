@@ -901,6 +901,8 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
         tau['s', (0, cur.key)] = d
         G.add_edge('s', (0, cur.key), weight = max(d / speed, atLeastTimeBtw[0]))
         cur = cur.next
+        if (cur == curveArcs[0].head):
+            break
 
     # Between startPt and endPt
     for i in range(len(curveArcs) - 1):
@@ -913,7 +915,11 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
                     tau[(i, curI.key), (i + 1, curJ.key)] = d
                     G.add_edge((i, curI.key), (i + 1, curJ.key), weight = max(d / speed, atLeastTimeBtw[i + 1]))
                 curJ = curJ.next
+                if (curJ == curveArcs[i + 1].head):
+                    break
             curI = curI.next
+            if (curI == curveArcs[i].head):
+                break
 
     # last curveArc to endPt
     cur = curveArcs[-1].head
@@ -922,8 +928,11 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
         tau[(len(curveArcs) - 1, cur.key), 'e'] = d
         G.add_edge((len(curveArcs) - 1, cur.key), 'e', weight = max(d / speed, atLeastTimeBtw[-1]))
         cur = cur.next
+        if (cur == curveArcs[-1].head):
+            break
 
     sp = nx.dijkstra_path(G, 's', 'e')
+    # print(sp)
 
     dist = 0
     for i in range(1, len(sp)):
@@ -953,6 +962,8 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
                 tau['s', (0, cur.key)] = d
                 G.add_edge('s', (0, cur.key), weight = max(d / speed, atLeastTimeBtw[0]))
             cur = cur.next
+            if (cur == curveArcs[0].head):
+                break
 
         # Between startPt and endPt
         for i in range(len(curveArcs) - 1):
@@ -965,7 +976,11 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
                         tau[(i, curI.key), (i + 1, curJ.key)] = d
                         G.add_edge((i, curI.key), (i + 1, curJ.key), weight = max(d / speed, atLeastTimeBtw[i + 1]))
                     curJ = curJ.next
+                    if (curJ == curveArcs[i + 1].head):
+                        break
                 curI = curI.next
+                if (curI == curveArcs[i].head):
+                    break
 
         # last curveArc to endPt
         cur = curveArcs[-1].head
@@ -975,8 +990,11 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
                 tau[(len(curveArcs) - 1, cur.key), 'e'] = d
                 G.add_edge((len(curveArcs) - 1, cur.key), 'e', weight = max(d / speed, atLeastTimeBtw[-1]))
             cur = cur.next
+            if (cur == curveArcs[-1].head):
+                break
 
         newSp = nx.dijkstra_path(G, 's', 'e')
+        # print(newSp)
 
         newDist = 0
         for i in range(1, len(newSp)):
@@ -986,6 +1004,7 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
             refineFlag = False
 
         dist = newDist
+        sp = newSp
 
     # Collect results =========================================================
     path = [startPt]
