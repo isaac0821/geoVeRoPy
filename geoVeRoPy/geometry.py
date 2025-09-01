@@ -3873,7 +3873,6 @@ def distManhattenXY(pt1: pt, pt2: pt, detailFlag: bool=False) -> dict:
     else:
         return dist
 
-# @tellRuntime("distBtwPolysXY")
 def distBtwPolysXY(pt1:pt, pt2:pt, polys:polys, polyVG: dict = None, detailFlag: bool=False) -> dict:
     """
     Gives a Manhatten distance based on two coords.

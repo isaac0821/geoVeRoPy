@@ -135,7 +135,7 @@ def solveCETSP(
                     'Exchange': 0.1,
                     'Rotate': 0.3,
                     'rndDestroy': 0.4,
-                    'semiTSP': 0.1
+                    'semiTSP': 0
                 }
             if ('stop' not in kwargs):
                 warnings.warn("WARNING: Missing stopping criteria, set to be default.")
@@ -1355,8 +1355,8 @@ def _solveCETSPGACircle(
                 dashboard['bestOfv'] = chromo.dist
                 dashboard['bestSeq'] = [i.key for i in chromo.seq.traverse()]
                 dashboard['bestChromo'] = chromo
-        print(hyphenStr())
-        print("Iter: ", iterTotal, "\nRuntime: ", round((datetime.datetime.now() - startTime).total_seconds(), 2), "[s]\nOFV: ", dashboard['bestOfv'])
+        printLog(hyphenStr())
+        printLog("Iter: ", iterTotal, "\nRuntime: ", round((datetime.datetime.now() - startTime).total_seconds(), 2), "[s]\nOFV: ", dashboard['bestOfv'])
         if (newOfvFound):
             iterNoImp = 0
         else:
@@ -1687,8 +1687,8 @@ def _solveCETSPGALatLon(
                 dashboard['bestOfv'] = chromo.dist
                 dashboard['bestSeq'] = [i.key for i in chromo.seq.traverse()]
                 dashboard['bestChromo'] = chromo
-        print(hyphenStr())
-        print("Iter: ", iterTotal, "\nRuntime: ", round((datetime.datetime.now() - startTime).total_seconds(), 2), "[s]\nOFV: ", dashboard['bestOfv'])
+        printLog(hyphenStr())
+        printLog("Iter: ", iterTotal, "\nRuntime: ", round((datetime.datetime.now() - startTime).total_seconds(), 2), "[s]\nOFV: ", dashboard['bestOfv'])
         if (newOfvFound):
             iterNoImp = 0
         else:
@@ -1727,9 +1727,14 @@ def _solveCETSPILSCircle(
     radiusFieldName: str = 'radius',
     initTemp: float = 100,
     coolRate: float = 0.95,
-    neighRatio: dict = {},
+    neighRatio: dict = {
+        'Swap': 0.1,
+        'Exchange': 0.1,
+        'Rotate': 0.3,
+        'rndDestroy': 0.4,
+        'semiTSP': 0.1
+    },
     stop: dict = {},
-    **kwargs
     ) -> dict | None:
 
     class chromosomeCETSP:
@@ -1907,6 +1912,7 @@ def _solveCETSPILSCircle(
                 newSeq.append(i)
             else:
                 newSeq.extend(list(i))
+        newSeq = newSeq[:-1]
         return chromosomeCETSP(depotLoc, nodes, newSeq)
 
     # Initialize ==============================================================
@@ -1988,9 +1994,13 @@ def _solveCETSPILSCircle(
         printLog(hyphenStr())
         printLog("Iter: ", iterTotal, 
             "\nRuntime [s]: ", round((datetime.datetime.now() - startTime).total_seconds(), 2), 
-            "\nTurning", dashboard['bestChromo'].turning,
-            "\nTrespass", dashboard['bestChromo'].trespass,
-            "\nDist: ", dashboard['bestDist'])
+            "\nBest.Turning", dashboard['bestChromo'].turning,
+            "\nBest.Trespass", dashboard['bestChromo'].trespass,
+            "\nBest.Dist: ", dashboard['bestDist'],
+            "\nCurrent.Turning", chromo.turning,
+            "\nCurrent.Trespass", chromo.trespass,
+            "\nCurrent.Dist: ", chromo.dist,
+        )
         if (newOfvFound):
             iterNoImp = 0
         else:
@@ -2028,4 +2038,3 @@ def _solveCETSPILSCircle(
         'runtime': (datetime.datetime.now() - startTime).total_seconds(),
         'convergence': convergence,
     }
-
