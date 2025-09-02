@@ -882,10 +882,176 @@ def _circle2CirclePathCOPT(startPt: pt, endPt: pt, circles: dict, outputFlag: bo
         'dist': ofv
     }
 
-def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], adaptErr = 0.002, atLeastTimeBtw = None, speed = 1):
+# @runtime('curveArc2CurveArcPath')
+def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], adaptErr = 0.01, atLeastTimeBtw = None, speed = 1):
+    tau = {}
 
-    startTime = datetime.datetime.now()
+    G = nx.Graph()
 
+    if (atLeastTimeBtw == None):
+        atLeastTimeBtw = [0 for i in range(len(curveArcs) + 1)]
+
+    # Initial iteration =======================================================
+    # startPt to the first curveArc
+    cur = curveArcs[0].head
+    while (not cur.isNil):
+        d = None
+        if (('s', (0, cur.key)) not in tau):
+            d = distEuclideanXY(startPt, cur.loc)
+            tau['s', (0, cur.key)] = d
+        else:
+            d = tau['s', (0, cur.key)]
+        G.add_edge('s', (0, cur.key), weight = max(d / speed, atLeastTimeBtw[0]))
+
+        cur = cur.next
+        if (cur == curveArcs[0].head):
+            break
+
+    # Between startPt and endPt
+    for i in range(len(curveArcs) - 1):
+        curI = curveArcs[i].head
+        while (not curI.isNil):
+            curJ = curveArcs[i + 1].head
+            while (not curJ.isNil):
+                d = None
+                if (((i, curI.key), (i + 1, curJ.key)) not in tau):
+                    d = distEuclideanXY(curI.loc, curJ.loc)
+                    tau[(i, curI.key), (i + 1, curJ.key)] = d
+                else:
+                    d = tau[(i, curI.key), (i + 1, curJ.key)]
+
+                if (d > 0.005):
+                    G.add_edge((i, curI.key), (i + 1, curJ.key), weight = max(d / speed, atLeastTimeBtw[i + 1]))
+
+                curJ = curJ.next
+                if (curJ == curveArcs[i + 1].head):
+                    break
+            curI = curI.next
+            if (curI == curveArcs[i].head):
+                break
+
+    # last curveArc to endPt
+    cur = curveArcs[-1].head
+    while (not cur.isNil):
+        d = None
+        if (((len(curveArcs) - 1, cur.key), 'e') not in tau):
+            d = distEuclideanXY(cur.loc, endPt)
+            tau[(len(curveArcs) - 1, cur.key), 'e'] = d
+        else:
+            d = tau[(len(curveArcs) - 1, cur.key), 'e']
+        G.add_edge((len(curveArcs) - 1, cur.key), 'e', weight = max(d / speed, atLeastTimeBtw[-1]))
+
+        cur = cur.next
+        if (cur == curveArcs[-1].head):
+            break
+
+    sp = nx.dijkstra_path(G, 's', 'e')
+    # print(sp)
+
+    dist = 0
+    for i in range(1, len(sp)):
+        dist += G[sp[i - 1]][sp[i]]['weight']
+
+    # Refine ==================================================================
+    iterNum = 0
+    refineFlag = True
+    while (refineFlag):
+        iterNum += 1
+
+        # 重新起图
+        G = nx.Graph()
+
+        byStage = []
+
+        # sp[0] is startLoc
+        # sp[-1] is endLoc
+        for i in range(1, len(sp) - 1):
+            cvIdx = sp[i][0]
+            cvKey = sp[i][1]
+
+            # Insert two pts before and after this cvNode
+            n = curveArcs[cvIdx].query(cvKey)
+            curveArcs[cvIdx].insertAround(n)
+
+            thisStage = []
+
+            # prev.prev
+            if (not n.prev.isNil and not n.prev.prev.isNil):
+                thisStage.append(n.prev.prev)
+            if (not n.prev.isNil):
+                thisStage.append(n.prev)
+            thisStage.append(n)
+            if (not n.next.isNil):
+                thisStage.append(n.next)
+            if (not n.next.isNil and not n.next.next.isNil):
+                thisStage.append(n.next.next)
+
+            byStage.append(thisStage)
+
+        # StartPt => byStage
+        for k in byStage[0]:
+            d = None
+            if (('s', (0, k.key)) not in tau):
+                d = distEuclideanXY(startPt, k.loc)
+                tau['s', (0, k.key)] = d
+            else:
+                d = tau['s', (0, k.key)]
+            G.add_edge('s', (0, k.key), weight = max(d / speed, atLeastTimeBtw[0]))
+
+        # Between byStages
+        if (len(byStage) > 2):
+            for i in range(1, len(byStage)):
+                for k1 in byStage[i - 1]:
+                    for k2 in byStage[i]:
+                        d = None
+                        if (((i - 1, k1.key), (i, k2.key)) not in tau):
+                            d = distEuclideanXY(k1.loc, k2.loc)
+                            tau[(i - 1, k1.key), (i, k2.key)] = d
+                        else:
+                            d = tau[(i - 1, k1.key), (i, k2.key)]
+                        G.add_edge((i - 1, k1.key), (i, k2.key), weight = max(d / speed, atLeastTimeBtw[i]))
+
+        # byStage => EndPt
+        for k in byStage[-1]:
+            d = None
+            if ((((len(curveArcs) - 1, k.key), 'e')) not in tau):
+                d = distEuclideanXY(k.loc, endPt)
+                tau[(len(curveArcs) - 1, k.key), 'e'] = d
+            else:
+                d = tau[(len(curveArcs) - 1, k.key), 'e']
+            G.add_edge((len(curveArcs) - 1, k.key), 'e', weight = max(d / speed, atLeastTimeBtw[-1]))
+
+        newSp = nx.dijkstra_path(G, 's', 'e')
+
+        # print(newSp)
+
+        newDist = 0
+        for i in range(1, len(newSp)):
+            newDist += G[newSp[i - 1]][newSp[i]]['weight']
+
+        if (abs(newDist - dist) <= adaptErr):
+            refineFlag = False
+
+        dist = newDist
+        sp = newSp
+
+    # Collect results =========================================================
+    path = [startPt]
+    for p in sp:
+        if (p != 's' and p != 'e'):
+            path.append(curveArcs[p[0]].query(p[1]).loc)
+    path.append(endPt)
+
+    # print("New dist: ", dist)
+    # print("Adapt Iter Time: ", (datetime.datetime.now() - startTime).total_seconds())
+    # print("Adapt Iter Num: ", iterNum)
+
+    return {
+        'path': path,
+        'dist': dist
+    }
+
+def curveArc2CurveArcPathBak(startPt: pt, endPt: pt, curveArcs: list[CurveArc], adaptErr = 0.002, atLeastTimeBtw = None, speed = 1):
     tau = {}
 
     G = nx.Graph()
@@ -900,6 +1066,7 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
         d = distEuclideanXY(startPt, cur.loc)
         tau['s', (0, cur.key)] = d
         G.add_edge('s', (0, cur.key), weight = max(d / speed, atLeastTimeBtw[0]))
+
         cur = cur.next
         if (cur == curveArcs[0].head):
             break
@@ -914,6 +1081,7 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
                 if (d > 0.005):
                     tau[(i, curI.key), (i + 1, curJ.key)] = d
                     G.add_edge((i, curI.key), (i + 1, curJ.key), weight = max(d / speed, atLeastTimeBtw[i + 1]))
+
                 curJ = curJ.next
                 if (curJ == curveArcs[i + 1].head):
                     break
@@ -927,6 +1095,7 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
         d = distEuclideanXY(cur.loc, endPt)
         tau[(len(curveArcs) - 1, cur.key), 'e'] = d
         G.add_edge((len(curveArcs) - 1, cur.key), 'e', weight = max(d / speed, atLeastTimeBtw[-1]))
+
         cur = cur.next
         if (cur == curveArcs[-1].head):
             break
@@ -961,6 +1130,7 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
                 d = distEuclideanXY(startPt, cur.loc)
                 tau['s', (0, cur.key)] = d
                 G.add_edge('s', (0, cur.key), weight = max(d / speed, atLeastTimeBtw[0]))
+
             cur = cur.next
             if (cur == curveArcs[0].head):
                 break
@@ -975,6 +1145,7 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
                         d = distEuclideanXY(curI.loc, curJ.loc)
                         tau[(i, curI.key), (i + 1, curJ.key)] = d
                         G.add_edge((i, curI.key), (i + 1, curJ.key), weight = max(d / speed, atLeastTimeBtw[i + 1]))
+
                     curJ = curJ.next
                     if (curJ == curveArcs[i + 1].head):
                         break
@@ -989,11 +1160,12 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
                 d = distEuclideanXY(cur.loc, endPt)
                 tau[(len(curveArcs) - 1, cur.key), 'e'] = d
                 G.add_edge((len(curveArcs) - 1, cur.key), 'e', weight = max(d / speed, atLeastTimeBtw[-1]))
+
             cur = cur.next
             if (cur == curveArcs[-1].head):
                 break
-
         newSp = nx.dijkstra_path(G, 's', 'e')
+
         # print(newSp)
 
         newDist = 0

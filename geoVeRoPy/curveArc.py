@@ -138,6 +138,7 @@ class CurveArc(object):
 
         return cvNodes
 
+    # @runtime('insertAround')
     def insertAround(self, n):
         # 给定一个CurveArcNode，在前方和后方分别插入一个CurveArcNode
 
@@ -267,8 +268,19 @@ def intCurveArc2Circle(curveArc: CurveArc, circle: dict) -> CurveArc:
             nl2.reverse()
             nl.extend(nl2)
 
-    else:
+    elif (intLine.geom_type == 'LineString'):
         nl = [i for i in mapping(intLine)['coordinates']]
+
+    elif (intLine.geom_type == 'GeometryCollection'):
+        # 最多应该两个，一个是LineString，一个是Point
+        for geom in intLine.geoms:
+            if (geom.geom_type == 'LineString'):
+                nl = [i for i in mapping(geom)['coordinates']]
+                break
+
+    else:
+        # print(intLine)
+        return None
 
     # 求出LineString的开始和结束圆心角
     # 技巧，三等分，确定序列是顺时针还是逆时针
