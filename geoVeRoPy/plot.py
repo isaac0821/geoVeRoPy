@@ -2461,20 +2461,37 @@ def plotGantt(
     for i in range(len(entities)):
         if (entities[i] != None):
             center = yticks[i]
-            top = None
-            bottom = yticks[i] - ganttHeight / 2
+            lane = [0]
             ent = [g for g in gantt if g['entityID'] == entities[i]]
+            ent.sort(key = lambda x:x['timeWindow'][0])
             for g in ent:
+                offSet = 0
+                needNewLaneFlag = True
+                for k in range(len(lane)):
+                    if (lane[k] <= g['timeWindow'][0]):
+                        offSet = k
+                        lane[k] = g['timeWindow'][1]
+                        needNewLaneFlag = False
+                        break
+                if (needNewLaneFlag):
+                    lane.append(g['timeWindow'][1])
+                    offSet = len(lane) - 1
+
+                # 形状位置
                 s = g['timeWindow'][0]
                 e = g['timeWindow'][1]
                 x = [s, s, e, e, s]
+
+                top = None
                 if ('desc' not in g or ('descPosition' in g and g['descPosition'] == 'Inside')):
-                    top = yticks[i] + ganttHeight / 2
+                    top = yticks[i] + ganttHeight / 2 - offSet * ganttHeight
                 else:
-                    top = yticks[i] + ganttHeight / 4
+                    top = yticks[i] + ganttHeight / 4 - offSet * ganttHeight
+                bottom = yticks[i] - ganttHeight / 2 - offSet * ganttHeight
+
                 y = [bottom, top, top, bottom, bottom]
                 ax.plot(x, y, color = 'black', linewidth = ganttLinewidth)
-                if ('color' in g or g['color'] != 'random'):
+                if ('color' in g and g['color'] != 'random'):
                     ax.fill(x, y, color = g['color'], linewidth = ganttLinewidth)
                 else:
                     rndRGB = rndColor()
