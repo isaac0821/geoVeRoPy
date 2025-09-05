@@ -230,7 +230,7 @@ def intCurveArc2Circle(curveArc: CurveArc, circle: dict) -> CurveArc:
     # 先转出LineString，再去和circle相交，得到新的LineString
     # NOTE: 交到的LineString可能有两部分，要连起来
     ls = curveArc.getLineString()
-    cc = shapely.Polygon(circleByCenterXY(center = circle['center'], radius = circle['radius']))
+    cc = shapely.Polygon(circleByCenterXY(center = circle['center'], radius = circle['radius'], lod = 60))
     intLine = shapely.intersection(ls, cc)
 
     if (intLine.is_empty):
@@ -277,7 +277,6 @@ def intCurveArc2Circle(curveArc: CurveArc, circle: dict) -> CurveArc:
             if (geom.geom_type == 'LineString'):
                 nl = [i for i in mapping(geom)['coordinates']]
                 break
-
     else:
         # print(intLine)
         return None
