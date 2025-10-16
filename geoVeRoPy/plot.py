@@ -17,6 +17,7 @@ from .msg import *
 from .province import *
 from .geometry import *
 from .travel import *
+from .curveArc import *
 
 def defaultBoundingBox(
     boundingBox = (None, None, None, None),
@@ -590,6 +591,7 @@ def plotArcs(
     arrowPosition: float = 0.5,
     arrowHeadWidth: float = 2.0,
     arrowHeadLength: float = 3.0,
+    arrowShowLimit: float|None = None,
     neighborOpacity: float = 0.5,
     neighborEntWidth: float = 1.2,
     neighborEntColor: str = 'black',
@@ -789,13 +791,15 @@ def plotArcs(
             dashes = arcStyle[n]['dashes'])
         # Plot arrows
         if (arrowFlag):
-            deg = headingXY([arcStyle[n]['x1'], arcStyle[n]['y1']], [arcStyle[n]['x2'], arcStyle[n]['y2']])
-            ptC = [arcStyle[n]['x1'] + (arcStyle[n]['x2'] - arcStyle[n]['x1']) * arrowPosition, arcStyle[n]['y1'] + (arcStyle[n]['y2'] - arcStyle[n]['y1']) * arrowPosition]
-            ptM = ptInDistXY(ptC, direction = deg + 180, dist = arrowHeadLength / 2)
-            ptH = ptInDistXY(ptC, direction = deg, dist = arrowHeadLength / 2)
-            pt1 = ptInDistXY(ptM, direction = deg + 90, dist = arrowHeadWidth / 2)
-            pt2 = ptInDistXY(ptM, direction = deg - 90, dist = arrowHeadWidth / 2)
-            ax.fill([ptH[0], pt1[0], pt2[0]], [ptH[1], pt1[1], pt2[1]], facecolor=arcStyle[n]['color'], edgecolor=arcStyle[n]['color'], linewidth=0)
+            length = distEuclideanXY((arcStyle[n]['x1'], arcStyle[n]['y1']), (arcStyle[n]['x2'], arcStyle[n]['y2']))
+            if (arrowShowLimit == None or length >= arrowShowLimit):
+                deg = headingXY([arcStyle[n]['x1'], arcStyle[n]['y1']], [arcStyle[n]['x2'], arcStyle[n]['y2']])
+                ptC = [arcStyle[n]['x1'] + (arcStyle[n]['x2'] - arcStyle[n]['x1']) * arrowPosition, arcStyle[n]['y1'] + (arcStyle[n]['y2'] - arcStyle[n]['y1']) * arrowPosition]
+                ptM = ptInDistXY(ptC, direction = deg + 180, dist = arrowHeadLength / 2)
+                ptH = ptInDistXY(ptC, direction = deg, dist = arrowHeadLength / 2)
+                pt1 = ptInDistXY(ptM, direction = deg + 90, dist = arrowHeadWidth / 2)
+                pt2 = ptInDistXY(ptM, direction = deg - 90, dist = arrowHeadWidth / 2)
+                ax.fill([ptH[0], pt1[0], pt2[0]], [ptH[1], pt1[1], pt2[1]], facecolor=arcStyle[n]['color'], edgecolor=arcStyle[n]['color'], linewidth=0)
 
         # Plot both ends
         ax.plot(arcStyle[n]['x1'], arcStyle[n]['y1'], 
@@ -866,8 +870,8 @@ def plotArcs(
 
     return fig, ax
 
-def plotCurveArcs(
-    curveArcs: dict,
+def plotCurveArc(
+    curveArc: CurveArc,
     lineColor: str = 'Random',
     lineWidth: float = 1.0,
     lineStyle: str = 'solid',
@@ -886,43 +890,57 @@ def plotCurveArcs(
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
-    for a in curveArcs:
-        # 计算夹角和拆分出来的边数
-        deltaDeg = curveArcs[a]['endDeg'] - curveArcs[a]['startDeg']
-        numInsert = max(2, int(lod * deltaDeg / 360))
-        dg = deltaDeg / (numInsert)
+    # Plot curve ==============================================================
+    # 计算夹角和拆分出来的边数
+    deltaDeg = curveArc.endDeg - curveArc.startDeg
+    numInsert = max(2, int(lod * deltaDeg / 360))
+    dg = deltaDeg / (numInsert)
 
-        # 生成曲线
-        curve = []
-        curve.append(ptInDistXY(
-            pt = curveArcs[a]['center'], 
-            direction = curveArcs[a]['startDeg'], 
-            dist = curveArcs[a]['radius']))
-        for i in range(numInsert):
-            curve.append(ptInDistXY(
-                pt = curveArcs[a]['center'], 
-                direction = curveArcs[a]['startDeg'] + dg * i, 
-                dist = curveArcs[a]['radius']))
-        curve.append(ptInDistXY(
-            pt = curveArcs[a]['center'], 
-            direction = curveArcs[a]['endDeg'], 
-            dist = curveArcs[a]['radius']))    
+    if (lineColor == 'Random'):
+        lineColor = rndColor()
 
-        fig, ax = plotLocSeq(
-            fig = fig,
-            ax = ax,
-            locSeq = curve,
-            lineColor = lineColor,
-            lineWidth = lineWidth,
-            lineStyle = lineStyle,
-            lineDashes = lineDashes,
-            nodeMarkerSize = 0,
-            arrowFlag = False,
-            figSize = figSize, 
-            boundingBox = boundingBox,
-            showAxis = showAxis,
-            showFig = False
-            )
+    # 生成曲线
+    curve = []
+    curve.append(ptInDistXY(
+        pt = curveArc.center, 
+        direction = curveArc.startDeg, 
+        dist = curveArc.radius))
+    for i in range(numInsert):
+        curve.append(ptInDistXY(
+            pt = curveArc.center, 
+            direction = curveArc.startDeg + dg * i, 
+            dist = curveArc.radius))
+    curve.append(ptInDistXY(
+        pt = curveArc.center, 
+        direction = curveArc.endDeg, 
+        dist = curveArc.radius))    
+
+    fig, ax = plotLocSeq(
+        fig = fig,
+        ax = ax,
+        locSeq = curve,
+        lineColor = lineColor,
+        lineWidth = lineWidth,
+        lineStyle = lineStyle,
+        lineDashes = lineDashes,
+        nodeMarkerSize = 0,
+        arrowFlag = False,
+        figSize = figSize, 
+        boundingBox = boundingBox,
+        showAxis = showAxis,
+        showFig = False
+        )
+
+    # Plot nodes ==============================================================
+    nodes = {}
+    for i in curveArc.traverse():
+        nodes[i.key] = {'loc': i.loc, 'label': ""}
+    fig, ax = plotNodes(
+        fig = fig,
+        ax = ax,
+        nodes = nodes,
+        nodeColor = lineColor,
+        nodeMarkerSize = 4)
 
     # Save figure =============================================================
     if (saveFigPath != None and isinstance(fig, plt.Figure)):
@@ -1117,6 +1135,7 @@ def plotLocSeq(
     arrowPosition: float = 0.5,
     arrowHeadWidth: float = 0.1,
     arrowHeadLength: float = 0.2,
+    arrowShowLimit: float|None = None,
     latLonFlag: bool = False,
     **kwargs
     ):
@@ -1197,6 +1216,7 @@ def plotLocSeq(
             arrowPosition = arrowPosition,
             arrowHeadWidth = arrowHeadWidth,
             arrowHeadLength = arrowHeadLength,
+            arrowShowLimit = arrowShowLimit,
             arcStartColor = nodeColor,
             arcEndColor = nodeColor ,
             arcMarkerSize = nodeMarkerSize,
@@ -2273,6 +2293,7 @@ def plotGantt(
     phaseSeparatorStyle: str = "--",
     phaseSeparatorLinewidth: float = 0.5,
     phaseSeparatorColor: str = 'gray',
+    entitiesOffset: dict = {},
     startTime: float = 0,
     endTime: float|None = None,
     fig = None, 
@@ -2460,22 +2481,26 @@ def plotGantt(
     # Plot each gantt block ===================================================
     for i in range(len(entities)):
         if (entities[i] != None):
+            entOffSet = 0
+            if (entities[i] in entitiesOffset):
+                entOffSet = entitiesOffset[entities[i]]
+
             center = yticks[i]
             lane = [0]
             ent = [g for g in gantt if g['entityID'] == entities[i]]
             ent.sort(key = lambda x:x['timeWindow'][0])
             for g in ent:
-                offSet = 0
+                ganttOffSet = 0
                 needNewLaneFlag = True
                 for k in range(len(lane)):
                     if (lane[k] <= g['timeWindow'][0]):
-                        offSet = k
+                        ganttOffSet = k
                         lane[k] = g['timeWindow'][1]
                         needNewLaneFlag = False
                         break
                 if (needNewLaneFlag):
                     lane.append(g['timeWindow'][1])
-                    offSet = len(lane) - 1
+                    ganttOffSet = len(lane) - 1
 
                 # 形状位置
                 s = g['timeWindow'][0]
@@ -2484,10 +2509,10 @@ def plotGantt(
 
                 top = None
                 if ('desc' not in g or ('descPosition' in g and g['descPosition'] == 'Inside')):
-                    top = yticks[i] + ganttHeight / 2 - offSet * ganttHeight
+                    top = yticks[i] + ganttHeight / 2 - ganttOffSet * ganttHeight + entOffSet
                 else:
-                    top = yticks[i] + ganttHeight / 4 - offSet * ganttHeight
-                bottom = yticks[i] - ganttHeight / 2 - offSet * ganttHeight
+                    top = yticks[i] + ganttHeight / 4 - ganttOffSet * ganttHeight + entOffSet
+                bottom = yticks[i] - ganttHeight / 2 - ganttOffSet * ganttHeight + entOffSet
 
                 y = [bottom, top, top, bottom, bottom]
                 ax.plot(x, y, color = 'black', linewidth = ganttLinewidth)

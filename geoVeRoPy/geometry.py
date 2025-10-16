@@ -3826,7 +3826,6 @@ def nodesInIsochrone(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'loc
     }
 
 # Distance calculation ========================================================
-# @runtime('distEuclideanXY')
 def distEuclideanXY(pt1: pt, pt2: pt) -> dict:
     """
     Gives a Euclidean distance based on two coords.

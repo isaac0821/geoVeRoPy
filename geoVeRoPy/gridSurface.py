@@ -572,7 +572,6 @@ class TriGridSurface(object):
         zProj = self.buildZProfile(z)
         return isPtInPoly(pt, zProj)
 
-    @runtime("dist2Seg")
     def dist2Seg(self, pt1, z1, pt2, z2):
         # Case 1: [pt1, pt2]的投影穿过了coreProfile，一定相交
         if (isSegIntPoly(seg = [pt1, pt2], poly = self.coreProj)):

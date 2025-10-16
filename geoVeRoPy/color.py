@@ -5,6 +5,10 @@ def rndColor() -> str:
     color = "#%06x" % random.randint(0, 0xFFFFFF)
     return color
 
+def rndRed() -> str:
+    color = "#FF00%02x" % random.randint(0, 0xFF)
+    return color
+
 def colorComplement(hexColor):
     (r, g, b) = hex2RGB(hexColor)
     def hilo(a, b, c):

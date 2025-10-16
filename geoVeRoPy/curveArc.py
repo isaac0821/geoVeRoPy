@@ -138,7 +138,6 @@ class CurveArc(object):
 
         return cvNodes
 
-    # @runtime('insertAround')
     def insertAround(self, n):
         # 给定一个CurveArcNode，在前方和后方分别插入一个CurveArcNode
 
