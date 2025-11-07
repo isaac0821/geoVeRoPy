@@ -1,6 +1,7 @@
 import math
 import random
 import warnings
+import shapely
 
 from .common import *
 from .geometry import *
@@ -849,7 +850,7 @@ def rndNodeNeighbors(
             }
 
             polyShapely = shapely.convex_hull(shapely.MultiPoint(points = polyPts))
-            poly = [i for i in mapping(polyShapely)['coordinates'][0]]
+            poly = [i for i in shapely.geometry.mapping(polyShapely)['coordinates'][0]]
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
 
     elif (shape == 'RndStar'):

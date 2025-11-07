@@ -11,6 +11,7 @@ from matplotlib.animation import PillowWriter
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 
+from .tree import *
 from .common import *
 from .color import *
 from .msg import *
@@ -563,7 +564,21 @@ def plotNodes(
                 fillStyle = nodeNeiStyle['neighborFillStyle'],
                 opacity = nodeNeiStyle['neighborOpacity'],
                 latLonFlag = latLonFlag,
-                showAxis = showAxis) 
+                showAxis = showAxis)
+
+        elif ('neiShape' in nodes[n] and nodes[n]['neiShape'] == 'Isochrone'):
+            for p in range(len(nodes[n][neighborFieldName])):
+                fig, ax = plotPoly(
+                    fig = fig,
+                    ax = ax,
+                    poly = nodes[n][neighborFieldName][p],
+                    edgeWidth = 1,
+                    edgeColor = 'black',
+                    fillColor = nodeNeiStyle['neighborColor'],
+                    fillStyle = nodeNeiStyle['neighborFillStyle'],
+                    opacity = nodeNeiStyle['neighborOpacity'] / len(nodes[n][neighborFieldName]),
+                    latLonFlag = latLonFlag,
+                    showAxis = showAxis)
 
     # Axis on and off =========================================================
     if (not showAxis):
@@ -2554,3 +2569,25 @@ def plotGantt(
 
     return fig, ax
 
+def plotTree(
+    tree: Tree,
+    layerHight: float = 10,
+    showKey: str|None = None):
+   
+    # 构建一个树，记录要绘制的树的每个节点在画布上的位置,
+    # NOTE: 基本的想法就是，把最宽的那层画出来，然后每层分别对齐
+    plotTree = Tree()
+    tTra = tree.traverse()
+    cp = []
+    for c in tTra:
+        cp.append(geoVeRoPy.TreeNode(
+            key = c.key,
+            value = c.value))
+    plotTree.insert(cp[0])
+    for i in range(1, len(cp)):
+        plotTree.insert(cp[i], plotTree.query(tTra[i].parent.key))
+
+    # 先把最底都列出来，那将是最大的宽度，然后排列好，每一个上层的位置都在下层的中点
+    layers = []
+
+    return fig, ax

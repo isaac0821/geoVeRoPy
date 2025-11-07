@@ -6,7 +6,6 @@ import warnings
 from .geometry import *
 from .ring import *
 from .curveArc import *
-from .gridSurface import *
 from .common import *
 from .plot import *
 
@@ -611,11 +610,6 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
     }
 
 def _circle2CirclePathGurobi(startPt: pt, endPt: pt, circles: list[dict], outputFlag: bool = False):
-    try:
-        import gurobipy as grb
-    except(ImportError):
-        print("ERROR: Cannot find Gurobi")
-        return
 
     model = grb.Model("SOCP")
     model.setParam('OutputFlag', 1 if outputFlag else 0)
@@ -956,7 +950,7 @@ def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], ada
             G.add_edge('s', (0, k.key), weight = max(d / speed, atLeastTimeBtw[0]))
 
         # Between byStages
-        if (len(byStage) > 2):
+        if (len(byStage) >= 2):
             for i in range(1, len(byStage)):
                 for k1 in byStage[i - 1]:
                     for k2 in byStage[i]:

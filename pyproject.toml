@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "geoVeRoPy"
-version = "0.0.17"
+version = "0.0.19"
 authors = [
   { name="Lan Peng", email="lanpeng@shu.edu.cn" },
 ]
-description = "geoVeRoPy: Geometrical/geological Vehicle Routing Problem solved by Python"
+description = "geoVeRoPy: Geometrical Vehicle Routing Problem solved by Python"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 dependencies = [
   "numpy",
   "scipy",

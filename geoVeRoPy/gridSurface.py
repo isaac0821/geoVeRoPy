@@ -165,8 +165,11 @@ class TriGridSurface(object):
         return poly
 
     def buildCoreProfile(self):
-        poly = polysIntersect(polys = [self.timedPoly[i][0] for i in range(len(self.timedPoly))])[0]
-        return poly
+        try:
+            poly = polysIntersect(polys = [self.timedPoly[i][0] for i in range(len(self.timedPoly))])[0]
+            return poly
+        except:
+            return None
 
     def buildBtwCoreProfile(self, t1, t2):
         z1 = None
@@ -573,8 +576,8 @@ class TriGridSurface(object):
         return isPtInPoly(pt, zProj)
 
     def dist2Seg(self, pt1, z1, pt2, z2):
-        # Case 1: [pt1, pt2]的投影穿过了coreProfile，一定相交
-        if (isSegIntPoly(seg = [pt1, pt2], poly = self.coreProj)):
+        # Case 1: coreProfile存在，且[pt1, pt2]的投影穿过了coreProfile，一定相交
+        if (self.coreProj != None and isSegIntPoly(seg = [pt1, pt2], poly = self.coreProj)):
             return {
                 'trespass': True,
                 'trespassSemi': True,

@@ -55,7 +55,7 @@ def solveCETSP(
             - method: str, support 'GeneticAlgorithm'
         2) 'Exact', use general Benders decomposition approach to solve CETSP to optimal
 
-    **kwargs: optionl
+    **kwargs: optional
         Provide additional inputs for different `neighbor` options and `algo` options
 
     """
