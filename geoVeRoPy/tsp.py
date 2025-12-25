@@ -650,7 +650,7 @@ def _ipTSPGurobiMTZ(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
     u = {}
     for i in range(n):
         u[i] = TSP.addVar(
-            vtype = grb.GRB.CONTINUOUS,
+            vtype = grb.GRB.INTEGER,
             name = 'u_%s' % (i))
 
     # TSP objective function ==================================================
@@ -672,6 +672,7 @@ def _ipTSPGurobiMTZ(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
         TSP.addConstr(u[i] <= n - 1)
 
     # TSP =====================================================================
+    TSP.write("TSP.lp")
     TSP.optimize()
 
     # Reconstruct solution ====================================================
