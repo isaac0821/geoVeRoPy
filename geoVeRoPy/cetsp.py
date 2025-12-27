@@ -2139,6 +2139,9 @@ def _solveCETSPBnBCircle(
         else:
             n.relaxFlag = False
 
+        printLog("Turning: ", n.turning)
+        printLog("Trespass: ", n.trespass)
+        printLog("Missing: ", n.missing)
         return
 
     def cetspBranch(n: BnBTreeNode):

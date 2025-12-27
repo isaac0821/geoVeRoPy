@@ -9,7 +9,7 @@ from .common import *
 class BnBTreeNode(TreeNode):
     # NOTE: rep - 解的输入格式
     # NOTE: 如果有gurobi的对象，传入**kwargs
-    def __init__(self, key, rep, funcSolve, funcBranch, funcQuickSolve=None, funcUBEstimate=None, bnbUB=float('inf'), **kwargs):
+    def __init__(self, key, rep, funcSolve, funcBranch, funcUBEstimate=None, bnbUB=float('inf'), **kwargs):
         # BnB树初始化的时候只有key和表达式rep是已知的
         self.key = key
         self.rep = rep
@@ -45,13 +45,6 @@ class BnBTreeNode(TreeNode):
         self.upperBound = p.upperBound
         self.lowerBound = p.lowerBound
 
-    # 快速求解函数
-    # NOTE: 快速估算该节点的目标函数值
-    def quickSolve(self):
-        self.funcQuickSolve(self)
-        self.quickSolvedFlag = True
-        return
-
     # 求解函数
     # NOTE: 真值
     def solve(self):
@@ -69,10 +62,12 @@ class BnBTreeNode(TreeNode):
     def bounding(self):
         if (self.prunFlag == False):
             if (self.relaxFlag == True):
+                # 松弛解
                 self.lowerBound = self.ofv
                 if (self.lowerBound > self.bnbUB):
                     self.prunFlag = True
             else:
+                # 非松弛解
                 self.upperBound = self.ofv
                 self.lowerBound = self.ofv
                 if (self.lowerBound > self.bnbUB):
@@ -120,13 +115,10 @@ class BnBTree(Tree):
     # 分支定界法主函数
     def bnb(self, timeLimit=None):
         # 算法框架（以最小化为例）
-        continueFlag = True
-
         startTime = datetime.datetime.now()
 
         numIter = 0
-        while(continueFlag):
-            continueFlag = False
+        while(True):
             numIter += 1
 
             printLog(hyphenStr(s="Iter: " + str(numIter)))
@@ -139,27 +131,20 @@ class BnBTree(Tree):
             if (curNode == None):
                 printLog("Iteration ends by enumeration.")
                 break
-
             if (timeLimit != None and (datetime.datetime.now() - startTime).total_seconds() > timeLimit):
                 printLog("Reach time limit!")
                 break
 
             printLog("Select: ", curNode.rep)
-            if (curNode != None):
-                continueFlag = True
 
             # Step 2: 求解
             curNode.solve()
-            printLog("Turning: ", curNode.turning)
-            printLog("Trespass: ", curNode.trespass)
-            printLog("Missing: ", curNode.missing)
 
-            # Step 2.1: 如果没有上界，启发式的给一个上界
+            # Step 2.1: 如果没有上界，启发式的给一个上界，注意，必须保证该上界至少大于一个incumbent
             if (self.upperBound == float('inf') and curNode.funcUBEstimate != None):
                 curNode.ubEstimate()
                 self.upperBound = curNode.upperBound
                 printLog("Est UB: ", curNode.upperBound)
-
                 
             # Step 3: 定界
             curNode.bnbUB = self.upperBound            
@@ -211,19 +196,6 @@ class BnBTree(Tree):
             return None
 
         return children[lowestIdx]
-
-    # 从n的子树里返回node中lb最低的未求解节点
-    def chooseByNode(self, n):
-        ret = None
-        # 如果n已经被prun了，不会返回东西
-        if (n.prunFlag == True):
-            return None
-        else:
-            # 如果n没有被prun，看有没有被solved
-            if (n.solvedFlag == True):
-                # 遍历子节点，如果有，逐个猜下界
-                for child in n.treeNodes:
-                    pass
 
     def updateBounds(self):
         # traverse整棵树，返回树的最低的下界和上界
