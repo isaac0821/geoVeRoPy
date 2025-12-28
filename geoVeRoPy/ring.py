@@ -59,7 +59,7 @@ class Ring(object):
 
     def query(self, key) -> "RingNode":
         if (self.head.isNil):
-            raise EmptyError("ERROR: The route is empty.")
+            raise EmptyError("ERROR: The ring is empty.")
         cur = self.head
         trvFlag = False
         queried = 0

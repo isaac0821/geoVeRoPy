@@ -365,9 +365,28 @@ def minusCurveArc2Circle(curveArc: CurveArc, circle: dict) -> list[CurveArc]:
                 rws.append(shapelyArc.geoms[k])
 
     elif (shapelyArc.geom_type == 'GeometryCollection'):
-        for geom in shapelyArc.geoms:
-            if (geom.geom_type == 'LineString'):
-                rws.append(geom)
+        contI, contJ = None, None
+        cross0Flag = False
+        for i in range(len(shapelyArc.geoms)):
+            for j in range(len(shapelyArc.geoms)):
+                if (i != j and shapelyArc.geoms[i].geom_type == 'LineString' 
+                        and shapelyArc.geoms[j].geom_type == 'LineString'):
+                    if (shapely.distance(shapelyArc.geoms[i], shapelyArc.geoms[j]) <= 0.01):
+                        contI = i
+                        contJ = j
+                        cross0Flag = True
+                        break
+            if (cross0Flag):
+                break
+        if (cross0Flag):
+            for k in range(len(shapelyArc.geoms)):
+                if (k != contI and k != contJ and shapelyArc.geoms[k].geom_type == 'LineString'):
+                    rws.append(shapelyArc.geoms[k])
+            rws.append(shapely.MultiLineString([shapelyArc.geoms[contI], shapelyArc.geoms[contJ]]))
+        else:
+            if (shapelyArc.geoms[k].geom_type == 'LineString'):
+                for k in range(len(shapelyArc.geoms)):
+                    rws.append(shapelyArc.geoms[k])
 
     curves = []
     for rw in rws:

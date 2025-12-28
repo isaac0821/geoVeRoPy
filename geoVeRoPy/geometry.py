@@ -2257,6 +2257,27 @@ def isPolyLegal(poly: poly):
                     return False
     return True
 
+def isPolyConvex(poly: poly):
+    if len(poly) < 3:
+        return False  # 至少需要3个顶点才能构成多边形        
+    def cross_sign(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])    
+    n = len(poly)
+    if n == 3:
+        return True
+    sign = 0
+    for i in range(n):
+        o = poly[i]
+        a = poly[(i + 1) % n]
+        b = poly[(i + 2) % n]        
+        curr_sign = cross_sign(o, a, b)        
+        if curr_sign != 0:
+            if sign == 0:
+                sign = curr_sign
+            elif sign * curr_sign < 0:
+                return False    
+    return True
+
 # Distance from Point to Object ===============================================
 def distPt2Line(pt: pt, line: line) -> float:
     """
