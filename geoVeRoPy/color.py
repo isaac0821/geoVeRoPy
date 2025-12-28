@@ -26,23 +26,15 @@ def hex2RGB(colorHex):
     return tuple(int(colorHex[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
 
 def getBWText(hexColor):
-    (r, g, b) = hex2RGB(hexColor)     
-    m = np.array([
-        [0.29900, -0.147108,  0.614777],
-        [0.58700, -0.288804, -0.514799],
-        [0.11400,  0.435912, -0.099978]
-    ])
-     
-    yuv = np.dot(np.array([[[r, g, b]]]), m)
-    yuv[:, :, 1:] += 0.5
-    nR = yuv[0][0][0]
-    nG = yuv[0][0][1]
-    nB = yuv[0][0][2]
-
-    gl = 0.299 * nR + 0.587 * nG + 0.114 * nB
-    if (gl >= 192):
+    (r, g, b) = hex2RGB(hexColor)
+    
+    # 直接计算相对亮度（Rec. 709标准）
+    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    
+    # 根据亮度决定文字颜色
+    if luminance >= 186:  # 较亮的背景用黑色文字
         return 'black'
-    else:
+    else:                 # 较暗的背景用白色文字
         return 'white'
 
 def RGB2Hex(colorRGB):

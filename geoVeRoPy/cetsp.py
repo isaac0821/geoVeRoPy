@@ -89,15 +89,14 @@ def solveCETSP(
             if (endLoc == None):
                 raise MissingParameterError("ERROR: Missing end location.")
 
-    # Check required for neighbor options =====================================
-    if (neighbor in ['Circle', 'Poly']):
-        if (neighbor == 'Circle'):
-            if ('radius' not in kwargs and 'radiusFieldName' not in kwargs):
-                raise MissingParameterError("ERROR: Must provide an uniform radius as `radius` or the field name of radius as `radiusFieldName`.")
-        elif (neighbor == 'Poly'):
-            if ('polyFieldName' not in kwargs):
-                warnings.warn("WARNING: `polyFieldName` is not provided, set to be default as `neighbor`.")
-                kwargs['polyFieldName'] = 'neighbor'
+    # Check required fields for neighbor options ==============================
+    if (neighbor == 'Circle'):
+        if ('radius' not in kwargs and 'radiusFieldName' not in kwargs):
+            raise MissingParameterError("ERROR: Must provide an uniform radius as `radius` or the field name of radius as `radiusFieldName`.")
+    elif (neighbor == 'Poly'):
+        if ('polyFieldName' not in kwargs):
+            warnings.warn("WARNING: `polyFieldName` is not provided, set to be default as `neighbor`.")
+            kwargs['polyFieldName'] = 'neighbor'
     else:
         raise UnsupportedInputError("ERROR: Neighborhood type is not supported")
 

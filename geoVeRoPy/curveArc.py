@@ -224,23 +224,16 @@ class CurveArc(object):
 
         return
 
-def intCurveArc2Circle(curveArc: CurveArc, circle: dict) -> CurveArc:
-
-    # 先转出LineString，再去和circle相交，得到新的LineString
-    # NOTE: 交到的LineString可能有两部分，要连起来
-    ls = curveArc.getLineString()
-    cc = shapely.Polygon(circleByCenterXY(center = circle['center'], radius = circle['radius'], lod = 60))
-    intLine = shapely.intersection(ls, cc)
-
-    if (intLine.is_empty):
+def _shapelyArc2CurveArc(curveArc, shapelyArc):
+    if (shapelyArc.is_empty):
         # print(ls, cc)
         return None
 
     nl = []
     # 如果0°包括在里头，则为两段，否则只会有一段
-    if (intLine.geom_type == 'MultiLineString'):
-        nl1 = [i for i in mapping(intLine)['coordinates'][0]]
-        nl2 = [i for i in mapping(intLine)['coordinates'][1]]
+    if (shapelyArc.geom_type == 'MultiLineString'):
+        nl1 = [i for i in mapping(shapelyArc)['coordinates'][0]]
+        nl2 = [i for i in mapping(shapelyArc)['coordinates'][1]]
 
         # 把nl1和nl2拼接起来
         if (is2PtsSame(nl1[0], nl2[0])):
@@ -267,17 +260,16 @@ def intCurveArc2Circle(curveArc: CurveArc, circle: dict) -> CurveArc:
             nl2.reverse()
             nl.extend(nl2)
 
-    elif (intLine.geom_type == 'LineString'):
-        nl = [i for i in mapping(intLine)['coordinates']]
+    elif (shapelyArc.geom_type == 'LineString'):
+        nl = [i for i in mapping(shapelyArc)['coordinates']]
 
-    elif (intLine.geom_type == 'GeometryCollection'):
+    elif (shapelyArc.geom_type == 'GeometryCollection'):
         # 最多应该两个，一个是LineString，一个是Point
-        for geom in intLine.geoms:
+        for geom in shapelyArc.geoms:
             if (geom.geom_type == 'LineString'):
                 nl = [i for i in mapping(geom)['coordinates']]
                 break
     else:
-        # print(intLine)
         return None
 
     # 求出LineString的开始和结束圆心角
@@ -326,3 +318,88 @@ def intCurveArc2Circle(curveArc: CurveArc, circle: dict) -> CurveArc:
         radius = curveArc.radius, 
         startDeg = startDeg, 
         endDeg = endDeg)
+
+def intCurveArc2Circle(curveArc: CurveArc, circle: dict) -> CurveArc:
+    # 先转出LineString，再去和circle相交，得到新的LineString
+    # NOTE: 交到的LineString可能有两部分，要连起来
+    ls = curveArc.getLineString()
+    cc = shapely.Polygon(circleByCenterXY(center = circle['center'], radius = circle['radius'], lod = 60))
+    shapelyArc = shapely.intersection(ls, cc)
+
+    curve = _shapelyArc2CurveArc(curveArc, shapelyArc)
+    return curve
+
+def minusCurveArc2Circle(curveArc: CurveArc, circle: dict) -> list[CurveArc]:
+    # 先转出LineString，再去和circle相交，得到新的LineString
+    # NOTE: 交到的LineString可能有两部分，要连起来
+    ls = curveArc.getLineString()
+    cc = shapely.Polygon(circleByCenterXY(center = circle['center'], radius = circle['radius'], lod = 60))
+    shapelyArc = shapely.difference(ls, cc)
+
+    rws = []
+    if (shapelyArc.geom_type == 'LineString'):
+        rws = [shapelyArc]
+
+    elif (shapelyArc.geom_type == 'MultiLineString'):
+        # NOTE: 可麻烦了...要看看交出来的MultiLineString是不是其实是过0点的一段弧
+        # NOTE: Stupid way，两两比较，看看是不是相连的如果找到俩相连的，那就是过0点的弧，返回这俩构成的MultiLineString
+        contI, contJ = None, None
+        cross0Flag = False
+        for i in range(len(shapelyArc.geoms)):
+            for j in range(len(shapelyArc.geoms)):
+                if (i != j):
+                    if (shapely.distance(shapelyArc.geoms[i], shapelyArc.geoms[j]) <= 0.01):
+                        contI = i
+                        contJ = j
+                        cross0Flag = True
+                        break
+            if (cross0Flag):
+                break
+        if (cross0Flag):
+            for k in range(len(shapelyArc.geoms)):
+                if (k != contI and k != contJ):
+                    rws.append(shapelyArc.geoms[k])
+            rws.append(shapely.MultiLineString([shapelyArc.geoms[contI], shapelyArc.geoms[contJ]]))
+        else:
+            for k in range(len(shapelyArc.geoms)):
+                rws.append(shapelyArc.geoms[k])
+
+    elif (shapelyArc.geom_type == 'GeometryCollection'):
+        for geom in shapelyArc.geoms:
+            if (geom.geom_type == 'LineString'):
+                rws.append(geom)
+
+    curves = []
+    for rw in rws:
+        cuv = _shapelyArc2CurveArc(curveArc, rw)
+        if (cuv != None):
+            curves.append(cuv)
+
+    return curves
+
+def splitCurveArcByNum(curveArc: CurveArc, num: int) -> list[CurveArc]:
+    startDeg = curveArc.startDeg
+    endDeg = curveArc.endDeg
+
+    if (num > 1):
+        splitCurveArcs = []
+        for i in range(num):
+            newStartDeg = startDeg + (endDeg - startDeg) / num * i
+            newEndDeg = startDeg + (endDeg - startDeg) / num * (i + 1)
+            splitCurveArcs.append(CurveArc(
+                startDeg = newStartDeg,
+                endDeg = newEndDeg,
+                center = curveArc.center,
+                radius = curveArc.radius))
+        return splitCurveArcs
+    else:
+        return [curveArc]
+
+def splitCurveArcByDeg(curveArc: CurveArc, deg: float) -> list[CurveArc]:
+    # 计算平均分成几份后每一份的度数小于等于deg
+    totalDeg = curveArc.endDeg - curveArc.startDeg
+    if (totalDeg > deg):
+        n = (int)(totalDeg / deg) + 1
+        return splitCurveArcByNum(curveArc, n)
+    else:
+        return [curveArc]

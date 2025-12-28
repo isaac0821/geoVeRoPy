@@ -14,7 +14,7 @@ class BnBTreeNode(TreeNode):
         self.key = key
         self.rep = rep
         self.__dict__.update(kwargs)
-
+ 
         # paraent属性在加入BnB树时补充，当前初始化为空
         self.parent = BnBTreeNilNode()
         # children属性在branch时补充，当前初始化为空数组
