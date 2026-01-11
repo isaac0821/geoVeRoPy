@@ -2677,6 +2677,7 @@ def polarSubtract(vecPolar1, vecPolar2):
 
     return (v3Val, v3Deg)
 
+# Mercator projection =========================================================
 def ptXY2LatLonMercator(ptXY: pt) -> pt:
     """
     Given a point in (x, y), map it to a (lat, lon) coordinate using Mercator projection
