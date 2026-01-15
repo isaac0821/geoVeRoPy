@@ -15,6 +15,7 @@ from .instance import *
 from .ring import *
 from .tree import *
 from .curveArc import *
+from .gridSurface import *
 
 # Visualize modules
 from .plot import *
