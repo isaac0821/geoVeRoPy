@@ -9,6 +9,7 @@ from matplotlib import patches
 from matplotlib.animation import FuncAnimation
 from matplotlib.animation import PillowWriter
 from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib import cm
 
 from .tree import *
@@ -19,218 +20,24 @@ from .province import *
 from .geometry import *
 from .travel import *
 from .curveArc import *
+from .gridSurface import *
 
-def defaultBoundingBox(
-    boundingBox = (None, None, None, None),
-    pts: list[pt] = None,
-    nodes: dict = None,
-    locFieldName = 'loc',
-    arcs: dict = None,
-    arcFieldName = 'arc',
-    arcStartLocFieldName = 'startLoc',
-    arcEndLocFieldName = 'endLoc',
-    poly: poly = None,
-    polys: polys = None, 
-    polygons: dict = None,
-    anchorFieldName: str = 'anchor',
-    polyFieldName: str = 'poly',
-    latLonFlag: bool = False,
-    edgeWidth: float = 0.1):
+def plotLocs(locs: list[pt], **kwargs):
 
     """
-    Given a list of objects, returns a bounding box of all given objects.
-
-    Parameters
-    ----------
-    boundingBox: list|tuple, optional, default as None
-        An existing bounding box
-    pts: list of pts, optional, default as None
-        A list of pts
-    nodes: dict, optional, default as None
-        A `nodes` dictionary
-    locFieldName: str, optional, default as 'loc'
-        The field in `nodes` indicates locations of nodes
-    arcs: dict, optional, default as None
-        An `arcs` dictionary
-    arcFieldName: str, optional, default as 'arc'
-        The field in `arcs` indicates locations of arcs
-    poly: poly, optional, default as None
-        A poly
-    polys: polys, optional, default as None
-        A list of polys
-    polygons: dict, optional, default as None
-        A `polygons` dictionary
-    anchorFieldName: str, optional, default as `anchor`
-        The field in `polygons` indicates anchor of each polygon
-    polyFieldName: str, optional, default as `poly`
-        The field in `polygons` indicates polygons
-    latLonFlag: bool, optional, default as True
-        True if x, y is reversed.
-    edgeWidth: float, optional, default as 0.1
-        The extra space around bounding box
-
-    Returns
-    -------
-    (float, float, float, float)
-        A bounding box
-
-    """
-
-    (xMin, xMax, yMin, yMax) = boundingBox
-    allX = []
-    allY = []
-    if (xMin != None):
-        allX.append(xMin)
-    if (xMax != None):
-        allX.append(xMax)
-    if (yMin != None):
-        allY.append(yMin)
-    if (yMax != None):
-        allY.append(yMax)
-
-    if (pts != None):
-        for pt in pts:
-            allX.append(pt[0])
-            allY.append(pt[1])
-    if (nodes != None):
-        for i in nodes:
-            allX.append(nodes[i][locFieldName][0])
-            allY.append(nodes[i][locFieldName][1])
-    if (arcs != None):
-        for i in arcs:
-            if (arcFieldName in arcs[i]):
-                allX.append(arcs[i][arcFieldName][0][0])
-                allX.append(arcs[i][arcFieldName][1][0])
-                allY.append(arcs[i][arcFieldName][0][1])
-                allY.append(arcs[i][arcFieldName][1][1])
-            elif (arcStartLocFieldName in arcs[i] and arcEndLocFieldName in arcs[i]):
-                allX.append(arcs[i][arcStartLocFieldName][0])
-                allY.append(arcs[i][arcStartLocFieldName][1])
-                allX.append(arcs[i][arcEndLocFieldName][0])
-                allY.append(arcs[i][arcEndLocFieldName][1])     
-    if (poly != None):
-        for pt in poly:
-            allX.append(pt[0])
-            allY.append(pt[1])
-    if (polys != None):
-        for poly in polys:
-            for pt in poly:
-                allX.append(pt[0])
-                allY.append(pt[1])
-    if (polygons != None):
-        for p in polygons:
-            for pt in polygons[p][polyFieldName]:
-                allX.append(pt[0])
-                allY.append(pt[1])
-
-    xMin = min(allX) - edgeWidth * abs(max(allX) - min(allX))
-    xMax = max(allX) + edgeWidth * abs(max(allX) - min(allX))
-    yMin = min(allY) - edgeWidth * abs(max(allY) - min(allY))
-    yMax = max(allY) + edgeWidth * abs(max(allY) - min(allY))
-
-    if (latLonFlag):
-        xMin, xMax, yMin, yMax = yMin, yMax, xMin, xMax
-
-    return (xMin, xMax, yMin, yMax)
-
-def defaultFigSize(
-    boundingBox, 
-    width = None, 
-    height = None, 
-    latLonFlag = False):
-    """
-    Given a bounding box, a width(or height), returns the height(or width) of the figure
-
-    Parameters
-    ----------
-
-    boundingBox: 4-tuple, required
-        The bounding box of the figure
-    width: float|None, optional, default as None
-        The desired width of the figure
-    height: float|None, optional, default as None
-        The desired height of the figure
-
-    Returns
-    -------
-    float, float
-        The (width, height) proportional to bounding box
-
-    """
-    (xMin, xMax, yMin, yMax) = boundingBox
-
-    w = None
-    h = None
-
-    if (not latLonFlag):
-        if (width == None and height == None):
-            if (xMax - xMin > yMax - yMin):
-                w = 5
-                h = 5 * ((yMax - yMin) / (xMax - xMin))
-            else:
-                w = 5 * ((xMax - xMin) / (yMax - yMin))
-                h = 5
-        elif (width != None and height == None):
-            w = width
-            h = width * ((yMax - yMin) / (xMax - xMin))
-        elif (width == None and height != None):
-            w = height * ((xMax - xMin) / (yMax - yMin))
-            h = height
-        else:
-            w = width
-            h = height
-    else:
-        heightDelta = distLatLon(
-            (xMin, yMin + (yMax - yMin) / 2), 
-            (xMax, yMin + (yMax - yMin) / 2))
-        widthDelta = distLatLon(
-            (xMin + (xMax - xMin) / 2, yMin),
-            (xMin + (xMax - xMin) / 2, yMax))
-
-        if (width == None and height == None):
-            if (widthDelta > heightDelta):
-                w = 5
-                h = 5 * heightDelta / widthDelta
-            else:
-                w = 5 * widthDelta / heightDelta
-                h = 5
-        elif (width != None and height == None):
-            w = width
-            h = width * heightDelta / widthDelta
-        elif (width == None and height != None):
-            w = height * widthDelta / heightDelta
-            h = height
-        else:
-            w = width
-            h = height
-
-    return w, h
-
-def plotLocs(
-    locs: list[pt],
-    locColor: str = 'Random',
-    locMarker: str = 'o',
-    locMarkerSize: float = 1,
-    latLonFlag: bool = False,
-    **kwargs
-    ):
-
-    """Plot locations on a figure
+    Plot locations on a figure
 
     Parameters
     ----------
     locs: list of pt, required
         A list of locations to be plotted
-    locColor: str, optional, default as 'Random'
-        The color of locations to be plotted, 'Random' if the color is randomized.
-    locMarker: str, optional, default as 'o'
-        The shape of the marker
-    locMarkerSize: str, optional, default as 1
-        The size of the marker
-    latLonFlag: bool, optional, default as False
-        Reverse the x, y, (x, y) => (y, x). Used in plotting (lat, lon) coordinates.
     **kwargs: optional
         Additional matplotlib information
+
+    Returns
+    -------
+    fig, ax
+        matplotlib.pyplot object
     """
 
     # Matplotlib characters ===================================================
@@ -241,6 +48,12 @@ def plotLocs(
     showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # styling characters ======================================================
+    locColor = 'Random' if 'locColor' not in kwargs else kwargs['locColor']
+    locMarker = 'o' if 'locMarker' not in kwargs else kwargs['locMarker']
+    locMarkerSize = 1 if 'locMarkerSize' not in kwargs else kwargs['locMarkerSize']
+    latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # Check for required fields ===============================================
     if (locs == None):
@@ -270,14 +83,12 @@ def plotLocs(
     # Draw locs ==============================================================
     # 逐个点绘制
     for i in locs:
-
         # Define color --------------------------------------------------------
         color = None
         if (locColor == 'Random'):
             color = rndColor()
         else:
             color = locColor
-
         # plot nodes ----------------------------------------------------------
         x = None
         y = None
@@ -301,14 +112,22 @@ def plotLocs(
 
     return fig, ax
 
-def plotLocs3D(
-    locs3D: list[pt3D],
-    locColor: str = 'Random',
-    locMarker: str = 'o',
-    locMarkerSize: float = 1,
-    latLonFlag: bool = False,
-    **kwargs
-    ):
+def plotLocs3D(locs3D: list[pt3D], **kwargs):
+    """
+    Plot 3D locations on a figure
+
+    Parameters
+    ----------
+    locs3D: list of pt3D, required
+        A list of locations to be plotted
+    **kwargs: optional
+        Additional matplotlib information
+
+    Returns
+    -------
+    fig, ax
+        matplotlib.pyplot object
+    """
 
     # Check for required fields ===============================================
     if (locs3D == None):
@@ -322,6 +141,12 @@ def plotLocs3D(
     showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # styling characters ======================================================
+    locColor = 'Random' if 'locColor' not in kwargs else kwargs['locColor']
+    locMarker = 'o' if 'locMarker' not in kwargs else kwargs['locMarker']
+    locMarkerSize = 1 if 'locMarkerSize' not in kwargs else kwargs['locMarkerSize']
+    latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # If no based matplotlib figure provided, define boundary =================
     if (fig == None or ax == None):
@@ -366,17 +191,7 @@ def plotLocs3D(
 
     return fig, ax
 
-def plotNodes(
-    nodes: dict, 
-    nodeColor: str = 'Random',
-    nodeMarker: str = 'o',
-    nodeMarkerSize: float = 1,
-    neighborColor: str|None = 'gray',
-    neighborOpacity: float = 0.5,
-    neighborFillStyle: str = '///',
-    latLonFlag: bool = False,
-    **kwargs
-    ):
+def plotNodes(nodes: dict, **kwargs):
 
     """
     Draw nodes
@@ -385,20 +200,6 @@ def plotNodes(
     ----------
     nodes: dictionary, required
         A `nodes` dictionary. See :ref:`nodes` for reference.
-    nodeColor: str, optional, default 'Random'
-        Alternative option. If 'color' is provided in `nodes`, this field will be ignored.
-    nodeMarker: str, optional, default 'o'
-        Alternative option for node marker. If 'marker' is provided in `nodes`, this field will be ignored.
-    nodeMarkerSize: int, optional, default 1
-        Alternative option for node marker size. If 'markerSize' is provided in `nodes`, this field will be ignored.
-    neighborColor: str, optional, default 'gray'
-        If nodes have 'neighbor' label, will plot the neighbor area in this color
-    neighborOpacity: float, optional, default 0.5
-        The opacity of neighborhood.
-    neighborFillStyle: str, optional, default '///'
-        The fill style of the neighborhood.
-    latLonFlag: bool, optional, default False
-        True if need to reverse the x, y coordinates, e.g., plot for (lat, lon)
     **kwargs: optional
         Additional matplotlib information
 
@@ -416,6 +217,15 @@ def plotNodes(
     showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # styling characters ======================================================
+    nodeColor = 'Random' if 'nodeColor' not in kwargs else kwargs['nodeColor']
+    nodeMarker = 'o' if 'nodeMarker' not in kwargs else kwargs['nodeMarker']
+    nodeMarkerSize = 1 if 'nodeMarkerSize' not in kwargs else kwargs['nodeMarkerSize']
+    neighborColor = 'gray' if 'neighborColor' not in kwargs else kwargs['neighborColor']
+    neighborOpacity = 0.5 if 'neighborOpacity' not in kwargs else kwargs['neighborOpacity']
+    neighborFillStyle = '///' if 'neighborFillStyle' not in kwargs else kwargs['neighborFillStyle']
+    latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # Field names =============================================================
     locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
@@ -592,63 +402,15 @@ def plotNodes(
 
     return fig, ax
 
-def plotArcs(
-    arcs: dict,
-    arcColor: str = 'Random',
-    arcWidth: float = 1.0,
-    arcLabel: str = None,
-    arcLineStyle: str = 'solid',
-    arcDashes: tuple = (None, None),
-    arcStartColor: str = 'black',
-    arcEndColor: str = 'black',
-    arcMarkerSize: int|float = 2.0,
-    arrowFlag: bool = True,
-    arrowPosition: float = 0.5,
-    arrowHeadWidth: float = 2.0,
-    arrowHeadLength: float = 3.0,
-    arrowShowLimit: float|None = None,
-    neighborOpacity: float = 0.5,
-    neighborEntWidth: float = 1.2,
-    neighborEntColor: str = 'black',
-    neighborBtwWidth: float = 1,
-    neighborBtwColor: str = 'black',
-    neighborFillStyle: str = '///',
-    latLonFlag: bool = False,
-    **kwargs
-    ):
+def plotArcs(arcs: dict, **kwargs):
     
     """
     Draw arcs
 
     Parameters
     ----------
-
     arcs: dict, required
         An `arcs` dictionary, each arc is defined by two points. See :ref:`arcs` for reference.
-    arcColor: string, optional, default 'Random'
-        Color of arcs
-    arcWidth: float, optional, default 1
-        Width of arcs
-    arrowFlag: bool, optional, default True
-        True if plot arrows
-    arrowHeadWidth: float, optional, default 0.1
-        Width of arrow head
-    arrowHeadLength: float, optional, default 0.2
-        Length of arrow head
-    fig: matplotlib object, optional, default None
-        `fig` and `ax` indicates the matplotlib object to plot on, if not provided, plot in a new figure
-    ax: matplotlib object, optional, default None
-        See `fig`
-    latLonFlag: bool, optional, default False
-        True if need to reverse the x, y coordinates, e.g., plot for (lat, lon)
-    figSize: 2-tuple, optional, default as (None, 5)
-        Size of the figure in (width, height). If width or height is set to be None, it will be auto-adjusted.
-    boundingBox: 4-tuple, optional, default as (None, None, None, None)
-        (xMin, xMax, yMin, yMax), defines four boundaries of the figure
-    saveFigPath: string, optional, default as None
-        The path for exporting image if provided
-    showFig: bool, optional, default as True
-        True if show the figure in Juypter Notebook environment
 
     Returns
     -------
@@ -664,6 +426,28 @@ def plotArcs(
     showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Styling characters ======================================================
+    arcColor = 'Random' if 'arcColor' not in kwargs else kwargs['arcColor']
+    arcWidth = 1.0 if 'arcWidth' not in kwargs else kwargs['arcWidth']
+    arcLabel = None if 'arcLabel' not in kwargs else kwargs['arcLabel']
+    arcLineStyle = 'solid' if 'arcLineStyle' not in kwargs else kwargs['arcLineStyle']
+    arcDashes = (None, None) if 'arcDashes' not in kwargs else kwargs['arcDashes']
+    arcStartColor = 'black' if 'arcStartColor' not in kwargs else kwargs['arcStartColor']
+    arcEndColor = 'black' if 'arcEndColor' not in kwargs else kwargs['arcEndColor']
+    arcMarkerSize = 2.0 if 'arcMarkerSize' not in kwargs else kwargs['arcMarkerSize']
+    arrowFlag = True if 'arrowFlag' not in kwargs else kwargs['arrowFlag']
+    arrowPosition = 0.5 if 'arrowPosition' not in kwargs else kwargs['arrowPosition']
+    arrowHeadWidth = 2.0 if 'arrowHeadWidth' not in kwargs else kwargs['arrowHeadWidth']
+    arrowHeadLength = 3.0 if 'arrowHeadLength' not in kwargs else kwargs['arrowHeadLength']
+    arrowShowLimit = None if 'arrowShowLimit' not in kwargs else kwargs['arrowShowLimit']
+    neighborOpacity = 0.5 if 'neighborOpacity' not in kwargs else kwargs['neighborOpacity']
+    neighborEntWidth = 1.2 if 'neighborEntWidth' not in kwargs else kwargs['neighborEntWidth']
+    neighborEntColor = 'black' if 'neighborEntColor' not in kwargs else kwargs['neighborEntColor']
+    neighborBtwWidth = 1 if 'neighborBtwWidth' not in kwargs else kwargs['neighborBtwWidth']
+    neighborBtwColor = 'black' if 'neighborBtwColor' not in kwargs else kwargs['neighborBtwColor']
+    neighborFillStyle = '///' if 'neighborFillStyle' not in kwargs else kwargs['neighborFillStyle']
+    latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # Field names =============================================================
     arcFieldName = 'arc' if 'arcFieldName' not in kwargs else kwargs['arcFieldName']
@@ -885,16 +669,7 @@ def plotArcs(
 
     return fig, ax
 
-def plotCurveArc(
-    curveArc: CurveArc,
-    lineColor: str = 'Random',
-    lineWidth: float = 1.0,
-    lineStyle: str = 'solid',
-    lineDashes: tuple = (5, 2),
-    arrowFlag: bool = True,
-    lod: int = 30,
-    **kwargs
-    ):
+def plotCurveArc(curveArc: CurveArc, lod: int = 30, **kwargs):
 
     # Matplotlib characters ===================================================
     fig = None if 'fig' not in kwargs else kwargs['fig']
@@ -904,6 +679,13 @@ def plotCurveArc(
     showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Style characters ========================================================
+    lineColor = 'Random' if 'lineColor' in kwargs else kwargs['lineColor']
+    lineWidth = 1.0 if 'lineWidth' in kwargs else kwargs['lineWidth']
+    lineStyle = 'solid' if 'lineStyle' in kwargs else kwargs['lineStyle']
+    lineDashes = (5, 2) if 'lineDashes' in kwargs else kwargs['lineDashes']
+    arrowFlag = True if 'arrowFlag' in kwargs else kwargs['arrowFlag']
 
     # Plot curve ==============================================================
     # 计算夹角和拆分出来的边数
@@ -965,19 +747,7 @@ def plotCurveArc(
 
     return fig, ax
 
-def plotPathCover(
-    locSeq: list[pt],
-    radius: float,
-    edgeColor: str = 'Random',
-    edgeWidth: float = 1.0,
-    edgeStyle: str = 'solid',
-    edgeDashes: tuple = (5, 2),
-    fillColor: str|None = None,
-    fillStyle: str = "///",
-    opacity: float = 0.5,
-    lod: int = 30,
-    **kwargs
-    ):
+def plotPathCover(locSeq: list[pt], radius: float, lod: int = 30, **kwargs):
 
     # Matplotlib characters ===================================================
     fig = None if 'fig' not in kwargs else kwargs['fig']
@@ -987,6 +757,15 @@ def plotPathCover(
     showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Styling characters ======================================================
+    edgeColor = 'Random' if 'edgeColor' not in kwargs else kwargs['edgeColor']
+    edgeWidth = 1.0 if 'edgeWidth' not in kwargs else kwargs['edgeWidth']
+    edgeStyle = 'solid' if 'edgeStyle' not in kwargs else kwargs['edgeStyle']
+    edgeDashes = (5, 2) if 'edgeDashes' not in kwargs else kwargs['edgeDashes']
+    fillColor = None if 'fillColor' not in kwargs else kwargs['fillColor']
+    fillStyle = "///" if 'fillStyle' not in kwargs else kwargs['fillStyle']
+    opacity = 0.5 if 'opacity' not in kwargs else kwargs['opacity']
 
     # curveArcs = {}
     # # NOTE: 先记录每个segment的角度
@@ -1138,22 +917,7 @@ def plotPathCover(
 
     return fig, ax
 
-def plotLocSeq(
-    locSeq: list[pt],
-    lineColor: str = 'Random',
-    lineWidth: float = 1.0,
-    lineStyle: str = 'solid',
-    lineDashes: tuple = (5, 2),
-    nodeColor: str = 'black',
-    nodeMarkerSize: float = 1,
-    arrowFlag: bool = True,
-    arrowPosition: float = 0.5,
-    arrowHeadWidth: float = 0.1,
-    arrowHeadLength: float = 0.2,
-    arrowShowLimit: float|None = None,
-    latLonFlag: bool = False,
-    **kwargs
-    ):
+def plotLocSeq(locSeq: list[pt], splFlag = False, **kwargs):
     
     """Given a list of coordinates, plot a open polyline by sequences.
 
@@ -1162,30 +926,8 @@ def plotLocSeq(
 
     locSeq: list[pt], required
         A list of coordinates to form a sequence
-    lineColor: string, optional, default 'Random'
-        Color of lines
-    lineWidth: float, optional, default 1
-        Width of lines
-    arrowFlag: bool, optional, default True
-        True if plot arrows
-    arrowHeadWidth: float, optional, default 0.1
-        Width of arrow head
-    arrowHeadLength: float, optional, default 0.2
-        Length of arrow head
-    latLonFlag: bool, optional, default False
-        True if need to reverse the x, y coordinates, e.g., plot for (lat, lon)
-    fig: matplotlib object, optional, default None
-        `fig` and `ax` indicates the matplotlib object to plot on, if not provided, plot in a new figure
-    ax: matplotlib object, optional, default None
-        See `fig`
-    figSize: 2-tuple, optional, default as (None, 5)
-        Size of the figure in (width, height). If width or height is set to be None, it will be auto-adjusted.
-    boundingBox: 4-tuple, optional, default as (None, None, None, None)
-        (xMin, xMax, yMin, yMax), defines four boundaries of the figure
-    saveFigPath: string, optional, default as None
-        The path for exporting image if provided
-    showFig: bool, optional, default as True
-        True if show the figure in Juypter Notebook environment
+    splFlag: bool, required
+        True if draw a spline curve instead of line segments
 
     Returns
     -------
@@ -1201,13 +943,49 @@ def plotLocSeq(
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
+    # Styling characters ======================================================
+    lineColor = 'Random' if 'lineColor' not in kwargs else kwargs['lineColor']
+    lineWidth = 1.0 if 'lineWidth' not in kwargs else kwargs['lineWidth']
+    lineStyle = 'solid' if 'lineStyle' not in kwargs else kwargs['lineStyle']
+    lineDashes = (5, 2) if 'lineDashes' not in kwargs else kwargs['lineDashes']
+    nodeColor = 'black' if 'nodeColor' not in kwargs else kwargs['nodeColor']
+    nodeMarkerSize = 1 if 'nodeMarkerSize' not in kwargs else kwargs['nodeMarkerSize']
+    arrowFlag = True if 'arrowFlag' not in kwargs else kwargs['arrowFlag']
+    arrowPosition = 0.5 if 'arrowPosition' not in kwargs else kwargs['arrowPosition']
+    arrowHeadWidth = 0.1 if 'arrowHeadWidth' not in kwargs else kwargs['arrowHeadWidth']
+    arrowHeadLength = 0.2 if 'arrowHeadLength' not in kwargs else kwargs['arrowHeadLength']
+    arrowShowLimit = None if 'arrowShowLimit' not in kwargs else kwargs['arrowShowLimit']
+    latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
+
     # Check for required fields ===============================================
+    if (fig == None or ax == None):
+        fig, ax = plt.subplots()
+        boundingBox = defaultBoundingBox(
+            boundingBox = boundingBox, 
+            pts = locSeq,
+            latLonFlag = latLonFlag)
+        (xMin, xMax, yMin, yMax) = boundingBox
+        (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
+
+        if (not latLonFlag):
+            fig.set_figwidth(width)
+            fig.set_figheight(height)
+            ax.set_xlim(xMin, xMax)
+            ax.set_ylim(yMin, yMax)
+        else:
+            fig.set_figwidth(height)
+            fig.set_figheight(width)
+            ax.set_xlim(yMin, yMax)
+            ax.set_ylim(xMin, xMax)
+
     if (locSeq == None):
         raise MissingParameterError("ERROR: Missing required field `locSeq`.")
     if (lineStyle == 'solid'):
         lineDashes = (None, None)
 
     if (arrowFlag):
+        if (splFlag):
+            raise UnsupportedInputError("ERROR: splFlag not supported for arrows yet.")
         arcs = {}
         for i in range(len(locSeq) - 1):
             if (not is2PtsSame(locSeq[i], locSeq[i + 1])):
@@ -1242,35 +1020,32 @@ def plotLocSeq(
             saveFigPath = saveFigPath,
             showFig = showFig)
     else:
-        if (fig == None or ax == None):
-            fig, ax = plt.subplots()
-            boundingBox = defaultBoundingBox(
-                boundingBox = boundingBox, 
-                pts = locSeq,
-                latLonFlag = latLonFlag)
-            (xMin, xMax, yMin, yMax) = boundingBox
-            (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
-
-            if (not latLonFlag):
-                fig.set_figwidth(width)
-                fig.set_figheight(height)
-                ax.set_xlim(xMin, xMax)
-                ax.set_ylim(yMin, yMax)
-            else:
-                fig.set_figwidth(height)
-                fig.set_figheight(width)
-                ax.set_xlim(yMin, yMax)
-                ax.set_ylim(xMin, xMax)
-
         x = []
         y = []
-        for pt in locSeq:
+
+        if (not splFlag):
+            for pt in locSeq:
+                if (latLonFlag):
+                    x.append(pt[1])
+                    y.append(pt[0])
+                else:
+                    x.append(pt[0])
+                    y.append(pt[1])
+        else:
+            lc = None
             if (latLonFlag):
-                x.append(pt[1])
-                y.append(pt[0])
+                lc = [(i[1], i[0]) for i in locSeq]
             else:
-                x.append(pt[0])
-                y.append(pt[1])
+                lc = locSeq
+
+            points = np.array(locSeq)
+            tck, u = splprep(points.T, u=None, s=0.0, per=False)
+            u_new = np.linspace(0, 1, lod)
+            x_smooth, y_smooth = splev(u_new, tck, der=0)
+
+            for i in range(len(x_smooth)):
+                x.append(x_smooth[i])
+                y.append(y_smooth[i])
 
         color = None
         if (lineColor == 'Random'):
@@ -1281,23 +1056,25 @@ def plotLocSeq(
 
     return fig, ax
 
-def plotLocSeq3D(
-    locSeq3D: list[pt3D],
-    lineColor: str = 'Random',
-    lineWidth: float = 1.0,
-    lineStyle: str = 'solid',
-    lineDashes: tuple = (5, 2),
-    nodeColor: str = 'black',
-    nodeMarkerSize: float = 1,
-    latLonFlag: bool = False,
-    fig = None,
-    ax = None,
-    figSize = (None, 5), 
-    boundingBox3D = (None, None, None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True
-    ):
+def plotLocSeq3D(locSeq3D: list[pt3D], **kwargs):
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox3D = (None, None, None, None, None, None) if 'boundingBox3D' not in kwargs else kwargs['boundingBox3D']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Styling characters ======================================================
+    lineColor = 'Random' if 'lineColor' not in kwargs else kwargs['lineColor']
+    lineWidth = 1.0 if 'lineWidth' not in kwargs else kwargs['lineWidth']
+    lineStyle = 'solid' if 'lineStyle' not in kwargs else kwargs['lineStyle']
+    lineDashes = (5, 2) if 'lineDashes' not in kwargs else kwargs['lineDashes']
+    nodeColor = 'black' if 'nodeColor' not in kwargs else kwargs['nodeColor']
+    nodeMarkerSize = 1 if 'nodeMarkerSize' not in kwargs else kwargs['nodeMarkerSize']
+    latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # Check for required fields ===============================================
     if (locSeq3D == None):
@@ -1307,10 +1084,9 @@ def plotLocSeq3D(
     if (fig == None or ax == None):
         fig = plt.figure()
         ax = plt.axes(projection = '3d')
-        (xMin, xMax, yMin, yMax, zMin, zMax) = boundingBox3D
-        # (width, height) = defaultFigSize(boundingBox3D, figSize[0], figSize[1], latLonFlag)
-        # fig.set_figwidth(width)
-        # fig.set_figheight(height)
+        (xMin, xMax, yMin, yMax, zMin, zMax) = defaultBoundingBox(
+            boundingBox3D = boundingBox3D,
+            locs3D = locSeq3D)
         ax.set_xlim(xMin, xMax)
         ax.set_ylim(yMin, yMax)
         ax.set_zlim(zMin, zMax)
@@ -1350,79 +1126,7 @@ def plotLocSeq3D(
 
     return fig, ax
 
-def plotLocSeqCurve(
-    locSeq: list[pt],
-    lineColor: str = 'Random',
-    lineWidth: float = 1.0,
-    lineStyle: str = 'solid',
-    lineDashes: tuple = (5, 2),
-    nodeColor: str = 'black',
-    nodeMarkerSize: float = 1,
-    latLonFlag: bool = False,
-    lod: int = 500,
-    **kwargs
-    ):
-
-    # Matplotlib characters ===================================================
-    fig = None if 'fig' not in kwargs else kwargs['fig']
-    ax = None if 'ax' not in kwargs else kwargs['ax']
-    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
-    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
-    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
-    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
-    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
-
-    # Check for required fields ===============================================
-    if (locSeq == None):
-        raise MissingParameterError("ERROR: Missing required field `locSeq`.")
-    if (lineStyle == 'solid'):
-        lineDashes = (None, None)
-
-    points = np.array(locSeq)
-    tck, u = splprep(points.T, u=None, s=0.0, per=False)
-    u_new = np.linspace(0, 1, lod)
-    x_smooth, y_smooth = splev(u_new, tck, der=0)
-
-    curve = []
-    for i in range(len(x_smooth)):
-        curve.append((x_smooth[i], y_smooth[i]))
-
-    fig, ax = plotLocSeq(
-        fig = fig,
-        ax = ax,
-        locSeq = curve,
-        lineColor = lineColor,
-        lineWidth = lineWidth,
-        lineStyle = lineStyle,
-        lineDashes = lineDashes,
-        nodeColor = None,
-        nodeMarkerSize = None,
-        arrowFlag = False,
-        latLonFlag = False,
-        figSize = figSize,
-        boundingBox = boundingBox,
-        showAxis = showAxis,
-        saveFigPath = saveFigPath,
-        showFig = showFig)
-
-    return fig, ax
-
-def plotNodeSeq(
-    nodes: dict, 
-    nodeSeq: list[int|str],
-    lineColor: str = 'Random',
-    lineWidth: float = 1,
-    lineStyle: str = 'solid',
-    lineDashes: tuple = (5, 2),
-    nodeColor: str = 'black',
-    nodeMarkerSize: float = 1,
-    arrowFlag: bool = True,
-    arrowPosition: float = 0.5,
-    arrowHeadWidth: float = 0.1,
-    arrowHeadLength: float = 0.2,
-    latLonFlag: bool = False,
-    **kwargs
-    ):
+def plotNodeSeq(nodes: dict, nodeSeq: list[int|str], **kwargs):
 
     """Given a `nodes` dictionary and a sequence of node IDs, plot a route that visits each node by IDs.
 
@@ -1432,30 +1136,6 @@ def plotNodeSeq(
         A `node` dictionary. See :ref:`nodes` for reference.
     nodeSeq: list[int|str], required
         A list of nodeIDs which will form a visiting sequence
-    arcColor: string, optional, default 'Random'
-        Color of arcs
-    arcWidth: float, optional, default 1
-        Width of arcs
-    arrowFlag: bool, optional, default True
-        True if plot arrows
-    arrowHeadWidth: float, optional, default 0.1
-        Width of arrow head
-    arrowHeadLength: float, optional, default 0.2
-        Length of arrow head
-    latLonFlag: bool, optional, default False
-        True if need to reverse the x, y coordinates, e.g., plot for (lat, lon)
-    fig: matplotlib object, optional, default None
-        `fig` and `ax` indicates the matplotlib object to plot on, if not provided, plot in a new figure
-    ax: matplotlib object, optional, default None
-        See `fig`
-    figSize: 2-tuple, optional, default as (None, 5)
-        Size of the figure in (width, height). If width or height is set to be None, it will be auto-adjusted.
-    boundingBox: 4-tuple, optional, default as (None, None, None, None)
-        (xMin, xMax, yMin, yMax), defines four boundaries of the figure
-    saveFigPath: string, optional, default as None
-        The path for exporting image if provided
-    showFig: bool, optional, default as True
-        True if show the figure in Juypter Notebook environment
 
     Returns
     -------
@@ -1470,6 +1150,19 @@ def plotNodeSeq(
     showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Styling characters ======================================================
+    lineColor = 'Random' if 'lineColor' not in kwargs else kwargs['lineColor']
+    lineWidth = 1 if 'lineWidth' not in kwargs else kwargs['lineWidth']
+    lineStyle = 'solid' if 'lineStyle' not in kwargs else kwargs['lineStyle']
+    lineDashes = (5, 2) if 'lineDashes' not in kwargs else kwargs['lineDashes']
+    nodeColor = 'black' if 'nodeColor' not in kwargs else kwargs['nodeColor']
+    nodeMarkerSize = 1 if 'nodeMarkerSize' not in kwargs else kwargs['nodeMarkerSize']
+    arrowFlag = True if 'arrowFlag' not in kwargs else kwargs['arrowFlag']
+    arrowPosition = 0.5 if 'arrowPosition' not in kwargs else kwargs['arrowPosition']
+    arrowHeadWidth = 0.1 if 'arrowHeadWidth' not in kwargs else kwargs['arrowHeadWidth']
+    arrowHeadLength = 0.2 if 'arrowHeadLength' not in kwargs else kwargs['arrowHeadLength']
+    latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # Field names =============================================================
     locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
@@ -1516,16 +1209,7 @@ def plotNodeSeq(
 
     return fig, ax
 
-def plotPoly(
-    poly: poly, 
-    edgeWidth: float = 0.5,
-    edgeColor: str|None = 'Random',
-    fillColor: str|None = None,
-    fillStyle: str = "///",
-    opacity: float = 0.5,
-    latLonFlag: bool = False,
-    **kwargs
-    ):
+def plotPoly(poly: poly, **kwargs):
 
     """Draw a polygon
 
@@ -1534,30 +1218,6 @@ def plotPoly(
 
     poly: poly, required, default None
         A polygon to be plotted
-    edgeWidth: float, optional, default 0.5
-        Width of the edge
-    edgeColor: string, optional, default 'Random'
-        Color of the edge
-    fillColor: string, optional, default None
-        Color filled in the polygon
-    fillStyle: string, optional, default "///"
-        Style filled in the polygon
-    opacity: float, optional, default 0.5
-        Opacity of the polygon
-    latLonFlag: bool, optional, default False
-        True if need to reverse the x, y coordinates, e.g., plot for (lat, lon)
-    fig: matplotlib object, optional, defaut None
-        `fig` and `ax` indicates the matplotlib object to plot on, if not provided, plot in a new figure
-    ax: matplotlib object, optional, default None
-        See `fig`
-    figSize: 2-tuple, optional, default as (None, 5)
-        Size of the figure in (width, height). If width or height is set to be None, it will be auto-adjusted.
-    boundingBox: 4-tuple, optional, default as (None, None, None, None)
-        (xMin, xMax, yMin, yMax), defines four boundaries of the figure
-    saveFigPath: string, optional, default as None
-        The path for exporting image if provided
-    showFig: bool, optional, default as True
-        True if show the figure in Juypter Notebook environment
 
     Returns
     -------
@@ -1572,6 +1232,14 @@ def plotPoly(
     showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Styling characters ======================================================
+    edgeWidth = 0.5 if 'edgeWidth' not in kwargs else kwargs['edgeWidth']
+    edgeColor = 'Random' if 'edgeColor' not in kwargs else kwargs['edgeColor']
+    fillColor = None if 'fillColor' not in kwargs else kwargs['fillColor']
+    fillStyle = "///" if 'fillStyle' not in kwargs else kwargs['fillStyle']
+    opacity = 0.5 if 'opacity' not in kwargs else kwargs['opacity']
+    latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # Check for required fields ===============================================
     if (poly == None):
@@ -1642,18 +1310,7 @@ def plotPoly(
 
     return fig, ax
 
-def plotCircle(
-    center: pt, 
-    radius: float,
-    lod: int = 30,
-    edgeWidth: float = 0.5,
-    edgeColor: str|None = 'Random',
-    fillColor: str|None = None,
-    fillStyle: str = "///",
-    opacity: float = 0.5,
-    latLonFlag: bool = False,
-    **kwargs
-    ):
+def plotCircle(center: pt, radius: float, lod: int = 30, **kwargs):
 
     # Matplotlib characters ===================================================
     fig = None if 'fig' not in kwargs else kwargs['fig']
@@ -1663,6 +1320,14 @@ def plotCircle(
     showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Styling characters ======================================================
+    edgeWidth = 0.5 if 'edgeWidth' not in kwargs else kwargs['edgeWidth']
+    edgeColor = 'Random' if 'edgeColor' not in kwargs else kwargs['edgeColor']
+    fillColor = None if 'fillColor' not in kwargs else kwargs['fillColor']
+    fillStyle = "///" if 'fillStyle' not in kwargs else kwargs['fillStyle']
+    opacity = 0.5 if 'opacity' not in kwargs else kwargs['opacity']
+    latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # Create polygon ==========================================================
     polyCircle = [[
@@ -1689,153 +1354,62 @@ def plotCircle(
     )
     return fig, ax
 
-def plotRing(
-    center: pt,
-    innerRadius: float,
-    outerRadius: float,
-    lod: int = 30,
-    edgeWidth: float = 0.5,
-    edgeColor: str|None = 'Random',
-    fillColor: str|None = 'gray',
-    fillStyle: str = "///",
-    opacity: float = 0.5,
-    latLonFlag: bool = False,
-    **kwargs
-    ):
+def plotTimedPoly(timedPoly, triGridSurface = None, plotPolyFlag = True, plotSurfaceFlag = True, **kwargs):
 
     # Matplotlib characters ===================================================
     fig = None if 'fig' not in kwargs else kwargs['fig']
     ax = None if 'ax' not in kwargs else kwargs['ax']
     figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
-    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    boundingBox3D = (None, None, None, None, None, None) if 'boundingBox3D' not in kwargs else kwargs['boundingBox3D']
     showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
-    # Get the x, y list =======================================================
-    outerCircle = [[
-        center[0] + outerRadius * math.sin(2 * d * math.pi / lod),
-        center[1] + outerRadius * math.cos(2 * d * math.pi / lod),
-    ] for d in range(lod + 1)]
-    innerCircle = [[
-        center[0] + innerRadius * math.sin(2 * d * math.pi / lod),
-        center[1] + innerRadius * math.cos(2 * d * math.pi / lod),
-    ] for d in range(lod + 1)]
-    innerCircle.reverse()
+    # Styling characters ======================================================
+    lineColor = 'Random' if 'lineColor' not in kwargs else kwargs['lineColor']
+    lineWidth = 1.0 if 'lineWidth' not in kwargs else kwargs['lineWidth']
+    lineStyle = 'solid' if 'lineStyle' not in kwargs else kwargs['lineStyle']
+    lineDashes = (5, 2) if 'lineDashes' not in kwargs else kwargs['lineDashes']
+    surfaceColor = 'Random' if 'surfaceColor' not in kwargs else kwargs['surfaceColor']
+    surfaceOpacity = 0.2 if 'surfaceOpacity' not in kwargs else kwargs['surfaceOpacity']
 
-    ring = [pt for pt in outerCircle]
-    ring.extend([pt for pt in innerCircle])
+    if (lineColor == 'Random'):
+        lineColor = rndColor()
+    if (surfaceColor == 'Random'):
+        surfaceColor = rndColor()
 
-    fig, ax = plotPoly(
-        poly = ring,
-        edgeWidth = 0,
-        fillColor = fillColor,
-        fillStyle = fillStyle,
-        opacity = opacity,
-        latLonFlag = latLonFlag,
-        fig = fig,
-        ax = ax,
-        figSize = figSize,
-        boundingBox = boundingBox,
-        showAxis = showAxis,
-        saveFigPath = saveFigPath,
-        showFig = showFig,
-    )
-
-    if (edgeColor == 'Random'):
-        edgeColor = rndColor()
-
-    fig, ax = plotCircle(
-        center = center, 
-        radius = innerRadius,
-        lod = 30,
-        edgeWidth = edgeWidth,
-        edgeColor = edgeColor,
-        fillColor = None,
-        latLonFlag = latLonFlag,
-        fig = fig,
-        ax = ax,
-        figSize = figSize,
-        boundingBox = boundingBox,
-        showAxis = showAxis,
-        saveFigPath = saveFigPath,
-        showFig = showFig)
-
-    fig, ax = plotCircle(
-        center = center, 
-        radius = outerRadius,
-        lod = 45,
-        edgeWidth = edgeWidth,
-        edgeColor = edgeColor,
-        fillColor = None,
-        latLonFlag = latLonFlag,
-        fig = fig,
-        ax = ax,
-        figSize = figSize,
-        boundingBox = boundingBox,
-        showAxis = showAxis,
-        saveFigPath = saveFigPath,
-        showFig = showFig)
-
-    # Axis on and off =========================================================
-    if (not showAxis):
-        plt.axis('off')
-
-    # Save figure =============================================================
-    if (saveFigPath != None and isinstance(fig, plt.Figure)):
-        fig.savefig(saveFigPath)
-    if (not showFig):
-        plt.close(fig)
-
-    return fig, ax
-
-def plotCone3D(
-    cone: dict,
-    lod: int = 30,
-    tanAlpha: float|None = None,    
-    fig = None,
-    ax = None,
-    boundingBox3D = (None, None, None, None, None, None),
-    showAxis: bool = True,
-    saveFigPath: str|None = None,
-    showFig: bool = True):
-
+    # If no based matplotlib figure provided, define boundary =================
     if (fig == None or ax == None):
         fig = plt.figure()
         ax = plt.axes(projection = '3d')
-        boundingBox3D = defaultBoundingBox3D(
-            boundingBox3D = boundingBox3D, 
-            cone = cone)
-        (xMin, xMax, yMin, yMax, zMin, zMax) = boundingBox3D
-        # (width, height) = defaultFigSize(boundingBox3D, figSize[0], figSize[1], latLonFlag)
-        # fig.set_figwidth(width)
-        # fig.set_figheight(height)
+        (xMin, xMax, yMin, yMax, zMin, zMax) = defaultBoundingBox3D(
+            boundingBox3D = boundingBox3D,
+            timedPoly = timedPoly)
         ax.set_xlim(xMin, xMax)
         ax.set_ylim(yMin, yMax)
         ax.set_zlim(zMin, zMax)
 
-    x0 = cone['center'][0]
-    y0 = cone['center'][1]
-    z0 = cone['center'][2] if len(cone['center']) >= 3 else 0
-    zMax = cone['maxHeight']
-    if ('tanAlpha' in cone):
-        tanAlpha = cone['tanAlpha']
-    rMax = zMax * tanAlpha
+    # Plot polys in time ======================================================
+    if (plotPolyFlag):
+        for k in timedPoly:
+            locSeq3D = []
+            for pt in k[0]:
+                locSeq3D.append((pt[0], pt[1], k[1]))
+            locSeq3D.append((k[0][0][0], k[0][0][1], k[1]))
+            fig, ax = plotLocSeq3D(
+                fig = fig,
+                ax = ax,
+                locSeq3D = locSeq3D,
+                lineColor = lineColor,
+                lineWidth = lineWidth,
+                lineStyle = lineStyle,
+                lineDashes = lineDashes)
 
-    r = np.linspace(0, rMax, lod)
-    theta = np.linspace(0, 2 * np.pi, lod)
-    r, theta = np.meshgrid(r, theta)
-
-    X = r * np.sin(theta) + x0
-    Y = r * np.cos(theta) + y0
-
-    def f(x, y):
-        return np.sqrt((x - x0)**2 + (y - y0)**2) / tanAlpha + z0
-
-    Z = f(X, Y)
-    ax.plot_surface(X, Y, Z, rstride=1, cstride=1, cmap = cm.jet, alpha = 0.1,
-                edgecolor='black');
-    
+    # Plot surface ============================================================
+    if (plotSurfaceFlag):
+        if (triGridSurface == None):
+            triGridSurface = TriGridSurface(timedPoly)
+        ax.add_collection3d(Poly3DCollection(triGridSurface.tris, alpha = surfaceOpacity, edgecolor = surfaceColor))
     # Axis on and off =========================================================
     if (not showAxis):
         plt.axis('off')
@@ -1848,19 +1422,7 @@ def plotCone3D(
 
     return fig, ax
 
-def plotPolygons(
-    polygons: dict,
-    polyFieldName: str = 'poly',
-    showAnchorFlag: bool = True,
-    anchorFieldName: str = 'anchor',
-    edgeWidth: float = 0.5,
-    edgeColor: str|None = 'Random',
-    fillColor: str|None = None,
-    fillStyle: str = "///",
-    opacity: float = 0.5,
-    latLonFlag: bool = False,
-    **kwargs
-    ):
+def plotPolygons(polygons: dict, **kwargs):
 
     # Matplotlib characters ===================================================
     fig = None if 'fig' not in kwargs else kwargs['fig']
@@ -1870,6 +1432,18 @@ def plotPolygons(
     showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Styling characters ======================================================
+    showAnchorFlag = True if 'showAnchorFlag' not in kwargs else kwargs['showAnchorFlag']
+    anchorFieldName = 'anchor' if 'anchorFieldName' not in kwargs else kwargs['anchorFieldName']
+    edgeWidth = 0.5 if 'edgeWidth' not in kwargs else kwargs['edgeWidth']
+    edgeColor = 'Random' if 'edgeColor' not in kwargs else kwargs['edgeColor']
+    fillColor = None if 'fillColor' not in kwargs else kwargs['fillColor']
+    fillStyle = "///" if 'fillStyle' not in kwargs else kwargs['fillStyle']
+    opacity = 0.5 if 'opacity' not in kwargs else kwargs['opacity']
+    latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
+
+    polyFieldName = 'poly' if 'polyFieldName' not in kwargs else kwargs['polyFieldName']
 
     # Sanity check ============================================================
     if (type(polygons) != dict):
@@ -2298,26 +1872,9 @@ def plotGantt(
     phase: list[dict] | None = None,
     xlabel: str = "Time",
     ylabel: str = "",
-    ganttHeight: float = 0.8,
-    ganttLinewidth: float = 1.0,
-    ganttBlockHeight: float = 1.0,
-    groupSeparatorHeight: float = 0.5,
-    groupSeparatorStyle: str = "-",
-    groupSeparatorLinewidth: float = 0.5,
-    groupSeparatorColor: str = 'gray',
-    phaseSeparatorStyle: str = "--",
-    phaseSeparatorLinewidth: float = 0.5,
-    phaseSeparatorColor: str = 'gray',
-    entitiesOffset: dict = {},
     startTime: float = 0,
     endTime: float|None = None,
-    fig = None, 
-    ax = None,
-    figSize: list[int|float|None] | tuple[int|float|None, int|float|None] = (12, 5), 
-    showGridFlag: bool = False,
-    saveFigPath: str|None = None,
-    showTailFlag: bool = True,
-    showFig: bool = True
+    **kwargs
     ) -> "Given a Gantt dictionary, plot Gantt":
 
     """Given a Gantt dictionary, plot a Gantt chart
@@ -2354,19 +1911,29 @@ def plotGantt(
         The label of x-axis
     ylabel: string, optional, default ""
         The label of y-axis
-    fig: matplotlib object, optional, default None
-        `fig` and `ax` indicates the matplotlib object to plot on, if not provided, plot in a new figure
-    ax: matplotlib object, optional, default None
-        See `fig`
-    figSize: 2-tuple, optional, default as (None, 5)
-        Size of the figure in (width, height). If width or height is set to be None, it will be auto-adjusted.    
-    showGridFlag: bool, optional, default as False
-        True if turn the grids on.
-    saveFigPath: string, optional, default as None
-        The path for exporting image if provided
-    showFig: bool, optional, default as True
-        True if show the figure in Juypter Notebook environment
     """
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox3D = (None, None, None, None, None, None) if 'boundingBox3D' not in kwargs else kwargs['boundingBox3D']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Styling characters ======================================================
+    ganttHeight = 0.8 if 'ganttHeight' not in kwargs else kwargs['ganttHeight']
+    ganttLinewidth = 1.0 if 'ganttLinewidth' not in kwargs else kwargs['ganttLinewidth']
+    ganttBlockHeight = 1.0 if 'ganttBlockHeight' not in kwargs else kwargs['ganttBlockHeight']
+    groupSeparatorHeight = 0.5 if 'groupSeparatorHeight' not in kwargs else kwargs['groupSeparatorHeight']
+    groupSeparatorStyle = "-" if 'groupSeparatorStyle' not in kwargs else kwargs['groupSeparatorStyle']
+    groupSeparatorLinewidth = 0.5 if 'groupSeparatorLinewidth' not in kwargs else kwargs['groupSeparatorLinewidth']
+    groupSeparatorColor = 'gray' if 'groupSeparatorColor' not in kwargs else kwargs['groupSeparatorColor']
+    phaseSeparatorStyle = "--" if 'phaseSeparatorStyle' not in kwargs else kwargs['phaseSeparatorStyle']
+    phaseSeparatorLinewidth = 0.5 if 'phaseSeparatorLinewidth' not in kwargs else kwargs['phaseSeparatorLinewidth']
+    phaseSeparatorColor = 'gray' if 'phaseSeparatorColor' not in kwargs else kwargs['phaseSeparatorColor']
+    entitiesOffset = {} if 'entitiesOffset' not in kwargs else kwargs['entitiesOffset']
 
     # Check for required fields ===============================================
     if (gantt == None):
@@ -2566,28 +2133,5 @@ def plotGantt(
         fig.savefig(saveFigPath)
     if (not showFig):
         plt.close(fig)
-
-    return fig, ax
-
-def plotTree(
-    tree: Tree,
-    layerHight: float = 10,
-    showKey: str|None = None):
-   
-    # 构建一个树，记录要绘制的树的每个节点在画布上的位置,
-    # NOTE: 基本的想法就是，把最宽的那层画出来，然后每层分别对齐
-    plotTree = Tree()
-    tTra = tree.traverse()
-    cp = []
-    for c in tTra:
-        cp.append(geoVeRoPy.TreeNode(
-            key = c.key,
-            value = c.value))
-    plotTree.insert(cp[0])
-    for i in range(1, len(cp)):
-        plotTree.insert(cp[i], plotTree.query(tTra[i].parent.key))
-
-    # 先把最底都列出来，那将是最大的宽度，然后排列好，每一个上层的位置都在下层的中点
-    layers = []
 
     return fig, ax

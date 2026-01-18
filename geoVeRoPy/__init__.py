@@ -12,6 +12,7 @@ from .road import *
 from .instance import *
 
 # Data structures
+from .bnbTree import *
 from .ring import *
 from .tree import *
 from .curveArc import *

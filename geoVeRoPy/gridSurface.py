@@ -3,31 +3,14 @@ import networkx as nx
 from .common import *
 from .geometry import *
 
-# class TriGrid(object):
-#     def __init__(self, key, tri):
-#         self.key = key
-#         self.tri = tri
-#         self.neighbors = []
-
-#         # 判断是否是垂直的
-#         self.horiFlag = False
-#         if (abs(tri[0][2] - tri[1][2]) <= ERRTOL['vertical'] and abs(tri[0][2] - tri[2][2]) <= ERRTOL['vertical']):
-#             self.horiFlag = True
-
-#         # 计算中心点
-#         self.center = [[(x[0] + y[0] + z[0]) / 3, (x[1] + y[1] + z[1]) / 3], (x[2] + y[2] + z[2]) / 3]
-
-         
-
-
 class TriGridSurface(object):
-    def __init__(self, timedPoly):
+    def __init__(self, timedPoly, startTime=None, endTime=None):
         # 初始化
         self.triFacets = {}
         self.triCenters = {}
         self.timedPoly = timedPoly
-        self.startTime = timedPoly[0][1]
-        self.endTime = timedPoly[-1][1]
+        self.startTime = timedPoly[0][1] if startTime == None else startTime
+        self.endTime = timedPoly[-1][1] if endTime == None else endTime
         self.surfaceGraph = nx.Graph()
 
         self.buildFacets(timedPoly)
@@ -36,6 +19,39 @@ class TriGridSurface(object):
         # Total projection
         self.unionProj = self.buildUnionProfile()
         self.coreProj = self.buildCoreProfile()
+
+        # 构造上下底面
+        self.bottomPoly = None
+        if (startTime == None or startTime <= timedPoly[0][1]):
+            self.bottomPoly = timedPoly[0][0]
+            startTime = timedPoly[0][1]
+        else:
+            self.bottomPoly = self.buildZProfile(startTime)
+        bottom = polyTriangulation(self.bottomPoly)
+
+        self.topPoly = None
+        if (endTime == None or endTime >= timedPoly[-1][1]):
+            self.topPoly = timedPoly[-1][0]
+            endTime = timedPoly[-1][1]
+        else:
+            self.topPoly = self.buildZProfile(endTime)
+        top = polyTriangulation(self.topPoly)
+
+        self.tris = []
+        for t in top:
+            self.tris.append([
+                (t[0][0], t[0][1], endTime), 
+                (t[1][0], t[1][1], endTime),
+                (t[2][0], t[2][1], endTime)])
+        for t in bottom:
+            self.tris.append([
+                (t[0][0], t[0][1], startTime), 
+                (t[1][0], t[1][1], startTime),
+                (t[2][0], t[2][1], startTime)])
+        for k in self.triFacets:
+            self.tris.append(self.triFacets[k])
+
+        return
 
     def buildFacets(self, timedPoly):
         poly3D = []
@@ -662,3 +678,4 @@ class TriGridSurface(object):
             'trespassSemi': True,
             'dist': closestDist
         }
+

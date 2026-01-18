@@ -3483,7 +3483,7 @@ def seq2TimedSeq(seq: list[pt], vehSpeed: float, timeEachStop: float = 0, startT
     timedSeq.append((seq[-1], accTime))
     return timedSeq
 
-# Area calculation ============================================================
+# Triangulation ===============================================================
 def polyTriangulation(poly: poly):
     triangles = []
     remain = [i for i in range(len(poly))]
@@ -3511,6 +3511,7 @@ def polyTriangulation(poly: poly):
                 continue
     return triangles
 
+# Area calculation ============================================================
 def calTriangleAreaEdge(a: float, b: float, c: float) -> float:
     
     s = (a / 2 + b / 2 + c / 2)
@@ -3848,6 +3849,7 @@ def nodesInIsochrone(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'loc
     }
 
 # Distance calculation ========================================================
+@runtime("distEuclideanXY")
 def distEuclideanXY(pt1: pt, pt2: pt) -> dict:
     """
     Gives a Euclidean distance based on two coords.
