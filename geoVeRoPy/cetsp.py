@@ -16,13 +16,13 @@ from .bnbTree import *
 
 def solveCETSP(
     nodes: dict, 
-    depotLoc: pt = None,
-    startLoc: pt = None,
-    endLoc: pt = None,    
+    depotPt: pt = None,
+    startPt: pt = None,
+    endPt: pt = None,    
     neighbor: str = "Circle",
     dimension: str = 'Euclidean',
-    algo: str = "Metaheuristic",
-    method: str = 'ILS',
+    algo: str = "Exact",
+    method: str = 'BnB',
     **kwargs):
 
     """Use MISOCP(GBD)/metaheuristic to find shortest CETSP tour
@@ -32,12 +32,12 @@ def solveCETSP(
 
     nodes: dict, required
         The `node` dictionary, must include neighborhood information
-    depotLoc: pt, optional
-        Depot location, where the travel starts from and returns to, required if depotLoc is not provided
-    startLoc: pt, optional
-        Start location, required if depotLoc is not provided
-    endLoc: pt, optional
-        End location, required if depotLoc is not provided
+    depotPt: pt, optional
+        Depot location, where the travel starts from and returns to, required if depotPt is not provided
+    startPt: pt, optional
+        Start location, required if depotPt is not provided
+    endPt: pt, optional
+        End location, required if depotPt is not provided
     neighbor: string, optional, default as "Circle"
         Type of neighborhood, options includes, "Circle" and "Poly", each requires different additional inputs
 
@@ -66,7 +66,6 @@ def solveCETSP(
     method: string, optional, default as "ILS"
         Select the method corresponding to `algo`.
 
-
     **kwargs: optional
         Provide additional inputs for different `neighbor` options and `algo` options
 
@@ -76,17 +75,17 @@ def solveCETSP(
     # Sanity check ============================================================
     if (nodes == None or type(nodes) != dict):
         raise MissingParameterError(ERROR_MISSING_NODES)
-    # depotLoc和startLoc/endLoc必须有一个，depotLoc会覆盖另外俩
-    if (depotLoc == None and startLoc == None and endLoc == None):
-        raise MissingParameterError("ERROR: Missing depotLoc. Use `depotLoc` or (`startLoc` and `endLoc').")
+    # depotPt和startPt/endPt必须有一个，depotPt会覆盖另外俩
+    if (depotPt == None and startPt == None and endPt == None):
+        raise MissingParameterError("ERROR: Missing depotPt. Use `depotPt` or (`startPt` and `endPt').")
     else:
-        if (depotLoc != None):
-            startLoc = depotLoc
-            endLoc = depotLoc
+        if (depotPt != None):
+            startPt = depotPt
+            endPt = depotPt
         else:
-            if (startLoc == None):
+            if (startPt == None):
                 raise MissingParameterError("ERROR: Missing start location.")
-            if (endLoc == None):
+            if (endPt == None):
                 raise MissingParameterError("ERROR: Missing end location.")
 
     # Check required fields for neighbor options ==============================
@@ -111,8 +110,8 @@ def solveCETSP(
     # - "LatLon" + "Poly" + "Exact" + "GBD"
     if (dimension == 'Euclidean' and neighbor == "Circle" and algo == "Exact" and method == "BnB"):
         cetsp = _solveCETSPBnBCircle(
-            startLoc = startLoc,
-            endLoc = endLoc,
+            startPt = startPt,
+            endPt = endPt,
             nodes = nodes,
             radius = kwargs['radius'] if 'radius' in kwargs else None,
             radiusFieldName = kwargs['radiusFieldName'] if 'radiusFieldName' in kwargs else None,
@@ -121,8 +120,8 @@ def solveCETSP(
     elif (dimension == 'Euclidean' and neighbor == "Circle" and algo == "Exact" and method == "GBD"):
         # NOTE: 分支版本，与geoVeRoPy_private不同
         cetsp = _solveCETSPGBDCircle(
-            startLoc = startLoc,
-            endLoc = endLoc,
+            startPt = startPt,
+            endPt = endPt,
             nodes = nodes,
             radius = kwargs['radius'] if 'radius' in kwargs else None,
             radiusFieldName = kwargs['radiusFieldName'] if 'radiusFieldName' in kwargs else None,
@@ -148,8 +147,8 @@ def solveCETSP(
                 'numNoImproveIter': 200
             }
         cetsp = _solveCETSPILSCircle(
-            startLoc = startLoc,
-            endLoc = endLoc,
+            startPt = startPt,
+            endPt = endPt,
             nodes = nodes,
             radius = kwargs['radius'] if 'radius' in kwargs else None,
             radiusFieldName = kwargs['radiusFieldName'] if 'radiusFieldName' in kwargs else None,
@@ -175,8 +174,8 @@ def solveCETSP(
                 'runtime': 120
             }        
         cetsp = _solveCETSPGACircle(
-            startLoc = startLoc,
-            endLoc = endLoc,
+            startPt = startPt,
+            endPt = endPt,
             nodes = nodes,
             radius = kwargs['radius'] if 'radius' in kwargs else None,
             radiusFieldName = kwargs['radiusFieldName'] if 'radiusFieldName' in kwargs else None,
@@ -186,8 +185,8 @@ def solveCETSP(
 
     elif (dimension == 'Euclidean' and neighbor == "Poly" and algo == "Exact" and method == "GBD"):
         cetsp = _solveCETSPGBDPoly(
-            startLoc = startLoc,
-            endLoc = endLoc,
+            startPt = startPt,
+            endPt = endPt,
             nodes = nodes,
             polyFieldName = kwargs['polyFieldName'],
             c2cAlgo = kwargs['c2cAlgo'] if 'c2cAlgo' in kwargs else 'SOCP',
@@ -197,14 +196,14 @@ def solveCETSP(
         polyXYMercator = {}
         for i in nodes:
             polyLatLon = circleByCenterLatLon(
-                center = nodes[i]['loc'],
+                center = nodes[i]['pt'],
                 radius = kwargs['radiusMeter'] if 'radiusMeter' in kwargs else nodes[i][kwargs['radiusFieldName']],
                 lod = 240)
             polyXY = polyLatLon2XYMercator(polyLatLon)
             polyXYMercator[i] = [pt for pt in polyXY]
         cetsp = _solveCETSPGBDLatLon(
-            startLoc = startLoc,
-            endLoc = endLoc,
+            startPt = startPt,
+            endPt = endPt,
             nodes = nodes,
             polyXYMercator = polyXYMercator,
             timeLimit = kwargs['timeLimit'] if 'timeLimit' in kwargs else None)
@@ -215,8 +214,8 @@ def solveCETSP(
             polyXY = polyLatLon2XYMercator(nodes[i][kwargs['polyFieldName']])
             polyXYMercator[i] = [pt for pt in polyXY]
         cetsp = _solveCETSPGBDLatLon(
-            startLoc = startLoc,
-            endLoc = endLoc,
+            startPt = startPt,
+            endPt = endPt,
             nodes = nodes,
             polyXYMercator = polyXYMercator,
             timeLimit = kwargs['timeLimit'] if 'timeLimit' in kwargs else None)
@@ -226,8 +225,8 @@ def solveCETSP(
     return cetsp
 
 def _solveCETSPGBDCircle(
-    startLoc: pt,
-    endLoc: pt,
+    startPt: pt,
+    endPt: pt,
     nodes: dict,
     radius: float | None = None,
     radiusFieldName: str = 'radius',
@@ -258,21 +257,21 @@ def _solveCETSPGBDCircle(
     nodeAll = [i for i in range(0, len(nodes) + 2)]
 
     # Parameters ==============================================================
-    # anchor starts from depotLoc, in between are a list of circles, ends with depotLoc
-    allX = [startLoc[0]]
-    allY = [startLoc[1]]
+    # anchor starts from depotPt, in between are a list of circles, ends with depotPt
+    allX = [startPt[0]]
+    allY = [startPt[1]]
     for i in nodes:
         r = None
         if (radius != None):
             r = radius
         else:
             r = nodes[i][radiusFieldName]
-        allX.append(nodes[i]['loc'][0] - r)
-        allX.append(nodes[i]['loc'][0] + r)
-        allY.append(nodes[i]['loc'][1] - r)
-        allY.append(nodes[i]['loc'][1] + r)
-    allX.append(endLoc[0])
-    allY.append(endLoc[1])
+        allX.append(nodes[i]['pt'][0] - r)
+        allX.append(nodes[i]['pt'][0] + r)
+        allY.append(nodes[i]['pt'][1] - r)
+        allY.append(nodes[i]['pt'][1] + r)
+    allX.append(endPt[0])
+    allY.append(endPt[1])
 
     lbX = min(allX) - 1
     lbY = min(allY) - 1
@@ -283,17 +282,17 @@ def _solveCETSPGBDCircle(
     tau = matrixDist(
         nodes = nodes, 
         edges = 'Euclidean', 
-        locFieldName = 'loc')
+        ptFieldName = 'pt')
     tauStart = vectorDist(
-        loc = startLoc,
+        pt = startPt,
         nodes = nodes,
         edges = 'Euclidean',
-        locFieldName = 'loc')
+        ptFieldName = 'pt')
     tauEnd = vectorDist(
-        loc = endLoc,
+        pt = endPt,
         nodes = nodes,
         edges = 'Euclidean',
-        locFieldName = 'loc')
+        ptFieldName = 'pt')
     for i in nodes:
         for j in nodes:
             if (i != j):
@@ -399,10 +398,10 @@ def _solveCETSPGBDCircle(
                     for i in repSeq:
                         if (i != startID and i != endID):
                             circles.append({
-                                'center': nodes[i]['loc'],
+                                'center': nodes[i]['pt'],
                                 'radius': radius if radius != None else nodes[i][radiusFieldName]
                             })
-                    p2p = circle2CirclePath(startPt = startLoc, endPt = endLoc, circles = circles, algo = c2cAlgo)
+                    p2p = circle2CirclePath(startPt = startPt, endPt = endPt, circles = circles, algo = c2cAlgo)
 
                     minDist = float('inf')
                     for seq in repSeqHis:
@@ -472,10 +471,10 @@ def _solveCETSPGBDCircle(
     for i in seq:
         if (i != startID and i != endID):
             circles.append({
-                'center': nodes[i]['loc'],
+                'center': nodes[i]['pt'],
                 'radius': radius if radius != None else nodes[i][radiusFieldName]
             })
-    p2p = circle2CirclePath(startPt = startLoc, endPt = endLoc, circles = circles, algo = c2cAlgo)
+    p2p = circle2CirclePath(startPt = startPt, endPt = endPt, circles = circles, algo = c2cAlgo)
 
     if (CETSP.status == grb.GRB.status.OPTIMAL):
         solType = 'IP_Optimal'
@@ -507,8 +506,8 @@ def _solveCETSPGBDCircle(
     }
 
 def _solveCETSPGBDPoly(
-    startLoc: pt,
-    endLoc: pt,
+    startPt: pt,
+    endPt: pt,
     nodes: dict, # Index from 1
     polyFieldName: str = 'poly',
     c2cAlgo: str = 'SOCP',
@@ -538,15 +537,15 @@ def _solveCETSPGBDPoly(
     nodeAll = [i for i in range(0, len(nodes) + 2)]
 
     # Parameters ==============================================================
-    # anchor starts from depotLoc, in between are a list of circles, ends with depotLoc
-    allX = [startLoc[0]]
-    allY = [startLoc[1]]
+    # anchor starts from depotPt, in between are a list of circles, ends with depotPt
+    allX = [startPt[0]]
+    allY = [startPt[1]]
     for i in nodes:
         for p in nodes[i][polyFieldName]:
             allX.append(p[0])
             allY.append(p[1])
-    allX.append(endLoc[0])
-    allY.append(endLoc[1])
+    allX.append(endPt[0])
+    allY.append(endPt[1])
 
     lbX = min(allX) - 1
     lbY = min(allY) - 1
@@ -559,10 +558,10 @@ def _solveCETSPGBDPoly(
             if (i != j):
                 zBar[i, j] = distPoly2Poly(nodes[i][polyFieldName], nodes[j][polyFieldName])
     for i in nodes:
-        zBar[startID, i] = distPt2Poly(startLoc, nodes[i][polyFieldName])
-        zBar[i, startID] = distPt2Poly(startLoc, nodes[i][polyFieldName])
-        zBar[endID, i] = distPt2Poly(endLoc, nodes[i][polyFieldName])
-        zBar[i, endID] = distPt2Poly(endLoc, nodes[i][polyFieldName])
+        zBar[startID, i] = distPt2Poly(startPt, nodes[i][polyFieldName])
+        zBar[i, startID] = distPt2Poly(startPt, nodes[i][polyFieldName])
+        zBar[endID, i] = distPt2Poly(endPt, nodes[i][polyFieldName])
+        zBar[i, endID] = distPt2Poly(endPt, nodes[i][polyFieldName])
     zBar[endID, startID] = 0
     zBar[startID, endID] = 0
 
@@ -656,7 +655,7 @@ def _solveCETSPGBDPoly(
                     for i in repSeq:
                         if (i != startID and i != endID):
                             polys.append(nodes[i][polyFieldName])
-                    p2p = poly2PolyPath(startPt = startLoc, endPt = endLoc, polys = polys, algo = c2cAlgo)
+                    p2p = poly2PolyPath(startPt = startPt, endPt = endPt, polys = polys, algo = c2cAlgo)
                     
                     minDist = float('inf')
                     for seq in repSeqHis:
@@ -726,7 +725,7 @@ def _solveCETSPGBDPoly(
     for i in seq:
         if (i != startID and i != endID):
             polys.append(nodes[i][polyFieldName])
-    p2p = poly2PolyPath(startPt = startLoc, endPt = endLoc, polys = polys, algo = c2cAlgo)
+    p2p = poly2PolyPath(startPt = startPt, endPt = endPt, polys = polys, algo = c2cAlgo)
 
     if (CETSP.status == grb.GRB.status.OPTIMAL):
         solType = 'IP_Optimal'
@@ -758,8 +757,8 @@ def _solveCETSPGBDPoly(
     }
 
 def _solveCETSPGBDLatLon(
-    startLoc: pt,
-    endLoc: pt,
+    startPt: pt,
+    endPt: pt,
     nodes: dict, # Index from 1
     polyXYMercator: dict,
     timeLimit: int | None = None
@@ -788,19 +787,19 @@ def _solveCETSPGBDLatLon(
     nodeAll = [i for i in range(0, len(nodes) + 2)]
 
     # Create neighborhoods ====================================================
-    startLocMercator = ptLatLon2XYMercator(startLoc)
-    endLocMercator = ptLatLon2XYMercator(endLoc)
+    startPtMercator = ptLatLon2XYMercator(startPt)
+    endPtMercator = ptLatLon2XYMercator(endPt)
 
     # Parameters ==============================================================
-    # anchor starts from depotLoc, in between are a list of circles, ends with depotLoc
-    allX = [startLocMercator[0]]
-    allY = [startLocMercator[1]]
+    # anchor starts from depotPt, in between are a list of circles, ends with depotPt
+    allX = [startPtMercator[0]]
+    allY = [startPtMercator[1]]
     for i in nodes:
         for p in polyXYMercator[i]:
             allX.append(p[0])
             allY.append(p[1])
-    allX.append(endLocMercator[0])
-    allY.append(endLocMercator[1])
+    allX.append(endPtMercator[0])
+    allY.append(endPtMercator[1])
 
     lbX = min(allX) - 1
     lbY = min(allY) - 1
@@ -813,10 +812,10 @@ def _solveCETSPGBDLatLon(
             if (i != j):
                 zBar[i, j] = distPoly2Poly(polyXYMercator[i], polyXYMercator[j])
     for i in nodes:
-        zBar[startID, i] = distPt2Poly(startLocMercator, polyXYMercator[i])
-        zBar[i, startID] = distPt2Poly(startLocMercator, polyXYMercator[i])
-        zBar[endID, i] = distPt2Poly(endLocMercator, polyXYMercator[i])
-        zBar[i, endID] = distPt2Poly(endLocMercator, polyXYMercator[i])
+        zBar[startID, i] = distPt2Poly(startPtMercator, polyXYMercator[i])
+        zBar[i, startID] = distPt2Poly(startPtMercator, polyXYMercator[i])
+        zBar[endID, i] = distPt2Poly(endPtMercator, polyXYMercator[i])
+        zBar[i, endID] = distPt2Poly(endPtMercator, polyXYMercator[i])
     zBar[endID, startID] = 0
     zBar[startID, endID] = 0
 
@@ -910,7 +909,7 @@ def _solveCETSPGBDLatLon(
                     for i in repSeq:
                         if (i != startID and i != endID):
                             polys.append(polyXYMercator[i])
-                    p2p = poly2PolyPath(startPt = startLocMercator, endPt = endLocMercator, polys = polys)
+                    p2p = poly2PolyPath(startPt = startPtMercator, endPt = endPtMercator, polys = polys)
                     
                     minDist = float('inf')
                     for seq in repSeqHis:
@@ -980,7 +979,7 @@ def _solveCETSPGBDLatLon(
     for i in seq:
         if (i != startID and i != endID):
             polys.append(polyXYMercator[i])
-    p2pLatLon = poly2PolyPath(startPt = startLocMercator, endPt = endLocMercator, polys = polys)
+    p2pLatLon = poly2PolyPath(startPt = startPtMercator, endPt = endPtMercator, polys = polys)
     p2p = {
         'dist': p2pLatLon['dist'],
         'path': []
@@ -1018,8 +1017,8 @@ def _solveCETSPGBDLatLon(
     }
 
 def _solveCETSPGACircle(
-    startLoc: pt,
-    endLoc: pt,
+    startPt: pt,
+    endPt: pt,
     nodes: dict, # Index from 1
     popSize: int,
     neighRatio: dict = {},
@@ -1030,7 +1029,7 @@ def _solveCETSPGACircle(
     ) -> dict | None:
 
     class chromosomeCETSP:
-        def __init__(self, startLoc, endLoc, nodes, seq):
+        def __init__(self, startPt, endPt, nodes, seq):
             # NOTE: seq以depotID开始和结束
             # NOTE: 每个seq都需要补全为一条合法的cetsp路径
             # Complete logic:
@@ -1039,8 +1038,8 @@ def _solveCETSPGACircle(
             # STEP 3: 将最近的未经过点插入，转入STEP 2
             
             # 记录nodes的信息
-            self.startLoc = startLoc
-            self.endLoc = endLoc
+            self.startPt = startPt
+            self.endPt = endPt
             self.nodes = nodes
             self.initSeq = [i for i in seq]
 
@@ -1069,12 +1068,12 @@ def _solveCETSPGACircle(
             seqTra.append(0)
             for i in range(1, len(seqTra) - 1):
                 circles.append({
-                    'center': self.nodes[seqTra[i]]['loc'],
+                    'center': self.nodes[seqTra[i]]['pt'],
                     'radius': radius if radius != None else self.nodes[seqTra[i]][radiusFieldName]
                 })
             c2c = circle2CirclePath(
-                startPt = self.startLoc,
-                endPt = self.endLoc,
+                startPt = self.startPt,
+                endPt = self.endPt,
                 circles = circles,
                 algo = 'SOCP')
             degen = seqRemoveDegen(seq = c2c['path'])
@@ -1111,13 +1110,13 @@ def _solveCETSPGACircle(
                     circles = []
                     for i in range(1, len(self.turning) - 1):
                         circles.append({
-                            'center': self.nodes[self.turning[i]]['loc'],
+                            'center': self.nodes[self.turning[i]]['pt'],
                             'radius': radius if radius != None else self.nodes[seqTra[i]][radiusFieldName]
                         })
                     # 得到seq对应路径
                     c2c = circle2CirclePath(
-                        startPt = self.startLoc,
-                        endPt = self.endLoc,
+                        startPt = self.startPt,
+                        endPt = self.endPt,
                         circles = circles,
                         algo = 'SOCP')
                     degen = seqRemoveDegen(seq = c2c['path'])
@@ -1131,7 +1130,7 @@ def _solveCETSPGACircle(
                 for i in self.nodes:
                     if (i not in self.turning):
                         res = distPt2Seq(
-                            pt = self.nodes[i]['loc'], 
+                            pt = self.nodes[i]['pt'], 
                             seq = degen['newSeq'],
                             closedFlag = False,
                             detailFlag = True)
@@ -1169,12 +1168,12 @@ def _solveCETSPGACircle(
             seq[idxI], seq[idxI + 1] = seq[idxI + 1], seq[idxI]
         else:
             seq[idxI], seq[0] = seq[0], seq[idxI]
-        return chromosomeCETSP(startLoc, endLoc, nodes, seq)
+        return chromosomeCETSP(startPt, endPt, nodes, seq)
 
     def exchange(chromo, idxI, idxJ):
         seq = [i.key for i in chromo.seq.traverse()]
         seq[idxI], seq[idxJ] = seq[idxJ], seq[idxI]
-        return chromosomeCETSP(startLoc, endLoc, nodes, seq)
+        return chromosomeCETSP(startPt, endPt, nodes, seq)
 
     def rotate(chromo, idxI, idxJ):
         seq = [i.key for i in chromo.seq.traverse()]
@@ -1183,7 +1182,7 @@ def _solveCETSPGACircle(
         newSeq = [seq[i] for i in range(idxI)]
         newSeq.extend([seq[idxJ - i] for i in range(idxJ - idxI + 1)])
         newSeq.extend([seq[i] for i in range(idxJ + 1, len(seq))])
-        return chromosomeCETSP(startLoc, endLoc, nodes, newSeq)
+        return chromosomeCETSP(startPt, endPt, nodes, newSeq)
     
     def crossover(chromo1, chromo2, idx1I, idx1J, idx2I, idx2J):
         # 原始序列
@@ -1223,8 +1222,8 @@ def _solveCETSPGACircle(
         if (0 not in newSeq2):
             newSeq2.append(0)
 
-        newChromo1 = chromosomeCETSP(startLoc, endLoc, nodes, newSeq1)
-        newChromo2 = chromosomeCETSP(startLoc, endLoc, nodes, newSeq2)
+        newChromo1 = chromosomeCETSP(startPt, endPt, nodes, newSeq1)
+        newChromo2 = chromosomeCETSP(startPt, endPt, nodes, newSeq2)
         return newChromo1, newChromo2
 
     # Initialize ==============================================================
@@ -1241,7 +1240,7 @@ def _solveCETSPGACircle(
         seq = [i for i in nodes]
         seq.append(0)
         random.shuffle(seq)
-        popObj.append(chromosomeCETSP(startLoc, endLoc, nodes, seq))
+        popObj.append(chromosomeCETSP(startPt, endPt, nodes, seq))
 
     for chromo in popObj:
         if (chromo.dist < dashboard['bestOfv']):
@@ -1359,8 +1358,8 @@ def _solveCETSPGACircle(
     }
 
 def _solveCETSPGALatLon(
-    startLocMercator: pt,
-    endLocMercator: pt,
+    startPtMercator: pt,
+    endPtMercator: pt,
     nodes: dict, # Index from 1
     polyXYMercator: dict,
     popSize: int,
@@ -1370,7 +1369,7 @@ def _solveCETSPGALatLon(
     ) -> dict | None:
 
     class chromosomeCETSP:
-        def __init__(self, startLocMercator, endLocMercator, nodes, polyXYMercator, seq):
+        def __init__(self, startPtMercator, endPtMercator, nodes, polyXYMercator, seq):
             # NOTE: seq以depotID开始和结束
             # NOTE: 每个seq都需要补全为一条合法的cetsp路径
             # Complete logic:
@@ -1379,8 +1378,8 @@ def _solveCETSPGALatLon(
             # STEP 3: 将最近的未经过点插入，转入STEP 2
             
             # 记录nodes的信息
-            self.startLocMercator = startLocMercator
-            self.endLocMercator = endLocMercator
+            self.startPtMercator = startPtMercator
+            self.endPtMercator = endPtMercator
             self.nodes = nodes
             self.polyXYMercator = polyXYMercator
             self.initSeq = [i for i in seq]
@@ -1409,7 +1408,7 @@ def _solveCETSPGALatLon(
             seqTra.append(0)
             for i in range(1, len(seqTra) - 1):
                 polys.append(self.polyXYMercator[i])
-            p2p = poly2PolyPath(startPt = self.startLocMercator, endPt = self.endLocMercator, polys = polys)
+            p2p = poly2PolyPath(startPt = self.startPtMercator, endPt = self.endPtMercator, polys = polys)
             degen = seqRemoveDegen(seq = p2p['path'])
 
             # 找turn point/trespass point
@@ -1442,7 +1441,7 @@ def _solveCETSPGALatLon(
                     polys = []
                     for i in (1, len(self.turning) - 1):
                         polys.append(self.polyXYMercator[i])
-                    p2p = poly2PolyPath(startPt = self.startLocMercator, endPt = self.endLocMercator, polys = polys)
+                    p2p = poly2PolyPath(startPt = self.startPtMercator, endPt = self.endPtMercator, polys = polys)
                     degen = seqRemoveDegen(seq = p2p['path'])
   
                     self.trespass = []
@@ -1498,12 +1497,12 @@ def _solveCETSPGALatLon(
             seq[idxI], seq[idxI + 1] = seq[idxI + 1], seq[idxI]
         else:
             seq[idxI], seq[0] = seq[0], seq[idxI]
-        return chromosomeCETSP(startLocMercator, endLocMercator, nodes, polyXYMercator, seq)
+        return chromosomeCETSP(startPtMercator, endPtMercator, nodes, polyXYMercator, seq)
 
     def exchange(chromo, idxI, idxJ):
         seq = [i.key for i in chromo.seq.traverse()]
         seq[idxI], seq[idxJ] = seq[idxJ], seq[idxI]
-        return chromosomeCETSP(startLocMercator, endLocMercator, nodes, polyXYMercator, seq)
+        return chromosomeCETSP(startPtMercator, endPtMercator, nodes, polyXYMercator, seq)
 
     def rotate(chromo, idxI, idxJ):
         seq = [i.key for i in chromo.seq.traverse()]
@@ -1512,7 +1511,7 @@ def _solveCETSPGALatLon(
         newSeq = [seq[i] for i in range(idxI)]
         newSeq.extend([seq[idxJ - i] for i in range(idxJ - idxI + 1)])
         newSeq.extend([seq[i] for i in range(idxJ + 1, len(seq))])
-        return chromosomeCETSP(startLoc, endLoc, nodes, newSeq)
+        return chromosomeCETSP(startPt, endPt, nodes, newSeq)
     
     def crossover(chromo1, chromo2, idx1I, idx1J, idx2I, idx2J):
         # 原始序列
@@ -1552,8 +1551,8 @@ def _solveCETSPGALatLon(
         if (0 not in newSeq2):
             newSeq2.append(0)
 
-        newChromo1 = chromosomeCETSP(startLocMercator, endLocMercator, nodes, polyXYMercator, newSeq1)
-        newChromo2 = chromosomeCETSP(startLocMercator, endLocMercator, nodes, polyXYMercator, newSeq2)
+        newChromo1 = chromosomeCETSP(startPtMercator, endPtMercator, nodes, polyXYMercator, newSeq1)
+        newChromo2 = chromosomeCETSP(startPtMercator, endPtMercator, nodes, polyXYMercator, newSeq2)
         return newChromo1, newChromo2
 
     # Initialize ==============================================================
@@ -1570,7 +1569,7 @@ def _solveCETSPGALatLon(
         seq = [i for i in nodes]
         seq.append(0)
         random.shuffle(seq)
-        popObj.append(chromosomeCETSP(startLocMercator, endLocMercator, nodes, polyXYMercator, seq))
+        popObj.append(chromosomeCETSP(startPtMercator, endPtMercator, nodes, polyXYMercator, seq))
 
     for chromo in popObj:
         if (chromo.dist < dashboard['bestOfv']):
@@ -1691,8 +1690,8 @@ def _solveCETSPGALatLon(
     }
 
 def _solveCETSPILSCircle(
-    startLoc: pt,
-    endLoc: pt,
+    startPt: pt,
+    endPt: pt,
     nodes: dict, # Index from 1
     radius: float | None = None,
     radiusFieldName: str = 'radius',
@@ -1708,7 +1707,7 @@ def _solveCETSPILSCircle(
     ) -> dict | None:
 
     class chromosomeCETSP:
-        def __init__(self, startLoc, endLoc, nodes, seq):
+        def __init__(self, startPt, endPt, nodes, seq):
             # NOTE: seq以depotID开始和结束
             # NOTE: 每个seq都需要补全为一条合法的cetsp路径
             # Complete logic:
@@ -1717,8 +1716,8 @@ def _solveCETSPILSCircle(
             # STEP 3: 将最近的未经过点插入，转入STEP 2
             
             # 记录nodes的信息
-            self.startLoc = startLoc
-            self.endLoc = endLoc
+            self.startPt = startPt
+            self.endPt = endPt
             self.nodes = nodes
             self.initSeq = [i for i in seq]
 
@@ -1746,14 +1745,14 @@ def _solveCETSPILSCircle(
             seqTra.append(0)
             for i in range(1, len(seqTra) - 1):
                 circles.append({
-                    'center': self.nodes[seqTra[i]]['loc'],
+                    'center': self.nodes[seqTra[i]]['pt'],
                     'radius': radius if radius != None else self.nodes[seqTra[i]][radiusFieldName]
                 })
 
             # 得到路径，然后进行去重
             c2c = circle2CirclePath(
-                startPt = self.startLoc,
-                endPt = self.endLoc,
+                startPt = self.startPt,
+                endPt = self.endPt,
                 circles = circles,
                 algo = 'SOCP')
             degen = seqRemoveDegen(seq = c2c['path'])          
@@ -1782,7 +1781,7 @@ def _solveCETSPILSCircle(
             for i in self.nodes:
                 if (i not in self.turning):
                     res = distPt2Seq(
-                        pt = self.nodes[i]['loc'], 
+                        pt = self.nodes[i]['pt'], 
                         seq = self.path,
                         closedFlag = False,
                         detailFlag = True)
@@ -1838,12 +1837,12 @@ def _solveCETSPILSCircle(
             seq[idxI], seq[idxI + 1] = seq[idxI + 1], seq[idxI]
         else:
             seq[idxI], seq[0] = seq[0], seq[idxI]
-        return chromosomeCETSP(startLoc, endLoc, nodes, seq)
+        return chromosomeCETSP(startPt, endPt, nodes, seq)
 
     def exchange(chromo, idxI, idxJ):
         seq = [i.key for i in chromo.seq.traverse()]
         seq[idxI], seq[idxJ] = seq[idxJ], seq[idxI]
-        return chromosomeCETSP(startLoc, endLoc, nodes, seq)
+        return chromosomeCETSP(startPt, endPt, nodes, seq)
 
     def rotate(chromo, idxI, idxJ):
         seq = [i.key for i in chromo.seq.traverse()]
@@ -1852,7 +1851,7 @@ def _solveCETSPILSCircle(
         newSeq = [seq[i] for i in range(idxI)]
         newSeq.extend([seq[idxJ - i] for i in range(idxJ - idxI + 1)])
         newSeq.extend([seq[i] for i in range(idxJ + 1, len(seq))])
-        return chromosomeCETSP(startLoc, endLoc, nodes, newSeq)
+        return chromosomeCETSP(startPt, endPt, nodes, newSeq)
     
     def rndDestroy(chromo):
         seq = [i.key for i in chromo.seq.traverse()]
@@ -1862,7 +1861,7 @@ def _solveCETSPILSCircle(
             newSeq.remove(newSeq[random.randint(0, len(newSeq) - 1)])
         if (0 not in newSeq):
             newSeq.append(0)
-        return chromosomeCETSP(startLoc, endLoc, nodes, newSeq)
+        return chromosomeCETSP(startPt, endPt, nodes, newSeq)
 
     # Initialize ==============================================================
     startTime = datetime.datetime.now()
@@ -1872,7 +1871,7 @@ def _solveCETSPILSCircle(
     seq.append(0)
     random.shuffle(seq) # 没事，会rehead
     
-    chromo = chromosomeCETSP(startLoc, endLoc, nodes, seq)
+    chromo = chromosomeCETSP(startPt, endPt, nodes, seq)
     printLog("Initial Solution: ", chromo.dist, chromo.turning, chromo.trespass)
 
     dashboard = {}
@@ -1984,32 +1983,32 @@ def _solveCETSPILSCircle(
     }
 
 def _solveCETSPBnBCircle(
-    startLoc: pt,
-    endLoc: pt,
+    startPt: pt,
+    endPt: pt,
     nodes: dict,
     radius: float | None = None,
     radiusFieldName: str = 'radius',
     timeLimit: int | None = None
     ) -> dict | None:
 
-    def cetspNew(startLoc, endLoc, nodes, funcSolve, funcBranch, funcUBEstimate):
+    def cetspNew(startPt, endPt, nodes, funcSolve, funcBranch, funcUBEstimate):
         seq = []
-        # 找到两个customer，让startLoc => cus1 => cus2 => endLoc的距离最长
+        # 找到两个customer，让startPt => cus1 => cus2 => endPt的距离最长
         distFarest = 0
         for i in nodes:
             for j in nodes:
                 if (i != j):
-                    d = distEuclideanXY(startLoc, nodes[i]['loc'])
-                    d += distEuclideanXY(nodes[i]['loc'], nodes[j]['loc'])
-                    d += distEuclideanXY(nodes[j]['loc'], endLoc)
+                    d = distEuclideanXY(startPt, nodes[i]['pt'])
+                    d += distEuclideanXY(nodes[i]['pt'], nodes[j]['pt'])
+                    d += distEuclideanXY(nodes[j]['pt'], endPt)
                     if (d > distFarest):
                         distFarest = d
                         seq = [i, j]
         n = BnBTreeNode(
             key = seq,
             rep = seq,
-            startLoc = startLoc,
-            endLoc = endLoc,
+            startPt = startPt,
+            endPt = endPt,
             nodes = nodes,
             funcSolve = funcSolve,
             funcBranch = funcBranch,
@@ -2031,14 +2030,14 @@ def _solveCETSPBnBCircle(
         circles = []
         for i in seq:
             circles.append({
-                'center': n.nodes[i]['loc'],
+                'center': n.nodes[i]['pt'],
                 'radius': n.nodes[i]['radius']
             })
 
         # 计算SOCP
         c2c = circle2CirclePath(
-            startPt = n.startLoc,
-            endPt = n.endLoc,
+            startPt = n.startPt,
+            endPt = n.endPt,
             circles = circles)
         repPt = {}
         for i in range(1, len(c2c['path']) - 1):
@@ -2063,11 +2062,11 @@ def _solveCETSPBnBCircle(
             for j in n.nodes:
                 if (j not in turning and j not in trespass):
                     dist2Seg = distPt2Seg(
-                        pt = n.nodes[j]['loc'],
+                        pt = n.nodes[j]['pt'],
                         seg = seg)
                     if (dist2Seg <= n.nodes[j]['radius']):
                         trespass.append(j)
-        # 注意，n.turning中不包括startLoc和endLoc
+        # 注意，n.turning中不包括startPt和endPt
         turning = turning[1:-1]
         for j in n.nodes:
             if (j not in turning and j not in trespass):
@@ -2088,12 +2087,12 @@ def _solveCETSPBnBCircle(
         heapq.heapify(distPt2Seg)
 
         # 第一段
-        seg = [n.startLoc, repPt[turning[0]]]
+        seg = [n.startPt, repPt[turning[0]]]
         delta = circle2CirclePath(
-            startPt = n.startLoc,
+            startPt = n.startPt,
             endPt = repPt[turning[0]],
             circles = [{
-                'center': n.nodes[toInsert]['loc'],
+                'center': n.nodes[toInsert]['pt'],
                 'radius': n.nodes[toInsert]['radius']
             }])['dist'] - distEuclideanXY(seg[0], seg[1])
         heapq.heappush(distPt2Seg, (delta, 0))
@@ -2105,18 +2104,18 @@ def _solveCETSPBnBCircle(
                 startPt = repPt[turning[i]],
                 endPt = repPt[turning[i + 1]],
                 circles = [{
-                    'center': n.nodes[toInsert]['loc'],
+                    'center': n.nodes[toInsert]['pt'],
                     'radius': n.nodes[toInsert]['radius']
                 }])['dist'] - distEuclideanXY(seg[0], seg[1])
             heapq.heappush(distPt2Seg, (delta, i + 1))
 
         # 最后一段
-        seg = [repPt[turning[-1]], n.endLoc]
+        seg = [repPt[turning[-1]], n.endPt]
         delta = circle2CirclePath(
             startPt = repPt[turning[-1]],
-            endPt = n.endLoc,
+            endPt = n.endPt,
             circles = [{
-                'center': n.nodes[toInsert]['loc'],
+                'center': n.nodes[toInsert]['pt'],
                 'radius': n.nodes[toInsert]['radius']
             }])['dist'] - distEuclideanXY(seg[0], seg[1])
         heapq.heappush(distPt2Seg, (delta, len(turning)))
@@ -2160,8 +2159,8 @@ def _solveCETSPBnBCircle(
             children.append(BnBTreeNode(
                 key = newSeq,
                 rep = newSeq,
-                startLoc = n.startLoc,
-                endLoc = n.endLoc,
+                startPt = n.startPt,
+                endPt = n.endPt,
                 nodes = n.nodes,
                 funcSolve = n.funcSolve,
                 funcBranch = n.funcBranch,
@@ -2206,8 +2205,8 @@ def _solveCETSPBnBCircle(
         return
 
     bnbNode = cetspNew(
-        startLoc = startLoc,
-        endLoc = endLoc,
+        startPt = startPt,
+        endPt = endPt,
         nodes = nodes,
         funcSolve = cetspSolve,
         funcBranch = cetspBranch,

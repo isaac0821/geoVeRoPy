@@ -2,6 +2,7 @@ import random
 import math
 import datetime
 import functools
+import warnings
 
 try:
     import pickle5 as pickle
@@ -17,7 +18,8 @@ ERRTOL = {
     'deltaDist': 0.01,
     'collinear': 0.001,
     'slope2Slope': 0.001,
-    'vertical': 0.001
+    'vertical': 0.001,
+    'slope': 0.001
 }
 
 DEBUG = {
@@ -79,14 +81,14 @@ class KeyNotExistError(Exception):
 class OutOfRangeError(Exception):
     pass
 
-class VrpSolverNotAvailableError(Exception):
+class NotAvailableError(Exception):
     pass
 
 def defaultBoundingBox(
     boundingBox = (None, None, None, None),
     pts: list[pt] = None,
     nodes: dict = None,
-    locFieldName = 'loc',
+    ptFieldName = 'pt',
     arcs: dict = None,
     arcFieldName = 'arc',
     arcStartLocFieldName = 'startLoc',
@@ -110,7 +112,7 @@ def defaultBoundingBox(
         A list of pts
     nodes: dict, optional, default as None
         A `nodes` dictionary
-    locFieldName: str, optional, default as 'loc'
+    ptFieldName: str, optional, default as 'pt'
         The field in `nodes` indicates locations of nodes
     arcs: dict, optional, default as None
         An `arcs` dictionary
@@ -156,8 +158,8 @@ def defaultBoundingBox(
             allY.append(pt[1])
     if (nodes != None):
         for i in nodes:
-            allX.append(nodes[i][locFieldName][0])
-            allY.append(nodes[i][locFieldName][1])
+            allX.append(nodes[i][ptFieldName][0])
+            allY.append(nodes[i][ptFieldName][1])
     if (arcs != None):
         for i in arcs:
             if (arcFieldName in arcs[i]):
@@ -197,7 +199,7 @@ def defaultBoundingBox(
 
 def defaultBoundingBox3D(
     boundingBox3D = (None, None, None, None, None, None),
-    locs3D = None,
+    pts3D = None,
     timedPoly = None,
     edgeWidth: float = 0.1):
 
@@ -218,8 +220,8 @@ def defaultBoundingBox3D(
     if (zMax != None):
         allZ.append(zMax)
 
-    if (locs3D != None):
-        for i in locs3D:
+    if (pts3D != None):
+        for i in pts3D:
             allX.append(i[0])
             allY.append(i[1])
             allZ.append(i[2])
@@ -502,6 +504,34 @@ def splitIntoSubSeq(inputList, selectFlag):
         splitSub.append([k for k in sub])
     return splitSub
 
+def countContinuousSubarrays(nums:list[int]) -> int:
+    """
+    判断一个数字数组中有多少个连续的子序列
+    :param nums:数字数组
+    :return:子序列的个数
+    """
+    if not nums:
+        return 0
+
+    nums = sorted(set(nums))  # 去重并排序
+
+    count = 0
+    left = 0
+
+    for right in range(1, len(nums)):
+        # 如果当前数字不满足连续递增，移动左指针
+        if nums[right] != nums[right - 1] + 1:
+            # 如果窗口长度 >= 1，则算作一个连续子串
+            if right - left >= 1:
+                count += 1
+            left = right
+
+    # 检查最后一段
+    if len(nums) - left >= 1:
+        count += 1
+
+    return count
+
 globalRuntimeAnalysis = {}
 # Support runtime tracking and store in dictionary of at most three level
 def runtime(key1, key2=None, key3=None):
@@ -552,6 +582,16 @@ def tellRuntime(funcName, indentLevel=0):
             dt = (datetime.datetime.now() - t).total_seconds()
             indent = "----" * indentLevel
             print(f"**{indent}Func {funcName} runtime: {dt}")
+            return result
+        return fun
+    return deco
+
+def deprecated(newFuncName):
+    def deco(func):
+        @functools.wraps(func)
+        def fun(*args, **kwargs):
+            result = func(*args, **kwargs)
+            warnings.warn(f"{func.__name__} is deprecated and will be removed in future versions. Use {funcName}.", DeprecationWarning) 
             return result
         return fun
     return deco

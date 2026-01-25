@@ -5,7 +5,6 @@ import networkx as nx
 
 from .common import *
 from .geometry import *
-from .msg import *
 from .ring import *
 from .travel import *
 
@@ -33,7 +32,7 @@ def solveTSP(
 
     nodes: dict, required
         The `nodes` dictionary, with coordinates of given nodes. See :ref:`nodes`
-    locFieldName: str, optional, default as 'loc'
+    ptFieldName: str, optional, default as 'pt'
         The key value in `nodes` indicating the location of each node.
     depotID: int|string, optional, default as 0
         The node ID of the depot.
@@ -101,13 +100,13 @@ def solveTSP(
 
     """
     # Field names =============================================================
-    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+    ptFieldName = 'pt' if 'ptFieldName' not in kwargs else kwargs['ptFieldName']
 
     # Sanity check ============================================================
     if (nodes == None or type(nodes) != dict):
-        raise MissingParameterError(ERROR_MISSING_NODES)
+        raise MissingParameterError("ERROR: Missing required field `nodes`.")
     for i in nodes:
-        if (locFieldName not in nodes[i]):
+        if (ptFieldName not in nodes[i]):
             raise MissingParameterError("ERROR: missing location information in `nodes`.")
     if (type(nodeIDs) is not list):
         if (nodeIDs == 'All'):
@@ -165,23 +164,23 @@ def solveTSP(
 
     # Define tau ==============================================================
     tau = None
-    pathLoc = None
+    pathPt = None
     if (detailFlag):
         res = matrixDist(
             nodes = nodes, 
             nodeIDs = nodeIDs,
             edges = edges, 
-            locFieldName = locFieldName,
+            ptFieldName = ptFieldName,
             detailFlag = True
             **kwargs)
         tau = res['tau']
-        pathLoc = res['pathLoc']
+        pathPt = res['pathPt']
     else:
         tau = matrixDist(
             nodes = nodes, 
             nodeIDs = nodeIDs,
             edges = edges, 
-            locFieldName = locFieldName,
+            ptFieldName = ptFieldName,
             **kwargs)
 
     # Check symmetric =========================================================
@@ -219,7 +218,7 @@ def solveTSP(
     elif (algo == 'Heuristic'):
         nodeObj = {}
         for n in nodeIDs:
-            nodeObj[n] = RouteNode(n, value=nodes[n][locFieldName])
+            nodeObj[n] = RouteNode(n, value=nodes[n][ptFieldName])
         # Two-phase: construction phase
         seqObj = _consTSP(
             nodes = nodes,
@@ -239,7 +238,7 @@ def solveTSP(
     elif (algo == 'Metaheuristic'):
         nodeObj = {}
         for n in nodeIDs:
-            nodeObj[n] = RouteNode(n, value=nodes[n][locFieldName])
+            nodeObj[n] = RouteNode(n, value=nodes[n][ptFieldName])
 
         # Population based
         if (kwargs['meta'] in ['GeneticAlgorithm', 'PSO', 'ACO']):
@@ -334,45 +333,45 @@ def solveTSP(
         # 返回一个数组，表示路径中的每个点的位置，不包括时间信息
         shapepoints = []        
         for i in range(len(nodeSeq) - 1):
-            shapepoints.extend(pathLoc[nodeSeq[i], nodeSeq[i + 1]][:-1])
-        shapepoints.append(pathLoc[nodeSeq[-2], nodeSeq[-1]][-1])
+            shapepoints.extend(pathPt[nodeSeq[i], nodeSeq[i + 1]][:-1])
+        shapepoints.append(pathPt[nodeSeq[-2], nodeSeq[-1]][-1])
 
         # 返回一个数组，其中每个元素为二元数组，表示位置+时刻
         curTime = 0
-        curLoc = nodes[depotID][locFieldName]
-        timedSeq = [(curLoc, curTime)]
+        curPt = nodes[depotID][ptFieldName]
+        timedSeq = [(curPt, curTime)]
         # 对每个leg检索path中的shapepoints，涉及到serviceTime，先不看最后一段leg
         for i in range(1, len(nodeSeq) - 1):
             # 对于Euclidean型的，没有中间节点
             if (edges in ['Euclidean', 'LatLon']):
                 curTime += tau[nodeSeq[i - 1], nodeSeq[i]] / vehicles[vehicleID]['speed']
-                curLoc = nodes[nodeSeq[i]][locFieldName]
-                timedSeq.append((curLoc, curTime))
+                curPt = nodes[nodeSeq[i]][ptFieldName]
+                timedSeq.append((curPt, curTime))
             else:
-                shapepointsInBtw = pathLoc[nodeSeq[i - 1], nodeSeq[i]]
+                shapepointsInBtw = pathPt[nodeSeq[i - 1], nodeSeq[i]]
                 for j in range(1, len(shapepointsInBtw)):
                     curTime += distEuclideanXY(shapepointsInBtw[j - 1], shapepointsInBtw[j]) / vehicles[vehicleID]['speed']
-                    curLoc = shapepointsInBtw[j]
-                    timedSeq.append((curLoc, curTime))
+                    curPt = shapepointsInBtw[j]
+                    timedSeq.append((curPt, curTime))
             # 如果有service time，则加上一段在原处等待的时间
             if ('serviceTime' in nodes[nodeSeq[i]]):
                 curTime += nodes[nodeSeq[i]]['serviceTime']
-                timedSeq.append((curLoc, curTime))
+                timedSeq.append((curPt, curTime))
             elif (serviceTime != None and serviceTime > 0):
                 curTime += serviceTime
-                # curLoc = curLoc
-                timedSeq.append((curLoc, curTime))
+                # curPt = curPt
+                timedSeq.append((curPt, curTime))
         # 现在补上最后一段leg
         if (edges in ['Euclidean', 'LatLon']):
             curTime += tau[nodeSeq[-2], nodeSeq[-1]] / vehicles[vehicleID]['speed']
-            curLoc = nodes[nodeSeq[-1]][locFieldName]
-            timedSeq.append((curLoc, curTime))
+            curPt = nodes[nodeSeq[-1]][ptFieldName]
+            timedSeq.append((curPt, curTime))
         else:
-            shapepointsInBtw = pathLoc[nodeSeq[-2], nodeSeq[-1]]
+            shapepointsInBtw = pathPt[nodeSeq[-2], nodeSeq[-1]]
             for j in range(1, len(shapepointsInBtw)):
                 curTime += distEuclideanXY(shapepointsInBtw[j - 1], shapepointsInBtw[j]) / vehicles[vehicleID]['speed']
-                curLoc = shapepointsInBtw[j]
-                timedSeq.append((curLoc, curTime))
+                curPt = shapepointsInBtw[j]
+                timedSeq.append((curPt, curTime))
 
         # Add detail information to `vehicles`
         vehicles[vehicleID]['shapepoints'] = shapepoints
@@ -1183,7 +1182,7 @@ def _consTSP(nodes, nodeObj, tau, depotID, nodeIDs, asymFlag, **kwargs) -> "Rout
 
     # Sweep heuristic
     elif (cons == 'Sweep'):
-        sweepSeq = _consTSPSweep(nodes, depotID, nodeIDs, locFieldName)
+        sweepSeq = _consTSPSweep(nodes, depotID, nodeIDs, ptFieldName)
         for i in sweepSeq:
             seqObj.append(nodeObj[i])
         seqObj.rehead(depotID)
@@ -1339,12 +1338,12 @@ def _consTSPFarthestNeighbor(depotID, nodeIDs, tau):
         remain.remove(nextID)
     return seq
 
-def _consTSPSweep(nodes, depotID, nodeIDs, locFieldName):
+def _consTSPSweep(nodes, depotID, nodeIDs, ptFieldName):
     # Sweep seq -----------------------------------------------------------
     sweep = nodeSeqBySweeping(
         nodes = nodes, 
         nodeIDs = nodeIDs,
-        refLoc = nodes[depotID][locFieldName])
+        refPt = nodes[depotID][ptFieldName])
     return sweep
 
 def _consTSPRandom(depotID, nodeIDs):

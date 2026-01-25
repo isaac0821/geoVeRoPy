@@ -1,7 +1,6 @@
 import networkx as nx
 import gurobipy as grb
 import datetime
-import warnings
 
 from .geometry import *
 from .ring import *
@@ -9,7 +8,6 @@ from .curveArc import *
 from .common import *
 from .plot import *
 
-# obj2ObjPath =================================================================
 def poly2PolyPath(startPt: pt, endPt: pt, polys: polys, algo: str = 'SOCP', **kwargs):
     
     """Given a starting point, a list of polys, and an ending point, returns a shortest route that starts from startPt, visits every polys in given order, and returns to the ending point.
@@ -150,10 +148,10 @@ def _poly2PolyPathAdaptIter(startPt: pt, endPt: pt, polys: polys, adaptErr):
             pPrev = p.prev
             pNext = p.next
 
-            pPrevMidLoc = [(pPrev.value[0] + (p.value[0] - pPrev.value[0]) / 2), (pPrev.value[1] + (p.value[1] - pPrev.value[1]) / 2)]
-            pPrevMid = RingNode(polyRings[polyIdx].count, pPrevMidLoc)
-            pNextMidLoc = [(p.value[0] + (pNext.value[0] - p.value[0]) / 2), (p.value[1] + (pNext.value[1] - p.value[1]) / 2)]
-            pNextMid = RingNode(polyRings[polyIdx].count + 1, pNextMidLoc)
+            pPrevMidPt = [(pPrev.value[0] + (p.value[0] - pPrev.value[0]) / 2), (pPrev.value[1] + (p.value[1] - pPrev.value[1]) / 2)]
+            pPrevMid = RingNode(polyRings[polyIdx].count, pPrevMidPt)
+            pNextMidPt = [(p.value[0] + (pNext.value[0] - p.value[0]) / 2), (p.value[1] + (pNext.value[1] - p.value[1]) / 2)]
+            pNextMid = RingNode(polyRings[polyIdx].count + 1, pNextMidPt)
 
             polyRings[polyIdx].insert(p, pNextMid)
             polyRings[polyIdx].insert(pPrev, pPrevMid)
@@ -239,7 +237,6 @@ def _seg2SegPathGurobi(startPt: pt, endPt: pt, segs: list[line], outputFlag = Fa
         import gurobipy as grb
     except(ImportError):
         raise ImportError("ERROR: Cannot find Gurobi")
-        return
 
     model = grb.Model("SOCP")
     model.setParam('OutputFlag', 0 if outputFlag == False else 1)
@@ -423,7 +420,7 @@ def circle2CirclePath(startPt: pt, endPt: pt, circles: list[dict], algo: str = '
 
 def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], adaptErr, initLod: int = 4):
 
-    def getLocByDeg(circle, deg):
+    def getPtByDeg(circle, deg):
         return (
             circle['center'][0] + circle['radius'] * math.cos(math.radians(deg)),
             circle['center'][1] + circle['radius'] * math.sin(math.radians(deg))
@@ -432,7 +429,7 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
     G = nx.Graph()
     circleRings = []
 
-    # circleRing is keyed by index, valued by [degree, loc]
+    # circleRing is keyed by index, valued by [degree, pt]
     for c in circles:
         circleRing = Ring()
         for i in range(initLod):
@@ -440,13 +437,13 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
             circleRing.append(RingNode(
                 key = i, 
                 deg = deg, 
-                loc = getLocByDeg(c, deg)))
+                pt = getPtByDeg(c, deg)))
         circleRings.append(circleRing)
 
     # startPt to the first polygon
     cur = circleRings[0].head
     while (True):
-        d = distEuclideanXY(startPt, cur.loc)
+        d = distEuclideanXY(startPt, cur.pt)
         G.add_edge('s', (0, cur.key), weight = d)
         cur = cur.next
         if (cur.key == circleRings[0].head.key):
@@ -458,7 +455,7 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
         while (True):
             curJ = circleRings[i + 1].head
             while (True):
-                d = distEuclideanXY(curI.loc, curJ.loc)
+                d = distEuclideanXY(curI.pt, curJ.pt)
                 G.add_edge((i, curI.key), (i + 1, curJ.key), weight = d)
                 curJ = curJ.next
                 if (curJ.key == circleRings[i + 1].head.key):
@@ -470,7 +467,7 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
     # last polygon to endPt
     cur = circleRings[-1].head
     while (True):
-        d = distEuclideanXY(cur.loc, endPt)
+        d = distEuclideanXY(cur.pt, endPt)
         G.add_edge((len(circles) - 1, cur.key), 'e', weight = d)
         cur = cur.next
         if (cur.key == circleRings[len(circles) - 1].head.key):
@@ -480,12 +477,12 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
 
     # sp[i] => (circleIdx, curKey)
 
-    dist = distEuclideanXY(startPt, circleRings[sp[1][0]].query(sp[1][1]).loc)
+    dist = distEuclideanXY(startPt, circleRings[sp[1][0]].query(sp[1][1]).pt)
     for i in range(1, len(sp) - 2):
         dist += distEuclideanXY(
-            circleRings[sp[i][0]].query(sp[i][1]).loc,
-            circleRings[sp[i + 1][0]].query(sp[i + 1][1]).loc)
-    dist += distEuclideanXY(circleRings[sp[-2][0]].query(sp[-2][1]).loc, endPt)
+            circleRings[sp[i][0]].query(sp[i][1]).pt,
+            circleRings[sp[i + 1][0]].query(sp[i + 1][1]).pt)
+    dist += distEuclideanXY(circleRings[sp[-2][0]].query(sp[-2][1]).pt, endPt)
     
     iterNum = 0
 
@@ -494,8 +491,8 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
     iterNum = 0
     # while (iterNum <= 10):
     while(refineFlag):
-        # sp[0] is startLoc
-        # sp[-1] is endLoc
+        # sp[0] is startPt
+        # sp[-1] is endPt
         for i in range(1, len(sp) - 1):
             # Find current shortest intersecting point
             circIdx = sp[i][0]
@@ -522,11 +519,11 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
             if (pNextMidDeg > 360):
                 pNextMidDeg -= 360
 
-            pPrevMidLoc = getLocByDeg(circles[circIdx], pPrevMidDeg)
-            pNextMidLoc = getLocByDeg(circles[circIdx], pNextMidDeg)
+            pPrevMidPt = getPtByDeg(circles[circIdx], pPrevMidDeg)
+            pNextMidPt = getPtByDeg(circles[circIdx], pNextMidDeg)
 
-            pPrevMid = RingNode(circleRings[circIdx].count, deg = pPrevMidDeg, loc = pPrevMidLoc)
-            pNextMid = RingNode(circleRings[circIdx].count + 1, deg = pNextMidDeg, loc = pNextMidLoc)
+            pPrevMid = RingNode(circleRings[circIdx].count, deg = pPrevMidDeg, pt = pPrevMidPt)
+            pNextMid = RingNode(circleRings[circIdx].count + 1, deg = pNextMidDeg, pt = pNextMidPt)
 
             circleRings[circIdx].insert(p, pNextMid)
             circleRings[circIdx].insert(pPrev, pPrevMid)
@@ -534,7 +531,7 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
         # New start
         for p in circleRings[sp[1][0]].traverse():
             if (('s', (0, p.key)) not in G.edges):
-                d = distEuclideanXY(startPt, p.loc)
+                d = distEuclideanXY(startPt, p.pt)
                 G.add_edge('s', (0, p.key), weight = d)
         # In between
         for i in range(1, len(sp) - 2):
@@ -543,64 +540,33 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
             for kI in circleRings[circIdx].traverse():
                 for kJ in circleRings[circNextIdx].traverse():
                     if (((circIdx, kI.key), (circNextIdx, kJ.key)) not in G.edges):
-                        d = distEuclideanXY(kI.loc, kJ.loc)
+                        d = distEuclideanXY(kI.pt, kJ.pt)
                         G.add_edge((circIdx, kI.key), (circNextIdx, kJ.key), weight = d)
         for p in circleRings[sp[-2][0]].traverse():
             if (((len(circles) - 1, p.key), 'e') not in G.edges):
-                d = distEuclideanXY(p.loc, endPt)
+                d = distEuclideanXY(p.pt, endPt)
                 G.add_edge((len(circles) - 1, p.key), 'e', weight = d)
 
         sp = nx.dijkstra_path(G, 's', 'e')
 
-        newDist = distEuclideanXY(startPt, circleRings[sp[1][0]].query(sp[1][1]).loc)
+        newDist = distEuclideanXY(startPt, circleRings[sp[1][0]].query(sp[1][1]).pt)
         for i in range(1, len(sp) - 2):
             newDist += distEuclideanXY(
-                circleRings[sp[i][0]].query(sp[i][1]).loc,
-                circleRings[sp[i + 1][0]].query(sp[i + 1][1]).loc)
-        newDist += distEuclideanXY(circleRings[sp[-2][0]].query(sp[-2][1]).loc, endPt)
+                circleRings[sp[i][0]].query(sp[i][1]).pt,
+                circleRings[sp[i + 1][0]].query(sp[i + 1][1]).pt)
+        newDist += distEuclideanXY(circleRings[sp[-2][0]].query(sp[-2][1]).pt, endPt)
 
         if (abs(newDist - dist) <= adaptErr):
             refineFlag = False
 
         dist = newDist
 
-        # 测试
-        # fig, ax = None, None
-        # for i in circles:
-        #     fig, ax = plotCircle(
-        #         fig = fig,
-        #         ax = ax,
-        #         center = i['center'],
-        #         radius = i['radius'],
-        #         edgeColor = 'black',
-        #         fillColor = 'gray',
-        #         boundingBox = (-10, 110, -10, 110))
-        # locs = [startPt, endPt]
-        # for i in circleRings:
-        #     for c in i.traverse():
-        #         locs.append(c.loc)
-        # fig, ax = plotLocs(
-        #     fig = fig,
-        #     ax = ax,
-        #     locs = locs,
-        #     locColor = 'red',
-        #     locMarkerSize = 3)
-        # locSeq = [startPt]
-        # for i in range(1, len(sp) - 1):
-        #     locSeq.append(circleRings[sp[i][0]].query(sp[i][1]).loc)
-        # locSeq.append(endPt)
-        # fig, ax = plotLocSeq(
-        #     fig = fig,
-        #     ax = ax,
-        #     locSeq = locSeq,
-        #     lineColor = 'blue')
-        # fig.savefig(f"Iter_{iterNum}.png")
         iterNum += 1
 
     path = [startPt]
     for p in sp:
         if (p != 's' and p != 'e'):
-            path.append(circleRings[p[0]].query(p[1]).loc)
+            path.append(circleRings[p[0]].query(p[1]).pt)
     path.append(endPt)
     # print("Num of iter: ", iterNum)
 
@@ -613,6 +579,9 @@ def _circle2CirclePathGurobi(startPt: pt, endPt: pt, circles: list[dict], output
 
     model = grb.Model("SOCP")
     model.setParam('OutputFlag', 1 if outputFlag else 0)
+    model.setParam('BarHomogeneous', 1)
+    # model.setParam('BarConvTol', 1e-3)
+    # model.setParam('PreSolve', 0)
 
     # Parameters ==============================================================
     # anchor starts from startPt, in between are a list of circles, ends with endPt
@@ -709,6 +678,7 @@ def _circle2CirclePathGurobi(startPt: pt, endPt: pt, circles: list[dict], output
         lb = model.ObjBoundC
         ub = model.ObjVal
     else:
+        print("HERE")
         print(model.status)
         
     return {
@@ -832,169 +802,4 @@ def _circle2CirclePathCOPT(startPt: pt, endPt: pt, circles: dict, outputFlag: bo
     return {
         'path': path,
         'dist': ofv
-    }
-
-def curveArc2CurveArcPath(startPt: pt, endPt: pt, curveArcs: list[CurveArc], adaptErr = 0.01, atLeastTimeBtw = None, speed = 1, boundingBox = None):
-    tau = {}
-
-    G = nx.Graph()
-
-    if (atLeastTimeBtw == None):
-        atLeastTimeBtw = [0 for i in range(len(curveArcs) + 1)]
-
-    # Initial iteration =======================================================
-    # startPt to the first curveArc
-    cur = curveArcs[0].head
-    while (not cur.isNil):
-        d = None
-        if (('s', (0, cur.key)) not in tau):
-            d = distEuclideanXY(startPt, cur.loc)
-            tau['s', (0, cur.key)] = d
-        else:
-            d = tau['s', (0, cur.key)]
-        G.add_edge('s', (0, cur.key), weight = max(d / speed, atLeastTimeBtw[0]))
-
-        cur = cur.next
-        if (cur == curveArcs[0].head):
-            break
-
-    # Between startPt and endPt
-    for i in range(len(curveArcs) - 1):
-        curI = curveArcs[i].head
-        while (not curI.isNil):
-            curJ = curveArcs[i + 1].head
-            while (not curJ.isNil):
-                d = None
-                if (((i, curI.key), (i + 1, curJ.key)) not in tau):
-                    d = distEuclideanXY(curI.loc, curJ.loc)
-                    tau[(i, curI.key), (i + 1, curJ.key)] = d
-                else:
-                    d = tau[(i, curI.key), (i + 1, curJ.key)]
-
-                if (d > 0.005):
-                    G.add_edge((i, curI.key), (i + 1, curJ.key), weight = max(d / speed, atLeastTimeBtw[i + 1]))
-
-                curJ = curJ.next
-                if (curJ == curveArcs[i + 1].head):
-                    break
-            curI = curI.next
-            if (curI == curveArcs[i].head):
-                break
-
-    # last curveArc to endPt
-    cur = curveArcs[-1].head
-    while (not cur.isNil):
-        d = None
-        if (((len(curveArcs) - 1, cur.key), 'e') not in tau):
-            d = distEuclideanXY(cur.loc, endPt)
-            tau[(len(curveArcs) - 1, cur.key), 'e'] = d
-        else:
-            d = tau[(len(curveArcs) - 1, cur.key), 'e']
-        G.add_edge((len(curveArcs) - 1, cur.key), 'e', weight = max(d / speed, atLeastTimeBtw[-1]))
-
-        cur = cur.next
-        if (cur == curveArcs[-1].head):
-            break
-
-    sp = nx.dijkstra_path(G, 's', 'e')
-    # print(sp)
-
-    dist = 0
-    for i in range(1, len(sp)):
-        dist += G[sp[i - 1]][sp[i]]['weight']
-
-    # Refine ==================================================================
-    iterNum = 0
-    refineFlag = True
-    while (refineFlag):
-        iterNum += 1
-
-        # 重新起图
-        G = nx.Graph()
-
-        byStage = []
-
-        # sp[0] is startLoc
-        # sp[-1] is endLoc
-        for i in range(1, len(sp) - 1):
-            cvIdx = sp[i][0]
-            cvKey = sp[i][1]
-
-            # Insert two pts before and after this cvNode
-            n = curveArcs[cvIdx].query(cvKey)
-            curveArcs[cvIdx].insertAround(n)
-
-            thisStage = []
-
-            # prev.prev
-            if (not n.prev.isNil and not n.prev.prev.isNil):
-                thisStage.append(n.prev.prev)
-            if (not n.prev.isNil):
-                thisStage.append(n.prev)
-            thisStage.append(n)
-            if (not n.next.isNil):
-                thisStage.append(n.next)
-            if (not n.next.isNil and not n.next.next.isNil):
-                thisStage.append(n.next.next)
-
-            byStage.append(thisStage)
-
-        # StartPt => byStage
-        for k in byStage[0]:
-            d = None
-            if (('s', (0, k.key)) not in tau):
-                d = distEuclideanXY(startPt, k.loc)
-                tau['s', (0, k.key)] = d
-            else:
-                d = tau['s', (0, k.key)]
-            G.add_edge('s', (0, k.key), weight = max(d / speed, atLeastTimeBtw[0]))
-
-        # Between byStages
-        if (len(byStage) >= 2):
-            for i in range(1, len(byStage)):
-                for k1 in byStage[i - 1]:
-                    for k2 in byStage[i]:
-                        d = None
-                        if (((i - 1, k1.key), (i, k2.key)) not in tau):
-                            d = distEuclideanXY(k1.loc, k2.loc)
-                            tau[(i - 1, k1.key), (i, k2.key)] = d
-                        else:
-                            d = tau[(i - 1, k1.key), (i, k2.key)]
-                        G.add_edge((i - 1, k1.key), (i, k2.key), weight = max(d / speed, atLeastTimeBtw[i]))
-
-        # byStage => EndPt
-        for k in byStage[-1]:
-            d = None
-            if ((((len(curveArcs) - 1, k.key), 'e')) not in tau):
-                d = distEuclideanXY(k.loc, endPt)
-                tau[(len(curveArcs) - 1, k.key), 'e'] = d
-            else:
-                d = tau[(len(curveArcs) - 1, k.key), 'e']
-            G.add_edge((len(curveArcs) - 1, k.key), 'e', weight = max(d / speed, atLeastTimeBtw[-1]))
-
-        newSp = nx.dijkstra_path(G, 's', 'e')
-        newDist = 0
-        for i in range(1, len(newSp)):
-            newDist += G[newSp[i - 1]][newSp[i]]['weight']
-
-        if (abs(newDist - dist) <= adaptErr):
-            refineFlag = False
-
-        dist = newDist
-        sp = newSp
-
-    # Collect results =========================================================
-    path = [startPt]
-    for p in sp:
-        if (p != 's' and p != 'e'):
-            path.append(curveArcs[p[0]].query(p[1]).loc)
-    path.append(endPt)
-
-    # print("New dist: ", dist)
-    # print("Adapt Iter Time: ", (datetime.datetime.now() - startTime).total_seconds())
-    # print("Adapt Iter Num: ", iterNum)
-
-    return {
-        'path': path,
-        'dist': dist
     }

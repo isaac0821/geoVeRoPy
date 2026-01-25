@@ -5,7 +5,6 @@ import networkx as nx
 
 from .common import *
 from .geometry import *
-from .msg import *
 from .travel import *
 
 def solveOP(
@@ -27,9 +26,9 @@ def solveOP(
 
     # Sanity check ============================================================
     if (nodes == None or type(nodes) != dict):
-        raise MissingParameterError(ERROR_MISSING_NODES)
+        raise MissingParameterError("ERROR: Missing required field `nodes`.")
     for i in nodes:
-        if (locFieldName not in nodes[i]):
+        if (ptFieldName not in nodes[i]):
             raise MissingParameterError("ERROR: Node %s does not specify location information in `nodes`." % i)
         if (priceFieldName not in nodes[i]):
             raise MissingParameterError("ERROR: Node %s does not specify price information in `nodes`." % i)
@@ -62,7 +61,7 @@ def solveOP(
             raise OutOfRangeError("ERROR: Formulation is not supported.", )
 
     # Field names =============================================================
-    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+    ptFieldName = 'pt' if 'ptFieldName' not in kwargs else kwargs['ptFieldName']
     priceFieldName = 'price' if 'priceFieldName' not in kwargs else kwargs['priceFieldName']
 
     # Define tau ==============================================================
@@ -73,14 +72,14 @@ def solveOP(
             nodes = nodes, 
             nodeIDs = nodeIDs,
             edges = edges, 
-            locFieldName = locFieldName,
+            ptFieldName = ptFieldName,
             **kwargs)
     else:
         tau, _ = matrixDist(
             nodes = nodes, 
             nodeIDs = nodeIDs,
             edges = edges, 
-            locFieldName = locFieldName,
+            ptFieldName = ptFieldName,
             **kwargs)
 
     price = {}
@@ -133,33 +132,33 @@ def solveOP(
 
         # 返回一个数组，其中每个元素为二元数组，表示位置+时刻
         curTime = 0
-        curLoc = nodes[depotID][locFieldName]
-        timedSeq = [(curLoc, curTime)]
+        curPt = nodes[depotID][ptFieldName]
+        timedSeq = [(curPt, curTime)]
         # 对每个leg检索path中的shapepoints，涉及到serviceTime，先不看最后一段leg
         for i in range(1, len(nodeSeq) - 1):
             # 对于Euclidean型的，没有中间节点
             if (edges in ['Euclidean', 'LatLon']):
                 curTime += tau[nodeSeq[i - 1], nodeSeq[i]] / vehicles[vehicleID]['speed']
-                curLoc = nodes[nodeSeq[i]][locFieldName]
-                timedSeq.append((curLoc, curTime))
+                curPt = nodes[nodeSeq[i]][ptFieldName]
+                timedSeq.append((curPt, curTime))
             else:
                 shapepointsInBtw = path[nodeSeq[i - 1], nodeSeq[i]]
                 for j in range(1, len(shapepointsInBtw)):
                     curTime += distEuclideanXY(shapepointsInBtw[j - 1], shapepointsInBtw[j]) / vehicles[vehicleID]['speed']
-                    curLoc = shapepointsInBtw[j]
-                    timedSeq.append((curLoc, curTime))
+                    curPt = shapepointsInBtw[j]
+                    timedSeq.append((curPt, curTime))
 
         # 现在补上最后一段leg
         if (edges in ['Euclidean', 'LatLon']):
             curTime += tau[nodeSeq[-2], nodeSeq[-1]] / vehicles[vehicleID]['speed']
-            curLoc = nodes[nodeSeq[-1]][locFieldName]
-            timedSeq.append((curLoc, curTime))
+            curPt = nodes[nodeSeq[-1]][ptFieldName]
+            timedSeq.append((curPt, curTime))
         else:
             shapepointsInBtw = path[nodeSeq[-2], nodeSeq[-1]]
             for j in range(1, len(shapepointsInBtw)):
                 curTime += distEuclideanXY(shapepointsInBtw[j - 1], shapepointsInBtw[j]) / vehicles[vehicleID]['speed']
-                curLoc = shapepointsInBtw[j]
-                timedSeq.append((curLoc, curTime))
+                curPt = shapepointsInBtw[j]
+                timedSeq.append((curPt, curTime))
 
         # Add detail information to `vehicles`
         vehicles[vehicleID]['shapepoints'] = shapepoints

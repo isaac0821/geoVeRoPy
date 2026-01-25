@@ -5,9 +5,9 @@ from .geometry import *
 from .common import *
 
 class CurveArcNode(object):
-    def __init__(self, key, loc, deg, center, prev=None, next=None):
+    def __init__(self, key, pt, deg, center, prev=None, next=None):
         self.key = key # key的值具体是多少不重要，只要可以通过prev和next检索到就行
-        self.loc = loc
+        self.pt = pt
         self.deg = deg
         self.center = center
         self.prev = prev if prev != None else CurveArcNilNode()
@@ -49,7 +49,7 @@ class CurveArc(object):
                 d = startDeg + i * (endDeg - startDeg) / lod
                 cvNodeList.append(CurveArcNode(
                     key = i,
-                    loc = ptInDistXY(self.center, d, self.radius),
+                    pt = ptInDistXY(self.center, d, self.radius),
                     deg = d,
                     center = self.center,
                     prev = None,
@@ -76,7 +76,7 @@ class CurveArc(object):
                 d = startDeg + i * (endDeg - startDeg) / lod
                 cvNodeList.append(CurveArcNode(
                     key = i,
-                    loc = ptInDistXY(self.center, d, self.radius),
+                    pt = ptInDistXY(self.center, d, self.radius),
                     deg = d,
                     center = self.center,
                     prev = None,
@@ -99,12 +99,67 @@ class CurveArc(object):
         c = CurveArc(self.center, self.radius, self.startDeg, self.endDeg, lod = 12)
         return c
 
+    def cutGen(self):
+        # 如果是完整的curve不返回cut
+        if (self.circleFlag):
+            return None
+
+        # 弧的开始点和结束点
+        s = self.head.pt
+        e = self.tail.pt
+        # 弧的中点
+        midDeg = self.startDeg + (self.endDeg - self.startDeg) / 2
+        m = ptInDistXY(self.center, midDeg, self.radius)
+
+        a = None
+        b = None
+        c = None
+        sign = None
+
+        # Special case: vertical
+        if (abs(s[0] - e[0]) <= ERRTOL['slope']):
+            a = 1
+            b = 0
+            c = s[0]
+            if (m[0] <= c):
+                sign = "<="
+            else:
+                sign = ">="
+        # Special case: horizontal
+        elif (abs(s[1] - e[1]) <= ERRTOL['slope']):
+            a = 0
+            b = 1
+            c = s[1]
+            if (m[1] <= c):
+                sign = "<="
+            else:
+                sign = ">="
+        else:
+            (x1, y1) = s
+            (x2, y2) = e
+
+            a = y1 - y2
+            b = x2 - x1
+            c = x2 * y1 - x1 * y2
+
+            if (a * m[0] + b * m[1] <= c):
+                sign = "<="
+            else:
+                sign = ">="
+
+        return {
+            'a': a,
+            'b': b,
+            'c': c,
+            'sign': sign
+        }
+
     def getLineString(self, lod = 60):
-        locs = []
+        pts = []
         for i in range(lod + 1):
             d = self.startDeg + i * (self.endDeg - self.startDeg) / lod
-            locs.append(ptInDistXY(self.center, d, self.radius))
-        return shapely.LineString(locs)
+            pts.append(ptInDistXY(self.center, d, self.radius))
+        return shapely.LineString(pts)
 
     def query(self, key) -> "CurveArcNode":
         if (self.head.isNil):
@@ -135,7 +190,8 @@ class CurveArc(object):
             cur = cur.next
             if (cur == self.head):
                 break
-
+        if (self.circleFlag):
+            cvNodes.append(self.head)
         return cvNodes
 
     def insertAround(self, n):
@@ -148,7 +204,7 @@ class CurveArc(object):
                 newDeg = n.prev.deg + (n.deg - n.prev.deg) / 2
                 newCurveArcPrev = CurveArcNode(
                     key = self._count,
-                    loc = ptInDistXY(self.center, newDeg, self.radius),
+                    pt = ptInDistXY(self.center, newDeg, self.radius),
                     deg = newDeg,
                     center = self.center)
                 nPrev = n.prev
@@ -162,7 +218,7 @@ class CurveArc(object):
                 newDeg = n.deg + (n.next.deg - n.deg) / 2
                 newCurveArcNext = CurveArcNode(
                     key = self._count,
-                    loc = ptInDistXY(self.center, newDeg, self.radius),
+                    pt = ptInDistXY(self.center, newDeg, self.radius),
                     deg = newDeg,
                     center = self.center)
                 nNext = n.next
@@ -188,7 +244,7 @@ class CurveArc(object):
                 newDeg = n.prev.deg + (n.deg - n.prev.deg) / 2                
             newCurveArcPrev = CurveArcNode(
                 key = self._count,
-                loc = ptInDistXY(self.center, newDeg, self.radius),
+                pt = ptInDistXY(self.center, newDeg, self.radius),
                 deg = newDeg,
                 center = self.center)
             nPrev = n.prev
@@ -212,7 +268,7 @@ class CurveArc(object):
                 newDeg = n.deg + (n.next.deg - n.deg) / 2
             newCurveArcNext = CurveArcNode(
                 key = self._count,
-                loc = ptInDistXY(self.center, newDeg, self.radius),
+                pt = ptInDistXY(self.center, newDeg, self.radius),
                 deg = newDeg,
                 center = self.center)
             nNext = n.next

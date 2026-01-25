@@ -9,61 +9,10 @@ from matplotlib import cm
 
 from .common import *
 from .color import *
-from .msg import *
-from .province import *
 from .geometry import *
 from .gridSurface import *
 
-def aniRouting(
-    timeRange: tuple[int, int],
-    # Nodes -------------------------------------------------------------------
-    nodes: dict|None = None,
-    locFieldName: str = 'loc',
-    nodeTimedSeqFieldName: str = 'timedSeq',
-    nodeTimeWindowFieldName: str = 'timeWindow',
-    nodeColor: str = 'black',
-    nodeMarker: str = 'o',
-    nodeMarkerSize: float = 2,
-    # Vehicles ----------------------------------------------------------------
-    vehicles: dict|None = None,
-    vehTimedSeqFieldName: str = 'timedSeq',
-    vehLabelFieldName: str = 'label',
-    vehNoteFieldName: str = 'note',
-    vehColor: str = 'blue',
-    vehMarker: str = '^',
-    vehMarkerSize: float = 5,
-    vehPathColor: str|None = 'gray',
-    vehPathWidth: float|int|None = 3,
-    vehTraceColor: str|None = 'orange',
-    vehTraceWidth: float|int|None = 3,
-    vehTraceShadowTime: float|None = None,
-    vehSpdShowLabelFlag: bool = True,
-    vehSpdShowArrowFlag: bool = True,
-    vehSpdArrowLength: float = 5,
-    vehShowNoteFlag: bool = True,
-    # Polygons ----------------------------------------------------------------
-    polygons: dict|None = None,
-    polyAnchorFieldName: str = None,
-    polyTimedSeqFieldName: str = None,
-    polyTimeWindowFieldName: str = None,
-    polyFieldName = 'poly',    
-    polyEdgeColor: str = 'black',
-    polyEdgeWidth: float = 1,
-    polyFillColor: str|None = 'gray',
-    polyFillStyle: str|None = '///',
-    polyOpacity: float = 0.5,
-    # Settings ----------------------------------------------------------------
-    speed: int = 1,
-    fps: int = 12,
-    repeatFlag: bool = True,
-    xyReverseFlag: bool = False,
-    figSize: list[int|float|None] | tuple[int|float|None, int|float|None] = (None, 5), 
-    boundingBox: tuple[int|float|None, int|float|None, int|float|None, int|float|None] = (None, None, None, None),
-    showProgressFlag: bool = True,
-    aniSavePath: str|None = None,
-    aniSaveDPI: int = 300
-    ):
-
+def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: dict|None = None, polygons: dict|None = None):
     """Given nodes, vehicles, static polygons, and dynamic polygons, create animation
 
     Parameters
@@ -72,7 +21,7 @@ def aniRouting(
     nodes: dictionary, optional, default None
         A dictionary of nodes.
             >>> nodes[nID] = {
-            ...     'loc': [x, y],
+            ...     'pt': [x, y],
             ...     'neighbor': poly, # A polygon indicating neighborhood
             ...     'direction': direction, # Moving direction
             ...     'speed': speed, # Moving speed
@@ -101,8 +50,6 @@ def aniRouting(
             ...     'poly': [pt1, pt2], # A sequence of extreme points, coordinates are relative to 'anchor'
             ...     'direction': direction, # Moving direction
             ...     'speed': speed, # Moving speed,
-            # ...     'clockwise': None, # True if clockwise, False if counter-clockwise, None if not rotating
-            # ...     'rSpeed': radSpeed, # Rad speed,
             ...     'timeRange': [ts, te], # Time range of the movement
             ...     'edgeColor': color, # Edge color
             ...     'fillColor': color, # Fill color
@@ -111,6 +58,54 @@ def aniRouting(
             ... }
 
     """
+
+    # Styling characters ======================================================
+    # Nodes -------------------------------------------------------------------
+    ptFieldName = 'pt' if 'ptFieldName' not in kwargs else kwargs['ptFieldName']
+    nodeTimedSeqFieldName = 'timedSeq' if 'nodeTimedSeqFieldName' not in kwargs else kwargs['nodeTimedSeqFieldName']
+    nodeTimeWindowFieldName = 'timeWindow' if 'nodeTimeWindowFieldName' not in kwargs else kwargs['nodeTimeWindowFieldName']
+    nodeColor = 'black' if 'nodeColor' not in kwargs else kwargs['nodeColor']
+    nodeMarker = 'o' if 'nodeMarker' not in kwargs else kwargs['nodeMarker']
+    nodeMarkerSize = 2 if 'nodeMarkerSize' not in kwargs else kwargs['nodeMarkerSize']
+
+    # Vehicles ----------------------------------------------------------------
+    vehTimedSeqFieldName = 'timedSeq' if 'vehTimedSeqFieldName' not in kwargs else kwargs['vehTimedSeqFieldName']
+    vehLabelFieldName = 'label' if 'vehLabelFieldName' not in kwargs else kwargs['vehLabelFieldName']
+    vehNoteFieldName = 'note' if 'vehNoteFieldName' not in kwargs else kwargs['vehNoteFieldName']
+    vehColor = 'blue' if 'vehColor' not in kwargs else kwargs['vehColor']
+    vehMarker = '^' if 'vehMarker' not in kwargs else kwargs['vehMarker']
+    vehMarkerSize = 5 if 'vehMarkerSize' not in kwargs else kwargs['vehMarkerSize']
+    vehPathColor = 'gray' if 'vehPathColor' not in kwargs else kwargs['vehPathColor']
+    vehPathWidth = 3 if 'vehPathWidth' not in kwargs else kwargs['vehPathWidth']
+    vehTraceColor = 'orange' if 'vehTraceColor' not in kwargs else kwargs['vehTraceColor']
+    vehTraceWidth = 3 if 'vehTraceWidth' not in kwargs else kwargs['vehTraceWidth']
+    vehTraceShadowTime = None if 'vehTraceShadowTime' not in kwargs else kwargs['vehTraceShadowTime']
+    vehSpdShowLabelFlag = True if 'vehSpdShowLabelFlag' not in kwargs else kwargs['vehSpdShowLabelFlag']
+    vehSpdShowArrowFlag = True if 'vehSpdShowArrowFlag' not in kwargs else kwargs['vehSpdShowArrowFlag']
+    vehSpdArrowLength = 5 if 'vehSpdArrowLength' not in kwargs else kwargs['vehSpdArrowLength']
+    vehShowNoteFlag = True if 'vehShowNoteFlag' not in kwargs else kwargs['vehShowNoteFlag']
+
+    # Polygons ----------------------------------------------------------------
+    polyAnchorFieldName = None if 'polyAnchorFieldName' not in kwargs else kwargs['polyAnchorFieldName']
+    polyTimedSeqFieldName = None if 'polyTimedSeqFieldName' not in kwargs else kwargs['polyTimedSeqFieldName']
+    polyTimeWindowFieldName = None if 'polyTimeWindowFieldName' not in kwargs else kwargs['polyTimeWindowFieldName']
+    polyFieldName = 'poly' if 'polyFieldName' not in kwargs else kwargs['polyFieldName']
+    polyEdgeColor = 'black' if 'polyEdgeColor' not in kwargs else kwargs['polyEdgeColor']
+    polyEdgeWidth = 1 if 'polyEdgeWidth' not in kwargs else kwargs['polyEdgeWidth']
+    polyFillColor = 'gray' if 'polyFillColor' not in kwargs else kwargs['polyFillColor']
+    polyFillStyle = '///' if 'polyFillStyle' not in kwargs else kwargs['polyFillStyle']
+    polyOpacity = 0.5 if 'polyOpacity' not in kwargs else kwargs['polyOpacity']
+
+    # Settings ----------------------------------------------------------------
+    speed = 1 if 'speed' not in kwargs else kwargs['speed']
+    fps = 12 if 'fps' not in kwargs else kwargs['fps']
+    repeatFlag = True if 'repeatFlag' not in kwargs else kwargs['repeatFlag']
+    xyReverseFlag = False if 'xyReverseFlag' not in kwargs else kwargs['xyReverseFlag']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showProgressFlag = True if 'showProgressFlag' not in kwargs else kwargs['showProgressFlag']
+    aniSavePath = None if 'aniSavePath' not in kwargs else kwargs['aniSavePath']
+    aniSaveDPI = 30 if 'aniSaveDPI' not in kwargs else kwargs['aniSaveDPI']
 
     # Check for required fields ===============================================
     if (nodes == None and vehicles == None and polygons == None):
@@ -123,11 +118,11 @@ def aniRouting(
     if (nodes != None):
         for i in nodes:
             if (not xyReverseFlag):
-                allX.append(nodes[i][locFieldName][0])
-                allY.append(nodes[i][locFieldName][1])
+                allX.append(nodes[i][ptFieldName][0])
+                allY.append(nodes[i][ptFieldName][1])
             else:
-                allX.append(nodes[i][locFieldName][1])
-                allY.append(nodes[i][locFieldName][0])
+                allX.append(nodes[i][ptFieldName][1])
+                allY.append(nodes[i][ptFieldName][0])
     (xMin, xMax, yMin, yMax) = boundingBox
     if (xMin == None):
         xMin = min(allX) - 0.1 * abs(max(allX) - min(allX))
@@ -315,8 +310,8 @@ def aniRouting(
                                     curSnap = snapInTimedSeq(
                                         timedSeq = polygons[pID][polyTimedSeqFieldName],
                                         t = clock)
-                                    dx = (curSnap['loc'][0] - polygons[pID][polyAnchorFieldName][0])
-                                    dy = (curSnap['loc'][1] - polygons[pID][polyAnchorFieldName][1])
+                                    dx = (curSnap['pt'][0] - polygons[pID][polyAnchorFieldName][0])
+                                    dy = (curSnap['pt'][1] - polygons[pID][polyAnchorFieldName][1])
                                     pt = (p[0] + dx, p[1] + dy)
                             elif ('direction' in polygons[pID] and 'speed' in polygons[pID]):
                                 if (clock < polygons[pID][polyTimeWindowFieldName][0]):
@@ -365,22 +360,22 @@ def aniRouting(
 
                 x = None
                 y = None       
-                curLoc = None         
+                curPt = None         
                 if (plotNodeFlag):
                     if (nodeTimedSeqFieldName not in nodes[nID]):
-                        curLoc = nodes[nID][locFieldName]
+                        curPt = nodes[nID][ptFieldName]
                     else:
                         curSnap = snapInTimedSeq(
                             timedSeq = nodes[nID][nodeTimedSeqFieldName],
                             t = clock)
-                        curLoc = curSnap['loc']
+                        curPt = curSnap['pt']
 
                 if (not xyReverseFlag):
-                    x = curLoc[0]
-                    y = curLoc[1]
+                    x = curPt[0]
+                    y = curPt[1]
                 else:
-                    x = curLoc[1]
-                    y = curLoc[0]
+                    x = curPt[1]
+                    y = curPt[0]
                 # Styling of each node
                 if (plotNodeFlag):
                     ax.plot(x, y, 
@@ -436,8 +431,8 @@ def aniRouting(
                 curSnap = snapInTimedSeq(
                     timedSeq = vehicles[vID][vehTimedSeqFieldName],
                     t = clock)
-                curLoc = curSnap['loc']
-                ax.plot(curLoc[0], curLoc[1], 
+                curPt = curSnap['pt']
+                ax.plot(curPt[0], curPt[1], 
                     color = vehicleStyle[vID]['vehColor'], 
                     marker = vehicleStyle[vID]['vehMarker'], 
                     markersize = vehicleStyle[vID]['vehMarkerSize'])
@@ -462,9 +457,9 @@ def aniRouting(
                             if (vehicles[vID]['timedSeq'][i][1] <= clock < vehicles[vID]['timedSeq'][i + 1][1]):
                                 note = vehicles[vID][vehNoteFieldName][i]
                                 break
-                    ax.annotate(lbl + "\n" + note, (curLoc[0], curLoc[1]))
+                    ax.annotate(lbl + "\n" + note, (curPt[0], curPt[1]))
                 else:
-                    ax.annotate(lbl, (curLoc[0], curLoc[1]))
+                    ax.annotate(lbl, (curPt[0], curPt[1]))
 
     ani = FuncAnimation(
         fig, animate, 

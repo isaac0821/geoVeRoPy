@@ -13,7 +13,6 @@ from shapely.ops import nearest_points
 import networkx as nx
 
 from .common import *
-from .msg import *
 from .tree import *
 
 # Relation between Pts ========================================================
@@ -1958,8 +1957,8 @@ def intSeg2Circle(seg: line, circle: dict, detailFlag: bool = True):
     lambda1 = (- B - sqDelta) / (2 * A)
     lambda2 = (- B + sqDelta) / (2 * A)
 
-    loc1 = [x1 + lambda1 * (x2 - x1), y1 + lambda1 * (y2 - y1)]
-    loc2 = [x1 + lambda2 * (x2 - x1), y1 + lambda2 * (y2 - y1)]
+    pt1 = [x1 + lambda1 * (x2 - x1), y1 + lambda1 * (y2 - y1)]
+    pt2 = [x1 + lambda2 * (x2 - x1), y1 + lambda2 * (y2 - y1)]
 
     L1 = L * lambda1
     L2 = L * lambda2
@@ -1969,36 +1968,36 @@ def intSeg2Circle(seg: line, circle: dict, detailFlag: bool = True):
         if (detailFlag):
             return {
                 'status': 'Cross',
-                'intersect': [seg[0], loc2],
+                'intersect': [seg[0], pt2],
                 'intersectType': 'Segment',
                 'interiorFlag': True,
                 'mileage': [0, L2]
             }
         else:
-            return [seg[0], loc2]
+            return [seg[0], pt2]
     # Case 3: A不在内部，B在内部，找到线段上唯一一个圆与线段的交点
     elif (not insideAFlag and insideBFlag):
         if (detailFlag):
             return {
                 'status': 'Cross',
-                'intersect': [loc1, seg[1]],
+                'intersect': [pt1, seg[1]],
                 'intersectType': 'Segment',
                 'interiorFlag': True,
                 'mileage': [L1, L]
             }
         else:
-            return [loc1, seg[1]]
+            return [pt1, seg[1]]
     else:
         if (detailFlag):
             return {
                 'status': 'Cross',
-                'intersect': [loc1, loc2],
+                'intersect': [pt1, pt2],
                 'intersectType': 'Segment',
                 'interiorFlag': True,
                 'mileage': [L1, L2]
             }
         else:
-            return [loc1, loc2]
+            return [pt1, pt2]
 
 # Line-shape versus polygon ===================================================
 def isLineIntPoly(line: line, poly: poly=None, polyShapely: shapely.Polygon=None, interiorOnly: bool=False) -> bool:
@@ -2767,8 +2766,8 @@ def ptInSeqMileage(seq: list[pt], dist: int|float, dimension: str = 'XY') -> pt:
     # Initialize ==============================================================
     inPathFlag = False
     accDist = 0
-    preLoc = []
-    nextLoc = []
+    prePt = []
+    nextPt = []
     # Find segment ============================================================
     for i in range(0, len(seq) - 1):
         if (dimension == 'LatLon'):
@@ -2776,8 +2775,8 @@ def ptInSeqMileage(seq: list[pt], dist: int|float, dimension: str = 'XY') -> pt:
         elif (dimension == 'XY'):
             accDist += distEuclideanXY(seq[i], seq[i + 1])
         if (accDist > dist):
-            preLoc = seq[i]
-            nextLoc = seq[i + 1]
+            prePt = seq[i]
+            nextPt = seq[i + 1]
             inPathFlag = True
             break
     if (inPathFlag == False):
@@ -2786,13 +2785,13 @@ def ptInSeqMileage(seq: list[pt], dist: int|float, dimension: str = 'XY') -> pt:
     remainDist = accDist - dist
     segDist = 0
     if (dimension == 'LatLon'):
-        segDist = distLatLon(preLoc, nextLoc)
+        segDist = distLatLon(prePt, nextPt)
     elif (dimension == 'XY'):
-        segDist = distEuclideanXY(preLoc, nextLoc)
+        segDist = distEuclideanXY(prePt, nextPt)
     if (segDist <= ERRTOL['distPt2Pt']):
         raise ZeroDivisionError
-    x = nextLoc[0] + (remainDist / segDist) * (preLoc[0] - nextLoc[0])
-    y = nextLoc[1] + (remainDist / segDist) * (preLoc[1] - nextLoc[1])
+    x = nextPt[0] + (remainDist / segDist) * (prePt[0] - nextPt[0])
+    y = nextPt[1] + (remainDist / segDist) * (prePt[1] - nextPt[1])
     return (x, y)
 
 def ptMid(seg) -> pt:
@@ -3127,14 +3126,14 @@ def polysVisibleGraph(polys:polys) -> dict:
     Return
     ------
     dict
-        Each polygon has a index p, each point in the polygon has a index e, therefore, a (p, e) pair defines a location. The visual graph returns use (p, e) as keys, collects the location of (p, e) in 'loc', and finds the set of visible (p, e) in 'visible'
+        Each polygon has a index p, each point in the polygon has a index e, therefore, a (p, e) pair defines a location. The visual graph returns use (p, e) as keys, collects the location of (p, e) in 'pt', and finds the set of visible (p, e) in 'visible'
 
     """
 
     vg = {}
     for p in range(len(polys)):
         for e in range(len(polys[p])):
-            vg[(p, e)] = {'loc': polys[p][e], 'visible': []}
+            vg[(p, e)] = {'pt': polys[p][e], 'visible': []}
             W = _visPtAmongPolys((p, e), polys, knownVG=vg)
             # print(p, e, W)
             for w in W:
@@ -3148,7 +3147,7 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
     for p in range(len(polys)):
         for e in range(len(polys[p])):
             vertices[(p, e)] = {
-                'loc': polys[p][e],
+                'pt': polys[p][e],
                 'visible': []
             }
             polyVertices.append((p, e))
@@ -3157,7 +3156,7 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
             raise MissingParameterError("ERROR: Cannot find `v` in `polys` or `standalonePts`")
         else:
             vertices[v] = {
-                'loc': standalonePts[v]['loc'],
+                'pt': standalonePts[v]['pt'],
                 'visible': []
             }
 
@@ -3165,7 +3164,7 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
     verticeDistIndex = {}
     sortedSeq = nodeSeqByDist(
         nodes = vertices,
-        refLoc = vertices[v]['loc'],
+        refPt = vertices[v]['pt'],
         nodeIDs = polyVertices)
     for i in range(len(sortedSeq)):
         verticeDistIndex[sortedSeq[i]] = i
@@ -3173,7 +3172,7 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
     sweepSeq = nodeSeqBySweeping(
         nodes = vertices,
         nodeIDs = polyVertices,
-        refLoc = vertices[v]['loc'],
+        refPt = vertices[v]['pt'],
         initDeg = 90)
 
     # 用一个红黑树来维护射线通过的边，边的键值用(closer-index, further-index)，这样排序的时候无论如何都能保持距离关系
@@ -3197,7 +3196,7 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
         return T
 
     # 初始射线方向为x-轴正方向
-    xAxisRay = [vertices[v]['loc'], (vertices[v]['loc'][0] + 1, vertices[v]['loc'][1])]
+    xAxisRay = [vertices[v]['pt'], (vertices[v]['pt'][0] + 1, vertices[v]['pt'][1])]
     T = rayIntersectPolyEdges(xAxisRay, polys)
 
     # 给定一个障碍物的顶点w_i，确定v是否可以见到w_i
@@ -3211,7 +3210,7 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
         # 所在的polygon的编号
         polyV = polys[v[0]] if len(v) == 2 else None
         polyW = polys[wi[0]]
-        vwi = [vertices[v]['loc'], vertices[wi]['loc']]
+        vwi = [vertices[v]['pt'], vertices[wi]['pt']]
 
         vNext = None
         vPrev = None
@@ -3236,7 +3235,7 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
         if (notOnlineFlag and not T.isEmpty and not T.min(T.root).isNil):
             for edge in T.traverse():
                 if (isSegIntSeg(
-                        seg1 = [vertices[edge.value[0]]['loc'], vertices[edge.value[1]]['loc']], 
+                        seg1 = [vertices[edge.value[0]]['pt'], vertices[edge.value[1]]['pt']], 
                         seg2 = vwi, 
                         interiorOnly = True)):
                     noSegBlockFlag = False
@@ -3250,11 +3249,11 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
             if (polyV == None):
                 int2PolyVTangenFlag = True
             else:
-                segV = [vertices[vNext]['loc'], vertices[vPrev]['loc']]
+                segV = [vertices[vNext]['pt'], vertices[vPrev]['pt']]
                 int2PolyVTangenFlag = not isLineIntSeg(vwi, segV, interiorOnly=True)
         if (int2PolyVTangenFlag):
             # Check point W
-            segW = [vertices[wiNext]['loc'], vertices[wiPrev]['loc']]
+            segW = [vertices[wiNext]['pt'], vertices[wiPrev]['pt']]
             int2PolyWTangenFlag = not isLineIntSeg(vwi, segW, interiorOnly=True)
         bothEndTangenFlag = int2PolyVTangenFlag and int2PolyWTangenFlag
 
@@ -3279,7 +3278,7 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
         wi = sweepSeq[i]
         wim = sweepSeq[i - 1] if i > 1 else None
         # print(T)
-        if (not is2PtsSame(vertices[v]['loc'], vertices[wi]['loc']) and visible(wi, wim, polys)):
+        if (not is2PtsSame(vertices[v]['pt'], vertices[wi]['pt']) and visible(wi, wim, polys)):
             W.append(wi)
 
         # 将wi的边加入/移出平衡树T
@@ -3297,7 +3296,7 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
         vIdxWi = verticeDistIndex[wi]
         vIdxWiNext = verticeDistIndex[wiNext]
         vIdxWiPrev = verticeDistIndex[wiPrev]
-        if (is3PtsClockWise(vertices[v]['loc'], vertices[wi]['loc'], vertices[wiNext]['loc'])):
+        if (is3PtsClockWise(vertices[v]['pt'], vertices[wi]['pt'], vertices[wiNext]['pt'])):
             if (T.query((min(vIdxWi, vIdxWiNext), max(vIdxWi, vIdxWiNext))).isNil):
                 T.insert(RedBlackTreeNode(
                     key = (min(vIdxWi, vIdxWiNext), max(vIdxWi, vIdxWiNext)), 
@@ -3305,7 +3304,7 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
         else:
             if (not T.query((min(vIdxWi, vIdxWiNext), max(vIdxWi, vIdxWiNext))).isNil):
                 T.delete((min(vIdxWi, vIdxWiNext), max(vIdxWi, vIdxWiNext)))        
-        if (is3PtsClockWise(vertices[v]['loc'], vertices[wi]['loc'], vertices[wiPrev]['loc'])):
+        if (is3PtsClockWise(vertices[v]['pt'], vertices[wi]['pt'], vertices[wiPrev]['pt'])):
             if (T.query((min(vIdxWiPrev, vIdxWi), max(vIdxWiPrev, vIdxWi))).isNil):
                 T.insert(RedBlackTreeNode(
                     key = (min(vIdxWiPrev, vIdxWi), max(vIdxWiPrev, vIdxWi)), 
@@ -3332,7 +3331,7 @@ def snapInTimedSeq(timedSeq: list[tuple[pt, float]], t: float) -> dict:
     ------
     dict
         >>> {
-        ...     'loc': location,
+        ...     'pt': location,
         ...     'speed': speed,
         ...     'trajectory': trajectory
         ... }
@@ -3347,20 +3346,20 @@ def snapInTimedSeq(timedSeq: list[tuple[pt, float]], t: float) -> dict:
                 or abs(timedSeq[i][0][1] - timedSeq[i + 1][0][1]) >= ERRTOL['distPt2Pt'])):
             raise UnsupportedInputError("ERROR: an object cannot be two places at the same time.")
 
-    curLocX = None
-    curLocY = None
+    curPtX = None
+    curPtY = None
     curSpeed = None
     curTrajectory = None
 
     if (t <= timedSeq[0][1]):
         return {
-            'loc': timedSeq[0][0],
+            'pt': timedSeq[0][0],
             'speed': 0,
             'trajectory': None
         }
     if (t >= timedSeq[-1][1]):
         return {
-            'loc': timedSeq[-1][0],
+            'pt': timedSeq[-1][0],
             'speed': 0,
             'trajectory': None
         }
@@ -3370,20 +3369,20 @@ def snapInTimedSeq(timedSeq: list[tuple[pt, float]], t: float) -> dict:
             dist = distEuclideanXY(timedSeq[i][0], timedSeq[i + 1][0])
             if (dist > 0):
                 dt = (t - timedSeq[i][1]) / (timedSeq[i + 1][1] - timedSeq[i][1])                
-                curLocX = timedSeq[i][0][0] + (timedSeq[i + 1][0][0] - timedSeq[i][0][0]) * dt
-                curLocY = timedSeq[i][0][1] + (timedSeq[i + 1][0][1] - timedSeq[i][0][1]) * dt
+                curPtX = timedSeq[i][0][0] + (timedSeq[i + 1][0][0] - timedSeq[i][0][0]) * dt
+                curPtY = timedSeq[i][0][1] + (timedSeq[i + 1][0][1] - timedSeq[i][0][1]) * dt
                 curSpeed = dist / (timedSeq[i + 1][1] - timedSeq[i][1])
                 trajX = (timedSeq[i + 1][0][0] - timedSeq[i][0][0]) / dist
                 trajY = (timedSeq[i + 1][0][1] - timedSeq[i][0][1]) / dist
-                curTrajectory = [(curLocX, curLocY), (curLocX + trajX, curLocY + trajY)]
+                curTrajectory = [(curPtX, curPtY), (curPtX + trajX, curPtY + trajY)]
             else:
-                curLocX = timedSeq[i][0][0]
-                curLocY = timedSeq[i][0][1]
+                curPtX = timedSeq[i][0][0]
+                curPtY = timedSeq[i][0][1]
                 curSpeed = 0
                 curTrajectory = None
             break
     return {
-        'loc': [curLocX, curLocY],
+        'pt': [curPtX, curPtY],
         'speed': curSpeed,
         'trajectory': curTrajectory
     }
@@ -3430,17 +3429,17 @@ def traceInTimedSeq(timedSeq: list[tuple[pt, float]], ts: float, te: float) -> l
 
     tsIndex = -1
     teIndex = -1
-    tsLoc = []
-    teLoc = []
+    tsPt = []
+    tePt = []
 
     if (ts <= timedSeq[0][1]):
         tsIndex = 0
         ts = timedSeq[0][1]
-        tsLoc = timedSeq[0][0]
+        tsPt = timedSeq[0][0]
     if (te >= timedSeq[-1][1]):
         teIndex = len(timedSeq) - 1
         te = timedSeq[-1][1]
-        teLoc = timedSeq[-1][0]
+        tePt = timedSeq[-1][0]
 
     for i in range(len(timedSeq) - 1):
         if (timedSeq[i][1] <= ts < timedSeq[i + 1][1]):
@@ -3448,26 +3447,26 @@ def traceInTimedSeq(timedSeq: list[tuple[pt, float]], ts: float, te: float) -> l
             dTs = (ts - timedSeq[i][1]) / (timedSeq[i + 1][1] - timedSeq[i][1])
             tsX = timedSeq[i][0][0] + (timedSeq[i + 1][0][0] - timedSeq[i][0][0]) * dTs
             tsY = timedSeq[i][0][1] + (timedSeq[i + 1][0][1] - timedSeq[i][0][1]) * dTs
-            tsLoc = [tsX, tsY]
+            tsPt = [tsX, tsY]
             for j in range(tsIndex, len(timedSeq) - 1):
                 if (timedSeq[j][1] <= te < timedSeq[j + 1][1]):
                     teIndex = j
                     dTe = (te - timedSeq[j][1]) / (timedSeq[j + 1][1] - timedSeq[j][1])
                     teX = timedSeq[j][0][0] + (timedSeq[j + 1][0][0] - timedSeq[j][0][0]) * dTe
                     teY = timedSeq[j][0][1] + (timedSeq[j + 1][0][1] - timedSeq[j][0][1]) * dTe
-                    teLoc = [teX, teY]
+                    tePt = [teX, teY]
 
     if (tsIndex == teIndex):
-        trace = [tsLoc, teLoc]
+        trace = [tsPt, tePt]
     elif (tsIndex + 1 == teIndex):
-        trace.append(tsLoc)
+        trace.append(tsPt)
         trace.append(timedSeq[tsIndex + 1][0])
-        trace.append(teLoc)
+        trace.append(tePt)
     else:
-        trace.append(tsLoc)
+        trace.append(tsPt)
         for i in range(tsIndex + 1, teIndex + 1):
             trace.append(timedSeq[i][0])
-        trace.append(teLoc)
+        trace.append(tePt)
 
     return trace
 
@@ -3668,8 +3667,8 @@ def ptInDistLatLon(pt: pt, direction: int|float, distMeters: int|float) -> pt:
 
     """
     # Bearing in degrees: 0 – North, 90 – East, 180 – South, 270 or -90 – West.
-    newLoc = list(geopy.distance.distance(meters=distMeters).destination(point=pt, bearing=direction))[:2]
-    return newLoc
+    newPt = list(geopy.distance.distance(meters=distMeters).destination(point=pt, bearing=direction))[:2]
+    return newPt
 
 def circleByCenterLatLon(center: pt, radius: int|float, lod: int = 30) -> poly:
     """
@@ -3724,7 +3723,7 @@ def circleByCenterXY(center: pt, radius: int|float, lod: int = 30) -> poly:
     return circle
 
 # Sort nodes ==================================================================
-def nodeSeqByDist(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'loc', refLoc: pt|None = None, refNodeID: int|str|None = None) -> list:
+def nodeSeqByDist(nodes: dict, nodeIDs: list|str = 'All', ptFieldName = 'pt', refPt: pt|None = None, refNodeID: int|str|None = None) -> list:
     # Define nodeIDs
     if (type(nodeIDs) is not list):
         if (nodeIDs == 'All'):
@@ -3732,27 +3731,27 @@ def nodeSeqByDist(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'loc', 
             for i in nodes:
                 nodeIDs.append(i)
 
-    # Define refLoc
-    if (refLoc == None):
+    # Define refPt
+    if (refPt == None):
         if (refNodeID == None):
             raise MissingParameterError("ERROR: Missing reference location")
         elif (refNodeID not in nodeIDs):
             raise OutOfRangeError("ERROR: `refNodeID` cannot be found.")
         else:
-            refLoc = nodes[refNodeID][locFieldName]
+            refPt = nodes[refNodeID][ptFieldName]
 
     # Sort distance
     sortedSeq = []
     sortedSeqHeap = []
     for n in nodeIDs:
-        dist = distEuclideanXY(refLoc, nodes[n][locFieldName])
+        dist = distEuclideanXY(refPt, nodes[n][ptFieldName])
         heapq.heappush(sortedSeqHeap, (dist, n))
     while (len(sortedSeqHeap) > 0):
         sortedSeq.append(heapq.heappop(sortedSeqHeap)[1])  
 
     return sortedSeq
 
-def nodeSeqBySweeping(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'loc', refLoc: None|pt = None, refNodeID: int|str|None = None, isClockwise: bool = True, initDeg: float = 0) -> list:
+def nodeSeqBySweeping(nodes: dict, nodeIDs: list|str = 'All', ptFieldName = 'pt', refPt: None|pt = None, refNodeID: int|str|None = None, isClockwise: bool = True, initDeg: float = 0) -> list:
     """Given a set of locations, and a center point, gets the sequence from sweeping"""
     # Define nodeIDs
     if (type(nodeIDs) is not list):
@@ -3762,25 +3761,25 @@ def nodeSeqBySweeping(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'lo
                 nodeIDs.append(i)
 
     # Initialize centroid
-    if (refLoc == None):
-        lstNodeLoc = []
+    if (refPt == None):
+        lstNodePt = []
         for n in nodeIDs:
-            lstNodeLoc.append(shapely.Point(nodes[n][locFieldName][0], nodes[n][locFieldName][1]))
-        refLoc = list(shapely.centroid(shapely.MultiPoint(points = lstNodeLoc)))
+            lstNodePt.append(shapely.Point(nodes[n][ptFieldName][0], nodes[n][ptFieldName][1]))
+        refPt = list(shapely.centroid(shapely.MultiPoint(points = lstNodePt)))
 
     # Initialize heap
     degHeap = []
-    refLocNodes = []
+    refPtNodes = []
     
     # Build heap
     for n in nodeIDs:
-        dist = distEuclideanXY(nodes[n][locFieldName], refLoc)
+        dist = distEuclideanXY(nodes[n][ptFieldName], refPt)
         # If the nodes are too close, separate it/them
         if (dist <= ERRTOL['distPt2Pt']):
-            refLocNodes.append(n)
+            refPtNodes.append(n)
         else:
-            dx = nodes[n][locFieldName][0] - refLoc[0]
-            dy = nodes[n][locFieldName][1] - refLoc[1]
+            dx = nodes[n][ptFieldName][0] - refPt[0]
+            dy = nodes[n][ptFieldName][1] - refPt[1]
             (_, deg) = vecXY2Polar((dx, dy))
             # Calculate angles
             evalDeg = None
@@ -3798,12 +3797,12 @@ def nodeSeqBySweeping(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'lo
     sweepSeq = []
     while (len(degHeap)):
         sweepSeq.append(heapq.heappop(degHeap)[2])
-    sweepSeq.extend(refLocNodes)
+    sweepSeq.extend(refPtNodes)
 
     return sweepSeq
 
-def nodesInIsochrone(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'loc', refLoc: pt|None = None, refNodeID: int|str|None = None, isoRange: float = None, sortFlag: bool = False) -> list: 
-    # FIXME: Need an algorithm to filter out locations that are clearly too far from refLoc
+def nodesInIsochrone(nodes: dict, nodeIDs: list|str = 'All', ptFieldName = 'pt', refPt: pt|None = None, refNodeID: int|str|None = None, isoRange: float = None, sortFlag: bool = False) -> list: 
+    # FIXME: Need an algorithm to filter out locations that are clearly too far from refPt
     # Define nodeIDs
     if (type(nodeIDs) is not list):
         if (nodeIDs == 'All'):
@@ -3811,14 +3810,14 @@ def nodesInIsochrone(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'loc
             for i in nodes:
                 nodeIDs.append(i)
 
-    # Define refLoc
-    if (refLoc == None):
+    # Define refPt
+    if (refPt == None):
         if (refNodeID == None):
             raise MissingParameterError("ERROR: Missing reference location")
         elif (refNodeID not in nodeIDs):
             raise OutOfRangeError("ERROR: `refNodeID` cannot be found.")
         else:
-            refLoc = nodes[refNodeID][locFieldName]
+            refPt = nodes[refNodeID][ptFieldName]
 
     # Sort distance
     if (isoRange == None):
@@ -3829,7 +3828,7 @@ def nodesInIsochrone(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'loc
     if (sortFlag):
         nearSetHeap = []
         for n in nodeIDs:
-            dist = scaleDist(loc1 = refLoc, loc2 = nodes[n][locFieldName], edges = 'Euclidean')
+            dist = scaleDist(pt1 = refPt, pt2 = nodes[n][ptFieldName], edges = 'Euclidean')
             if (dist <= isoRange):
                 heapq.heappush(nearSetHeap, (dist, n))
         while (len(nearSetHeap) > 0):
@@ -3837,7 +3836,7 @@ def nodesInIsochrone(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'loc
         nearest = nearSet[0]
     else:
         for n in nodeIDs:
-            dist = scaleDist(loc1 = refLoc, loc2 = nodes[n][locFieldName], edges = 'Euclidean')
+            dist = scaleDist(pt1 = refPt, pt2 = nodes[n][ptFieldName], edges = 'Euclidean')
             if (dist <= isoRange):
                 nearSet.append(n)
             if (dist <= nearestDist):
@@ -3849,7 +3848,6 @@ def nodesInIsochrone(nodes: dict, nodeIDs: list|str = 'All', locFieldName = 'loc
     }
 
 # Distance calculation ========================================================
-@runtime("distEuclideanXY")
 def distEuclideanXY(pt1: pt, pt2: pt) -> dict:
     """
     Gives a Euclidean distance based on two coords.
@@ -3955,14 +3953,14 @@ def distBtwPolysXY(pt1:pt, pt2:pt, polys:polys, polyVG: dict = None, detailFlag:
     vertices = {}
     for p in polyVG:
         vertices[p] = {
-            'loc': polyVG[p]['loc'],
+            'pt': polyVG[p]['pt'],
             'visible': [i for i in polyVG[p]['visible']]
         }
-    vertices['s'] = {'loc': pt1, 'visible': []}
-    Ws = _visPtAmongPolys('s', polys, {'s': {'loc': pt1, 'visible': []}})
+    vertices['s'] = {'pt': pt1, 'visible': []}
+    Ws = _visPtAmongPolys('s', polys, {'s': {'pt': pt1, 'visible': []}})
     vertices['s']['visible'] = Ws
-    vertices['e'] = {'loc': pt2, 'visible': []}
-    We = _visPtAmongPolys('e', polys, {'e': {'loc': pt2, 'visible': []}})
+    vertices['e'] = {'pt': pt2, 'visible': []}
+    We = _visPtAmongPolys('e', polys, {'e': {'pt': pt2, 'visible': []}})
     vertices['e']['visible'] = We
 
     # Find shortest path ======================================================
@@ -3971,7 +3969,7 @@ def distBtwPolysXY(pt1:pt, pt2:pt, polys:polys, polyVG: dict = None, detailFlag:
         vg.add_node(v)
     for v in vertices:
         for e in vertices[v]['visible']:
-            vg.add_edge(v, e, weight=distEuclideanXY(vertices[v]['loc'], vertices[e]['loc']))
+            vg.add_edge(v, e, weight=distEuclideanXY(vertices[v]['pt'], vertices[e]['pt']))
     try:
         sp = nx.dijkstra_path(vg, 's', 'e')
     except:
@@ -3980,12 +3978,12 @@ def distBtwPolysXY(pt1:pt, pt2:pt, polys:polys, polyVG: dict = None, detailFlag:
 
     dist = 0
     for i in range(len(sp) - 1):
-        dist += distEuclideanXY(vertices[sp[i]]['loc'], vertices[sp[i + 1]]['loc'])
+        dist += distEuclideanXY(vertices[sp[i]]['pt'], vertices[sp[i + 1]]['pt'])
 
     if (detailFlag):
         return {
             'dist': dist,
-            'path': [vertices[wp]['loc'] for wp in sp]
+            'path': [vertices[wp]['pt'] for wp in sp]
         }
     else:
         return dist

@@ -15,21 +15,20 @@ from matplotlib import cm
 from .tree import *
 from .common import *
 from .color import *
-from .msg import *
 from .province import *
 from .geometry import *
 from .travel import *
 from .curveArc import *
 from .gridSurface import *
 
-def plotLocs(locs: list[pt], **kwargs):
+def plotPts(pts: list[pt], **kwargs):
 
     """
     Plot locations on a figure
 
     Parameters
     ----------
-    locs: list of pt, required
+    pts: list of pt, required
         A list of locations to be plotted
     **kwargs: optional
         Additional matplotlib information
@@ -49,22 +48,22 @@ def plotLocs(locs: list[pt], **kwargs):
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
-    # styling characters ======================================================
-    locColor = 'Random' if 'locColor' not in kwargs else kwargs['locColor']
-    locMarker = 'o' if 'locMarker' not in kwargs else kwargs['locMarker']
-    locMarkerSize = 1 if 'locMarkerSize' not in kwargs else kwargs['locMarkerSize']
+    # Styling characters ======================================================
+    ptColor = 'Random' if 'ptColor' not in kwargs else kwargs['ptColor']
+    ptMarker = 'o' if 'ptMarker' not in kwargs else kwargs['ptMarker']
+    ptMarkerSize = 1 if 'ptMarkerSize' not in kwargs else kwargs['ptMarkerSize']
     latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # Check for required fields ===============================================
-    if (locs == None):
-        raise MissingParameterError("ERROR: Missing required field `locs`.")
+    if (pts == None):
+        raise MissingParameterError("ERROR: Missing required field `pts`.")
 
     # If no based matplotlib figure provided, define boundary =================
     if (fig == None or ax == None):
         fig, ax = plt.subplots()
         boundingBox = defaultBoundingBox(
             boundingBox = boundingBox, 
-            pts = locs,
+            pts = pts,
             latLonFlag = latLonFlag)
         (xMin, xMax, yMin, yMax) = boundingBox
         (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
@@ -80,15 +79,15 @@ def plotLocs(locs: list[pt], **kwargs):
             ax.set_xlim(yMin, yMax)
             ax.set_ylim(xMin, xMax)
 
-    # Draw locs ==============================================================
+    # Draw pts ==============================================================
     # 逐个点绘制
-    for i in locs:
+    for i in pts:
         # Define color --------------------------------------------------------
         color = None
-        if (locColor == 'Random'):
+        if (ptColor == 'Random'):
             color = rndColor()
         else:
-            color = locColor
+            color = ptColor
         # plot nodes ----------------------------------------------------------
         x = None
         y = None
@@ -98,7 +97,7 @@ def plotLocs(locs: list[pt], **kwargs):
         else:
             x = i[1]
             y = i[0]
-        ax.plot(x, y, color = color, marker = locMarker, markersize = locMarkerSize)
+        ax.plot(x, y, color = color, marker = ptMarker, markersize = ptMarkerSize)
 
     # Axis on and off =========================================================
     if (not showAxis):
@@ -112,13 +111,13 @@ def plotLocs(locs: list[pt], **kwargs):
 
     return fig, ax
 
-def plotLocs3D(locs3D: list[pt3D], **kwargs):
+def plotPts3D(pts3D: list[pt3D], **kwargs):
     """
     Plot 3D locations on a figure
 
     Parameters
     ----------
-    locs3D: list of pt3D, required
+    pts3D: list of pt3D, required
         A list of locations to be plotted
     **kwargs: optional
         Additional matplotlib information
@@ -130,8 +129,8 @@ def plotLocs3D(locs3D: list[pt3D], **kwargs):
     """
 
     # Check for required fields ===============================================
-    if (locs3D == None):
-        raise MissingParameterError("ERROR: Missing required field `locs3D`.")
+    if (pts3D == None):
+        raise MissingParameterError("ERROR: Missing required field `pts3D`.")
 
     # Matplotlib characters ===================================================
     fig = None if 'fig' not in kwargs else kwargs['fig']
@@ -142,10 +141,10 @@ def plotLocs3D(locs3D: list[pt3D], **kwargs):
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
-    # styling characters ======================================================
-    locColor = 'Random' if 'locColor' not in kwargs else kwargs['locColor']
-    locMarker = 'o' if 'locMarker' not in kwargs else kwargs['locMarker']
-    locMarkerSize = 1 if 'locMarkerSize' not in kwargs else kwargs['locMarkerSize']
+    # Styling characters ======================================================
+    ptColor = 'Random' if 'ptColor' not in kwargs else kwargs['ptColor']
+    ptMarker = 'o' if 'ptMarker' not in kwargs else kwargs['ptMarker']
+    ptMarkerSize = 1 if 'ptMarkerSize' not in kwargs else kwargs['ptMarkerSize']
     latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # If no based matplotlib figure provided, define boundary =================
@@ -157,14 +156,14 @@ def plotLocs3D(locs3D: list[pt3D], **kwargs):
         ax.set_ylim(yMin, yMax)
         ax.set_zlim(zMin, zMax)
 
-    # Draw locs ==============================================================
-    for i in locs3D:
+    # Draw pts ==============================================================
+    for i in pts3D:
         # Define color --------------------------------------------------------
         color = None
-        if (locColor == 'Random'):
+        if (ptColor == 'Random'):
             color = rndColor()
         else:
-            color = locColor
+            color = ptColor
 
         # plot nodes ----------------------------------------------------------        
         x = None
@@ -177,7 +176,7 @@ def plotLocs3D(locs3D: list[pt3D], **kwargs):
             x = i[1]
             y = i[0]
 
-        ax.scatter3D(x, y, z, c = color, marker = locMarker, s = locMarkerSize)
+        ax.scatter3D(x, y, z, c = color, marker = ptMarker, s = ptMarkerSize)
 
     # Axis on and off =========================================================
     if (not showAxis):
@@ -218,7 +217,7 @@ def plotNodes(nodes: dict, **kwargs):
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
-    # styling characters ======================================================
+    # Styling characters ======================================================
     nodeColor = 'Random' if 'nodeColor' not in kwargs else kwargs['nodeColor']
     nodeMarker = 'o' if 'nodeMarker' not in kwargs else kwargs['nodeMarker']
     nodeMarkerSize = 1 if 'nodeMarkerSize' not in kwargs else kwargs['nodeMarkerSize']
@@ -228,12 +227,12 @@ def plotNodes(nodes: dict, **kwargs):
     latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # Field names =============================================================
-    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+    ptFieldName = 'pt' if 'ptFieldName' not in kwargs else kwargs['ptFieldName']
     neighborFieldName = 'neighbor' if 'neighborFieldName' not in kwargs else kwargs['neighborFieldName']
 
     # Check for required fields ===============================================
     if (nodes == None):
-        raise MissingParameterError(ERROR_MISSING_NODES)
+        raise MissingParameterError("ERROR: Missing required field `nodes`.")
 
     # If no based matplotlib figure provided, define boundary =================
     if (fig == None or ax == None):
@@ -241,7 +240,7 @@ def plotNodes(nodes: dict, **kwargs):
         boundingBox = defaultBoundingBox(
             boundingBox = boundingBox, 
             nodes = nodes, 
-            locFieldName = locFieldName, 
+            ptFieldName = ptFieldName, 
             latLonFlag = latLonFlag)
         (xMin, xMax, yMin, yMax) = boundingBox
         (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
@@ -260,11 +259,11 @@ def plotNodes(nodes: dict, **kwargs):
         nodeStyle[n]['x'] = None
         nodeStyle[n]['y'] = None
         if (not latLonFlag):
-            nodeStyle[n]['x'] = nodes[n][locFieldName][0]
-            nodeStyle[n]['y'] = nodes[n][locFieldName][1]
+            nodeStyle[n]['x'] = nodes[n][ptFieldName][0]
+            nodeStyle[n]['y'] = nodes[n][ptFieldName][1]
         else:
-            nodeStyle[n]['x'] = nodes[n][locFieldName][1]
-            nodeStyle[n]['y'] = nodes[n][locFieldName][0]
+            nodeStyle[n]['x'] = nodes[n][ptFieldName][1]
+            nodeStyle[n]['y'] = nodes[n][ptFieldName][0]
 
         # Color ---------------------------------------------------------------
         if ('color' in nodes[n]):
@@ -362,7 +361,7 @@ def plotNodes(nodes: dict, **kwargs):
             if ('radius' not in nodes[n]):
                 raise MissingParameterError(f"ERROR: Missing radius for node {n}, specify with 'radius' in nodes[{n}].")
             neiPoly = circleByCenterXY(
-                center = nodes[n][locFieldName],
+                center = nodes[n][ptFieldName],
                 radius = nodes[n]['radius'])
             fig, ax = plotPoly(
                 fig = fig,
@@ -451,8 +450,8 @@ def plotArcs(arcs: dict, **kwargs):
 
     # Field names =============================================================
     arcFieldName = 'arc' if 'arcFieldName' not in kwargs else kwargs['arcFieldName']
-    arcStartLocFieldName = 'startLoc' if 'arcStartLocFieldName' not in kwargs else kwargs['arcStartLocFieldName']
-    arcEndLocFieldName = 'endLoc' if 'arcEndLocFieldName' not in kwargs else kwargs['arcEndLocFieldName']
+    arcStartPtFieldName = 'startPt' if 'arcStartPtFieldName' not in kwargs else kwargs['arcStartPtFieldName']
+    arcEndPtFieldName = 'endPt' if 'arcEndPtFieldName' not in kwargs else kwargs['arcEndPtFieldName']
     neiAFieldName = 'neiA' if 'neiAFieldName' not in kwargs else kwargs['neiAFieldName']
     neiBFieldName = 'neiB' if 'neiBFieldName' not in kwargs else kwargs['neiBFieldName']
     neiBtwFieldName = 'neiBtw' if 'neiBtwFieldName' not in kwargs else kwargs['neiBtwFieldName']
@@ -461,7 +460,7 @@ def plotArcs(arcs: dict, **kwargs):
     if (arcs == None):
         raise MissingParameterError("ERROR: Missing required field `arcs`.")
     for i in arcs:
-        if (arcFieldName not in arcs[i] and arcStartLocFieldName not in arcs[i] and arcEndLocFieldName not in arcs[i]):
+        if (arcFieldName not in arcs[i] and arcStartPtFieldName not in arcs[i] and arcEndPtFieldName not in arcs[i]):
             raise MissingParameterError("ERROR: Cannot find arc field in given `arcs` - %s" % i)
 
     # If no based matplotlib figure provided, define boundary =================
@@ -471,8 +470,8 @@ def plotArcs(arcs: dict, **kwargs):
             boundingBox = boundingBox, 
             arcs = arcs, 
             arcFieldName = arcFieldName,
-            arcStartLocFieldName = arcStartLocFieldName,
-            arcEndLocFieldName = arcEndLocFieldName, 
+            arcStartPtFieldName = arcStartPtFieldName,
+            arcEndPtFieldName = arcEndPtFieldName, 
             latLonFlag = latLonFlag)
         (xMin, xMax, yMin, yMax) = boundingBox
         (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
@@ -499,19 +498,19 @@ def plotArcs(arcs: dict, **kwargs):
                 arcStyle[n]['x2'] = arcs[n][arcFieldName][1][1]
                 arcStyle[n]['y1'] = arcs[n][arcFieldName][0][0]
                 arcStyle[n]['y2'] = arcs[n][arcFieldName][1][0]
-        elif (arcStartLocFieldName in arcs[n] and arcEndLocFieldName in arcs[n]):
+        elif (arcStartPtFieldName in arcs[n] and arcEndPtFieldName in arcs[n]):
             if (not latLonFlag):
-                arcStyle[n]['x1'] = arcs[n][arcStartLocFieldName][0]
-                arcStyle[n]['y1'] = arcs[n][arcStartLocFieldName][1]
-                arcStyle[n]['x2'] = arcs[n][arcEndLocFieldName][0]
-                arcStyle[n]['y2'] = arcs[n][arcEndLocFieldName][1]
+                arcStyle[n]['x1'] = arcs[n][arcStartPtFieldName][0]
+                arcStyle[n]['y1'] = arcs[n][arcStartPtFieldName][1]
+                arcStyle[n]['x2'] = arcs[n][arcEndPtFieldName][0]
+                arcStyle[n]['y2'] = arcs[n][arcEndPtFieldName][1]
             else:
-                arcStyle[n]['x1'] = arcs[n][arcStartLocFieldName][1]
-                arcStyle[n]['y1'] = arcs[n][arcStartLocFieldName][0]
-                arcStyle[n]['x2'] = arcs[n][arcEndLocFieldName][1]
-                arcStyle[n]['y2'] = arcs[n][arcEndLocFieldName][0]
+                arcStyle[n]['x1'] = arcs[n][arcStartPtFieldName][1]
+                arcStyle[n]['y1'] = arcs[n][arcStartPtFieldName][0]
+                arcStyle[n]['x2'] = arcs[n][arcEndPtFieldName][1]
+                arcStyle[n]['y2'] = arcs[n][arcEndPtFieldName][0]
         else:
-            raise MissingParameterError("ERROR: Cannot find corresponded `arcFieldName` or (`arcStartLocFieldName` and `arcEndLocFieldName`) in given `arcs` structure.")
+            raise MissingParameterError("ERROR: Cannot find corresponded `arcFieldName` or (`arcStartPtFieldName` and `arcEndPtFieldName`) in given `arcs` structure.")
 
         # Color ---------------------------------------------------------------
         if ('color' in arcs[n]):
@@ -681,11 +680,11 @@ def plotCurveArc(curveArc: CurveArc, lod: int = 30, **kwargs):
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
     # Style characters ========================================================
-    lineColor = 'Random' if 'lineColor' in kwargs else kwargs['lineColor']
-    lineWidth = 1.0 if 'lineWidth' in kwargs else kwargs['lineWidth']
-    lineStyle = 'solid' if 'lineStyle' in kwargs else kwargs['lineStyle']
-    lineDashes = (5, 2) if 'lineDashes' in kwargs else kwargs['lineDashes']
-    arrowFlag = True if 'arrowFlag' in kwargs else kwargs['arrowFlag']
+    lineColor = 'Random' if 'lineColor' not in kwargs else kwargs['lineColor']
+    lineWidth = 1.0 if 'lineWidth' not in kwargs else kwargs['lineWidth']
+    lineStyle = 'solid' if 'lineStyle' not in kwargs else kwargs['lineStyle']
+    lineDashes = (5, 2) if 'lineDashes' not in kwargs else kwargs['lineDashes']
+    arrowFlag = True if 'arrowFlag' not in kwargs else kwargs['arrowFlag']
 
     # Plot curve ==============================================================
     # 计算夹角和拆分出来的边数
@@ -712,10 +711,10 @@ def plotCurveArc(curveArc: CurveArc, lod: int = 30, **kwargs):
         direction = curveArc.endDeg, 
         dist = curveArc.radius))    
 
-    fig, ax = plotLocSeq(
+    fig, ax = plotPtSeq(
         fig = fig,
         ax = ax,
-        locSeq = curve,
+        ptSeq = curve,
         lineColor = lineColor,
         lineWidth = lineWidth,
         lineStyle = lineStyle,
@@ -731,7 +730,7 @@ def plotCurveArc(curveArc: CurveArc, lod: int = 30, **kwargs):
     # Plot nodes ==============================================================
     nodes = {}
     for i in curveArc.traverse():
-        nodes[i.key] = {'loc': i.loc, 'label': ""}
+        nodes[i.key] = {'pt': i.pt, 'label': ""}
     fig, ax = plotNodes(
         fig = fig,
         ax = ax,
@@ -747,7 +746,7 @@ def plotCurveArc(curveArc: CurveArc, lod: int = 30, **kwargs):
 
     return fig, ax
 
-def plotPathCover(locSeq: list[pt], radius: float, lod: int = 30, **kwargs):
+def plotPathCover(ptSeq: list[pt], radius: float, lod: int = 30, **kwargs):
 
     # Matplotlib characters ===================================================
     fig = None if 'fig' not in kwargs else kwargs['fig']
@@ -769,14 +768,14 @@ def plotPathCover(locSeq: list[pt], radius: float, lod: int = 30, **kwargs):
 
     # curveArcs = {}
     # # NOTE: 先记录每个segment的角度
-    # for i in range(1, len(locSeq) - 2):
-    #     dir2Next = headingXY(locSeq[i], locSeq[i + 1])
-    #     dir2Prev = headingXY(locSeq[i], locSeq[i - 1])
+    # for i in range(1, len(ptSeq) - 2):
+    #     dir2Next = headingXY(ptSeq[i], ptSeq[i + 1])
+    #     dir2Prev = headingXY(ptSeq[i], ptSeq[i - 1])
     fig, ax = plotCircle(
         fig = fig,
         ax = ax,
         lod = lod,
-        center = locSeq[0],
+        center = ptSeq[0],
         radius = radius,
         edgeWidth = 0.1,
         edgeColor = 'gray',
@@ -785,10 +784,10 @@ def plotPathCover(locSeq: list[pt], radius: float, lod: int = 30, **kwargs):
         boundingBox = boundingBox,
         opacity = 0.3)
 
-    for i in range(1, len(locSeq) - 1):
+    for i in range(1, len(ptSeq) - 1):
         # 分别看看和上一个点、下一个点的距离，会不会让圆相交
-        # dist2Prev = distEuclideanXY(locSeq[i], locSeq[i - 1])
-        dist2Next = distEuclideanXY(locSeq[i], locSeq[i + 1])
+        # dist2Prev = distEuclideanXY(ptSeq[i], ptSeq[i - 1])
+        dist2Next = distEuclideanXY(ptSeq[i], ptSeq[i + 1])
 
         # 如果分别到上一个和下一个都大于R，完整圆
         if (dist2Next > 2 * radius):
@@ -796,7 +795,7 @@ def plotPathCover(locSeq: list[pt], radius: float, lod: int = 30, **kwargs):
                 fig = fig,
                 ax = ax,
                 lod = lod,
-                center = locSeq[i],
+                center = ptSeq[i],
                 radius = radius,
                 edgeWidth = 0.1,
                 edgeColor = 'gray',
@@ -806,8 +805,8 @@ def plotPathCover(locSeq: list[pt], radius: float, lod: int = 30, **kwargs):
                 opacity = 0.3)
         # 如果没有大于L
         else:
-            cir = circleByCenterXY(locSeq[i], radius, lod)
-            cirNext = circleByCenterXY(locSeq[i + 1], radius, lod)
+            cir = circleByCenterXY(ptSeq[i], radius, lod)
+            cirNext = circleByCenterXY(ptSeq[i + 1], radius, lod)
             subCir = polysSubtract(polys = [cir], subPolys = [cirNext])[0]
             fig, ax = plotPoly(
                 fig = fig,
@@ -820,19 +819,19 @@ def plotPathCover(locSeq: list[pt], radius: float, lod: int = 30, **kwargs):
                 boundingBox = boundingBox,
                 opacity = 0.3)
 
-    for i in range(len(locSeq) - 1):
-        deg = headingXY(locSeq[i], locSeq[i + 1])
-        pt1 = ptInDistXY(locSeq[i], deg + 90, radius)
-        pt2 = ptInDistXY(locSeq[i + 1], deg + 90, radius)
-        pt3 = ptInDistXY(locSeq[i + 1], deg - 90, radius)
-        pt4 = ptInDistXY(locSeq[i], deg - 90, radius)
+    for i in range(len(ptSeq) - 1):
+        deg = headingXY(ptSeq[i], ptSeq[i + 1])
+        pt1 = ptInDistXY(ptSeq[i], deg + 90, radius)
+        pt2 = ptInDistXY(ptSeq[i + 1], deg + 90, radius)
+        pt3 = ptInDistXY(ptSeq[i + 1], deg - 90, radius)
+        pt4 = ptInDistXY(ptSeq[i], deg - 90, radius)
 
         # Case 1: L > 2R
-        L = distEuclideanXY(locSeq[i], locSeq[i + 1])
+        L = distEuclideanXY(ptSeq[i], ptSeq[i + 1])
         if (L > 2 * radius):
             poly = [pt1, pt2, pt3, pt4]
-            c1 = circleByCenterXY(locSeq[i], radius, lod)
-            c2 = circleByCenterXY(locSeq[i + 1], radius, lod)
+            c1 = circleByCenterXY(ptSeq[i], radius, lod)
+            c2 = circleByCenterXY(ptSeq[i + 1], radius, lod)
             poly = polysSubtract(polys = [poly], subPolys = [c1])[0]
             poly = polysSubtract(polys = [poly], subPolys = [c2])[0]
             fig, ax = plotPoly(
@@ -848,8 +847,8 @@ def plotPathCover(locSeq: list[pt], radius: float, lod: int = 30, **kwargs):
         # Case 2: L <= 2R
         elif (L > radius):
             poly = [pt1, pt2, pt3, pt4]
-            c1 = circleByCenterXY(locSeq[i], radius, lod)
-            c2 = circleByCenterXY(locSeq[i + 1], radius, lod)
+            c1 = circleByCenterXY(ptSeq[i], radius, lod)
+            c2 = circleByCenterXY(ptSeq[i + 1], radius, lod)
             poly = polysSubtract(polys = [poly], subPolys = [c1])[0]
             polys = polysSubtract(polys = [poly], subPolys = [c2])
 
@@ -884,8 +883,8 @@ def plotPathCover(locSeq: list[pt], radius: float, lod: int = 30, **kwargs):
         elif (L < radius):
             try:
                 poly = [pt1, pt2, pt3, pt4]
-                c1 = circleByCenterXY(locSeq[i], radius, lod)
-                c2 = circleByCenterXY(locSeq[i + 1], radius, lod)
+                c1 = circleByCenterXY(ptSeq[i], radius, lod)
+                c2 = circleByCenterXY(ptSeq[i + 1], radius, lod)
                 polys = polysSubtract(polys = [poly], subPolys = [c1])
                 poly1 = polys[0]
                 poly2 = polys[1]
@@ -917,14 +916,14 @@ def plotPathCover(locSeq: list[pt], radius: float, lod: int = 30, **kwargs):
 
     return fig, ax
 
-def plotLocSeq(locSeq: list[pt], splFlag = False, **kwargs):
+def plotPtSeq(ptSeq: list[pt], splFlag = False, **kwargs):
     
     """Given a list of coordinates, plot a open polyline by sequences.
 
     Parameters
     ----------
 
-    locSeq: list[pt], required
+    ptSeq: list[pt], required
         A list of coordinates to form a sequence
     splFlag: bool, required
         True if draw a spline curve instead of line segments
@@ -962,7 +961,7 @@ def plotLocSeq(locSeq: list[pt], splFlag = False, **kwargs):
         fig, ax = plt.subplots()
         boundingBox = defaultBoundingBox(
             boundingBox = boundingBox, 
-            pts = locSeq,
+            pts = ptSeq,
             latLonFlag = latLonFlag)
         (xMin, xMax, yMin, yMax) = boundingBox
         (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
@@ -978,8 +977,8 @@ def plotLocSeq(locSeq: list[pt], splFlag = False, **kwargs):
             ax.set_xlim(yMin, yMax)
             ax.set_ylim(xMin, xMax)
 
-    if (locSeq == None):
-        raise MissingParameterError("ERROR: Missing required field `locSeq`.")
+    if (ptSeq == None):
+        raise MissingParameterError("ERROR: Missing required field `ptSeq`.")
     if (lineStyle == 'solid'):
         lineDashes = (None, None)
 
@@ -987,9 +986,9 @@ def plotLocSeq(locSeq: list[pt], splFlag = False, **kwargs):
         if (splFlag):
             raise UnsupportedInputError("ERROR: splFlag not supported for arrows yet.")
         arcs = {}
-        for i in range(len(locSeq) - 1):
-            if (not is2PtsSame(locSeq[i], locSeq[i + 1])):
-                arcs[i] = {'arc': [locSeq[i], locSeq[i + 1]]}
+        for i in range(len(ptSeq) - 1):
+            if (not is2PtsSame(ptSeq[i], ptSeq[i + 1])):
+                arcs[i] = {'arc': [ptSeq[i], ptSeq[i + 1]]}
 
         # Color ===================================================================
         if (lineColor == 'Random'):
@@ -1024,7 +1023,7 @@ def plotLocSeq(locSeq: list[pt], splFlag = False, **kwargs):
         y = []
 
         if (not splFlag):
-            for pt in locSeq:
+            for pt in ptSeq:
                 if (latLonFlag):
                     x.append(pt[1])
                     y.append(pt[0])
@@ -1034,11 +1033,11 @@ def plotLocSeq(locSeq: list[pt], splFlag = False, **kwargs):
         else:
             lc = None
             if (latLonFlag):
-                lc = [(i[1], i[0]) for i in locSeq]
+                lc = [(i[1], i[0]) for i in ptSeq]
             else:
-                lc = locSeq
+                lc = ptSeq
 
-            points = np.array(locSeq)
+            points = np.array(ptSeq)
             tck, u = splprep(points.T, u=None, s=0.0, per=False)
             u_new = np.linspace(0, 1, lod)
             x_smooth, y_smooth = splev(u_new, tck, der=0)
@@ -1056,7 +1055,7 @@ def plotLocSeq(locSeq: list[pt], splFlag = False, **kwargs):
 
     return fig, ax
 
-def plotLocSeq3D(locSeq3D: list[pt3D], **kwargs):
+def plotPtSeq3D(ptSeq3D: list[pt3D], **kwargs):
 
     # Matplotlib characters ===================================================
     fig = None if 'fig' not in kwargs else kwargs['fig']
@@ -1077,8 +1076,8 @@ def plotLocSeq3D(locSeq3D: list[pt3D], **kwargs):
     latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # Check for required fields ===============================================
-    if (locSeq3D == None):
-        raise MissingParameterError("ERROR: Missing required field `locSeq3D`.")
+    if (ptSeq3D == None):
+        raise MissingParameterError("ERROR: Missing required field `ptSeq3D`.")
 
     # If no based matplotlib figure provided, define boundary =================
     if (fig == None or ax == None):
@@ -1086,7 +1085,7 @@ def plotLocSeq3D(locSeq3D: list[pt3D], **kwargs):
         ax = plt.axes(projection = '3d')
         (xMin, xMax, yMin, yMax, zMin, zMax) = defaultBoundingBox(
             boundingBox3D = boundingBox3D,
-            locs3D = locSeq3D)
+            pts3D = ptSeq3D)
         ax.set_xlim(xMin, xMax)
         ax.set_ylim(yMin, yMax)
         ax.set_zlim(zMin, zMax)
@@ -1094,14 +1093,14 @@ def plotLocSeq3D(locSeq3D: list[pt3D], **kwargs):
     x = []
     y = []
     z = []
-    for loc in locSeq3D:
+    for pt in ptSeq3D:
         if (not latLonFlag):
-            x.append(loc[0])
-            y.append(loc[1])
+            x.append(pt[0])
+            y.append(pt[1])
         else:
-            x.append(loc[1])
-            y.append(loc[0])
-        z.append(loc[2])
+            x.append(pt[1])
+            y.append(pt[0])
+        z.append(pt[2])
 
     color = None
     if (lineColor == 'Random'):
@@ -1165,7 +1164,7 @@ def plotNodeSeq(nodes: dict, nodeSeq: list[int|str], **kwargs):
     latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # Field names =============================================================
-    locFieldName = 'loc' if 'locFieldName' not in kwargs else kwargs['locFieldName']
+    ptFieldName = 'pt' if 'ptFieldName' not in kwargs else kwargs['ptFieldName']
 
     # Create arcs =============================================================
     if (nodeSeq == None):
@@ -1177,7 +1176,7 @@ def plotNodeSeq(nodes: dict, nodeSeq: list[int|str], **kwargs):
 
     arcs = {}
     for i in range(len(nodeSeq) - 1):
-        arcs[i] = {'arc': [nodes[nodeSeq[i]][locFieldName], nodes[nodeSeq[i + 1]][locFieldName]]}
+        arcs[i] = {'arc': [nodes[nodeSeq[i]][ptFieldName], nodes[nodeSeq[i + 1]][ptFieldName]]}
 
     # Color ===================================================================
     if (lineColor == 'Random'):
@@ -1392,14 +1391,14 @@ def plotTimedPoly(timedPoly, triGridSurface = None, plotPolyFlag = True, plotSur
     # Plot polys in time ======================================================
     if (plotPolyFlag):
         for k in timedPoly:
-            locSeq3D = []
+            ptSeq3D = []
             for pt in k[0]:
-                locSeq3D.append((pt[0], pt[1], k[1]))
-            locSeq3D.append((k[0][0][0], k[0][0][1], k[1]))
-            fig, ax = plotLocSeq3D(
+                ptSeq3D.append((pt[0], pt[1], k[1]))
+            ptSeq3D.append((k[0][0][0], k[0][0][1], k[1]))
+            fig, ax = plotPtSeq3D(
                 fig = fig,
                 ax = ax,
-                locSeq3D = locSeq3D,
+                ptSeq3D = ptSeq3D,
                 lineColor = lineColor,
                 lineWidth = lineWidth,
                 lineStyle = lineStyle,
@@ -1410,6 +1409,7 @@ def plotTimedPoly(timedPoly, triGridSurface = None, plotPolyFlag = True, plotSur
         if (triGridSurface == None):
             triGridSurface = TriGridSurface(timedPoly)
         ax.add_collection3d(Poly3DCollection(triGridSurface.tris, alpha = surfaceOpacity, edgecolor = surfaceColor))
+        
     # Axis on and off =========================================================
     if (not showAxis):
         plt.axis('off')
@@ -1937,8 +1937,8 @@ def plotGantt(
 
     # Check for required fields ===============================================
     if (gantt == None):
-        raise MissingParameterError(ERROR_MISSING_GANTT)
-
+        raise MissingParameterError("ERROR: Missing required field `gantt`.")
+        
     # Pre-calculate ===========================================================
     realStart = None
     realEnd = None

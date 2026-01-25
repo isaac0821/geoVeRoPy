@@ -1,8 +1,7 @@
-__version__ = "0.0.20"
+__version__ = "0.0.22"
 __author__ = "Lan Peng"
 
 # Constants, messages, and basic modules
-from .msg import *
 from .common import *
 from .color import *
 
@@ -27,6 +26,9 @@ from .geometry import *
 from .obj2Obj import *
 from .polyTour import *
 from .grid import *
+from .stPath import *
+
+from .ctpst import *
 
 # Classical TSP
 from .tsp import *

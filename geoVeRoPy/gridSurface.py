@@ -678,4 +678,3 @@ class TriGridSurface(object):
             'trespassSemi': True,
             'dist': closestDist
         }
-

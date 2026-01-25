@@ -20,7 +20,7 @@ def gridSquare(
     for i in range(-numLeft, numRight + 1, 1):
         for j in range(-numDown, numUp + 1, 1):
             grid[(i, j)] = {
-                'loc': (center[0] + i * width, center[1] + j * width),
+                'pt': (center[0] + i * width, center[1] + j * width),
                 'poly': [
                     (center[0] + i * width - width / 2, center[1] + j * width - width / 2), 
                     (center[0] + i * width - width / 2, center[1] + j * width + width / 2), 
@@ -54,7 +54,7 @@ def gridHexagon(
             offSet = sqrt3 * width / 2        
         for i in range(-numLeft, numRight + 1, 1):
             grid[(i, j)] = {
-                'loc': (center[0] + i * sqrt3 * width + offSet, center[1] + j * 1.5 * width),
+                'pt': (center[0] + i * sqrt3 * width + offSet, center[1] + j * 1.5 * width),
                 'poly': [
                     (center[0] + i * sqrt3 * width + offSet - sqrt3 * width / 2, center[1] + j * 1.5 * width + width / 2),
                     (center[0] + i * sqrt3 * width + offSet, center[1] + j * 1.5 * width + width),
@@ -84,4 +84,3 @@ def gridIntPolys(
                     grid[g]['label'] = True
 
     return grid
-

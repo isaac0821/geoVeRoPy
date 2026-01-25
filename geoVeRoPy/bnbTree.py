@@ -1,7 +1,3 @@
-import math
-import random
-import heapq
-
 from .tree import *
 from .common import *
 

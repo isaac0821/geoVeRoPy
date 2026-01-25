@@ -1,4 +1,3 @@
-import math
 from .common import *
 
 # Basic tree objects
