@@ -152,6 +152,9 @@ def plotPts3D(pts3D: list[pt3D], **kwargs):
         fig = plt.figure()
         ax = plt.axes(projection = '3d')
         (xMin, xMax, yMin, yMax, zMin, zMax) = boundingBox3D
+        (xMin, xMax, yMin, yMax, zMin, zMax) = defaultBoundingBox3D(
+            boundingBox3D = boundingBox3D,
+            pts3D = ptSeq3D)
         ax.set_xlim(xMin, xMax)
         ax.set_ylim(yMin, yMax)
         ax.set_zlim(zMin, zMax)
@@ -1083,7 +1086,7 @@ def plotPtSeq3D(ptSeq3D: list[pt3D], **kwargs):
     if (fig == None or ax == None):
         fig = plt.figure()
         ax = plt.axes(projection = '3d')
-        (xMin, xMax, yMin, yMax, zMin, zMax) = defaultBoundingBox(
+        (xMin, xMax, yMin, yMax, zMin, zMax) = defaultBoundingBox3D(
             boundingBox3D = boundingBox3D,
             pts3D = ptSeq3D)
         ax.set_xlim(xMin, xMax)

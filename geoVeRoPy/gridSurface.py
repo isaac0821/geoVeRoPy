@@ -38,11 +38,6 @@ class TriGridSurface(object):
         top = polyTriangulation(self.topPoly)
 
         self.tris = []
-        for t in top:
-            self.tris.append([
-                (t[0][0], t[0][1], endTime), 
-                (t[1][0], t[1][1], endTime),
-                (t[2][0], t[2][1], endTime)])
         for t in bottom:
             self.tris.append([
                 (t[0][0], t[0][1], startTime), 
@@ -50,7 +45,12 @@ class TriGridSurface(object):
                 (t[2][0], t[2][1], startTime)])
         for k in self.triFacets:
             self.tris.append(self.triFacets[k])
-
+        for t in top:
+            self.tris.append([
+                (t[0][0], t[0][1], endTime), 
+                (t[1][0], t[1][1], endTime),
+                (t[2][0], t[2][1], endTime)])
+             
         return
 
     def buildFacets(self, timedPoly):
