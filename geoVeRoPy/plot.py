@@ -154,7 +154,7 @@ def plotPts3D(pts3D: list[pt3D], **kwargs):
         (xMin, xMax, yMin, yMax, zMin, zMax) = boundingBox3D
         (xMin, xMax, yMin, yMax, zMin, zMax) = defaultBoundingBox3D(
             boundingBox3D = boundingBox3D,
-            pts3D = ptSeq3D)
+            pts3D = path3D)
         ax.set_xlim(xMin, xMax)
         ax.set_ylim(yMin, yMax)
         ax.set_zlim(zMin, zMax)
@@ -714,10 +714,10 @@ def plotCurveArc(curveArc: CurveArc, lod: int = 30, **kwargs):
         direction = curveArc.endDeg, 
         dist = curveArc.radius))    
 
-    fig, ax = plotPtSeq(
+    fig, ax = plotPath(
         fig = fig,
         ax = ax,
-        ptSeq = curve,
+        path = curve,
         lineColor = lineColor,
         lineWidth = lineWidth,
         lineStyle = lineStyle,
@@ -749,184 +749,14 @@ def plotCurveArc(curveArc: CurveArc, lod: int = 30, **kwargs):
 
     return fig, ax
 
-def plotPathCover(ptSeq: list[pt], radius: float, lod: int = 30, **kwargs):
-
-    # Matplotlib characters ===================================================
-    fig = None if 'fig' not in kwargs else kwargs['fig']
-    ax = None if 'ax' not in kwargs else kwargs['ax']
-    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
-    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
-    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
-    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
-    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
-
-    # Styling characters ======================================================
-    edgeColor = 'Random' if 'edgeColor' not in kwargs else kwargs['edgeColor']
-    edgeWidth = 1.0 if 'edgeWidth' not in kwargs else kwargs['edgeWidth']
-    edgeStyle = 'solid' if 'edgeStyle' not in kwargs else kwargs['edgeStyle']
-    edgeDashes = (5, 2) if 'edgeDashes' not in kwargs else kwargs['edgeDashes']
-    fillColor = None if 'fillColor' not in kwargs else kwargs['fillColor']
-    fillStyle = "///" if 'fillStyle' not in kwargs else kwargs['fillStyle']
-    opacity = 0.5 if 'opacity' not in kwargs else kwargs['opacity']
-
-    # curveArcs = {}
-    # # NOTE: 先记录每个segment的角度
-    # for i in range(1, len(ptSeq) - 2):
-    #     dir2Next = headingXY(ptSeq[i], ptSeq[i + 1])
-    #     dir2Prev = headingXY(ptSeq[i], ptSeq[i - 1])
-    fig, ax = plotCircle(
-        fig = fig,
-        ax = ax,
-        lod = lod,
-        center = ptSeq[0],
-        radius = radius,
-        edgeWidth = 0.1,
-        edgeColor = 'gray',
-        fillColor = 'gray',
-        fillStyle = '///',
-        boundingBox = boundingBox,
-        opacity = 0.3)
-
-    for i in range(1, len(ptSeq) - 1):
-        # 分别看看和上一个点、下一个点的距离，会不会让圆相交
-        # dist2Prev = distEuclideanXY(ptSeq[i], ptSeq[i - 1])
-        dist2Next = distEuclideanXY(ptSeq[i], ptSeq[i + 1])
-
-        # 如果分别到上一个和下一个都大于R，完整圆
-        if (dist2Next > 2 * radius):
-            fig, ax = plotCircle(
-                fig = fig,
-                ax = ax,
-                lod = lod,
-                center = ptSeq[i],
-                radius = radius,
-                edgeWidth = 0.1,
-                edgeColor = 'gray',
-                fillColor = 'gray',
-                fillStyle = '///',
-                boundingBox = boundingBox,
-                opacity = 0.3)
-        # 如果没有大于L
-        else:
-            cir = circleByCenterXY(ptSeq[i], radius, lod)
-            cirNext = circleByCenterXY(ptSeq[i + 1], radius, lod)
-            subCir = polysSubtract(polys = [cir], subPolys = [cirNext])[0]
-            fig, ax = plotPoly(
-                fig = fig,
-                ax = ax,
-                poly = subCir,
-                edgeWidth = 0.1,
-                edgeColor = 'gray',
-                fillColor = 'gray',
-                fillStyle = '///',
-                boundingBox = boundingBox,
-                opacity = 0.3)
-
-    for i in range(len(ptSeq) - 1):
-        deg = headingXY(ptSeq[i], ptSeq[i + 1])
-        pt1 = ptInDistXY(ptSeq[i], deg + 90, radius)
-        pt2 = ptInDistXY(ptSeq[i + 1], deg + 90, radius)
-        pt3 = ptInDistXY(ptSeq[i + 1], deg - 90, radius)
-        pt4 = ptInDistXY(ptSeq[i], deg - 90, radius)
-
-        # Case 1: L > 2R
-        L = distEuclideanXY(ptSeq[i], ptSeq[i + 1])
-        if (L > 2 * radius):
-            poly = [pt1, pt2, pt3, pt4]
-            c1 = circleByCenterXY(ptSeq[i], radius, lod)
-            c2 = circleByCenterXY(ptSeq[i + 1], radius, lod)
-            poly = polysSubtract(polys = [poly], subPolys = [c1])[0]
-            poly = polysSubtract(polys = [poly], subPolys = [c2])[0]
-            fig, ax = plotPoly(
-                fig = fig,
-                ax = ax,
-                poly = poly,
-                edgeWidth = 0.1,
-                edgeColor = 'gray',
-                fillColor = 'gray',
-                fillStyle = '///',
-                boundingBox = boundingBox,
-                opacity = 0.3)
-        # Case 2: L <= 2R
-        elif (L > radius):
-            poly = [pt1, pt2, pt3, pt4]
-            c1 = circleByCenterXY(ptSeq[i], radius, lod)
-            c2 = circleByCenterXY(ptSeq[i + 1], radius, lod)
-            poly = polysSubtract(polys = [poly], subPolys = [c1])[0]
-            polys = polysSubtract(polys = [poly], subPolys = [c2])
-
-            poly1 = polys[0]
-            fig, ax = plotPoly(
-                fig = fig,
-                ax = ax,
-                poly = poly1,
-                edgeWidth = 0.1,
-                edgeColor = 'gray',
-                fillColor = 'gray',
-                fillStyle = '///',
-                boundingBox = boundingBox,
-                opacity = 0.3)
-
-            try:
-                poly2 = polys[1]
-                fig, ax = plotPoly(
-                    fig = fig,
-                    ax = ax,
-                    poly = poly2,
-                    edgeWidth = 0.1,
-                    edgeColor = 'gray',
-                    fillColor = 'gray',
-                    fillStyle = '///',
-                    boundingBox = boundingBox,
-                    opacity = 0.3)
-            except:
-                pass
-                
-        # Case 3: L < R
-        elif (L < radius):
-            try:
-                poly = [pt1, pt2, pt3, pt4]
-                c1 = circleByCenterXY(ptSeq[i], radius, lod)
-                c2 = circleByCenterXY(ptSeq[i + 1], radius, lod)
-                polys = polysSubtract(polys = [poly], subPolys = [c1])
-                poly1 = polys[0]
-                poly2 = polys[1]
-                poly1 = polysSubtract(polys = [poly1], subPolys = [c2])[0]
-                poly2 = polysSubtract(polys = [poly2], subPolys = [c2])[0]
-
-                fig, ax = plotPoly(
-                    fig = fig,
-                    ax = ax,
-                    poly = poly1,
-                    edgeWidth = 0.1,
-                    edgeColor = 'gray',
-                    fillColor = 'gray',
-                    fillStyle = '///',
-                    boundingBox = boundingBox,
-                    opacity = 0.3)
-                fig, ax = plotPoly(
-                    fig = fig,
-                    ax = ax,
-                    poly = poly2,
-                    edgeWidth = 0.1,
-                    edgeColor = 'gray',
-                    fillColor = 'gray',
-                    fillStyle = '///',
-                    boundingBox = boundingBox,
-                    opacity = 0.3)
-            except:
-                pass
-
-    return fig, ax
-
-def plotPtSeq(ptSeq: list[pt], splFlag = False, **kwargs):
+def plotPath(path: list[pt], splFlag = False, **kwargs):
     
     """Given a list of coordinates, plot a open polyline by sequences.
 
     Parameters
     ----------
 
-    ptSeq: list[pt], required
+    path: list[pt], required
         A list of coordinates to form a sequence
     splFlag: bool, required
         True if draw a spline curve instead of line segments
@@ -964,7 +794,7 @@ def plotPtSeq(ptSeq: list[pt], splFlag = False, **kwargs):
         fig, ax = plt.subplots()
         boundingBox = defaultBoundingBox(
             boundingBox = boundingBox, 
-            pts = ptSeq,
+            pts = path,
             latLonFlag = latLonFlag)
         (xMin, xMax, yMin, yMax) = boundingBox
         (width, height) = defaultFigSize(boundingBox, figSize[0], figSize[1], latLonFlag)
@@ -980,8 +810,8 @@ def plotPtSeq(ptSeq: list[pt], splFlag = False, **kwargs):
             ax.set_xlim(yMin, yMax)
             ax.set_ylim(xMin, xMax)
 
-    if (ptSeq == None):
-        raise MissingParameterError("ERROR: Missing required field `ptSeq`.")
+    if (path == None):
+        raise MissingParameterError("ERROR: Missing required field `path`.")
     if (lineStyle == 'solid'):
         lineDashes = (None, None)
 
@@ -989,9 +819,9 @@ def plotPtSeq(ptSeq: list[pt], splFlag = False, **kwargs):
         if (splFlag):
             raise UnsupportedInputError("ERROR: splFlag not supported for arrows yet.")
         arcs = {}
-        for i in range(len(ptSeq) - 1):
-            if (not is2PtsSame(ptSeq[i], ptSeq[i + 1])):
-                arcs[i] = {'arc': [ptSeq[i], ptSeq[i + 1]]}
+        for i in range(len(path) - 1):
+            if (not is2PtsSame(path[i], path[i + 1])):
+                arcs[i] = {'arc': [path[i], path[i + 1]]}
 
         # Color ===================================================================
         if (lineColor == 'Random'):
@@ -1026,7 +856,7 @@ def plotPtSeq(ptSeq: list[pt], splFlag = False, **kwargs):
         y = []
 
         if (not splFlag):
-            for pt in ptSeq:
+            for pt in path:
                 if (latLonFlag):
                     x.append(pt[1])
                     y.append(pt[0])
@@ -1036,11 +866,11 @@ def plotPtSeq(ptSeq: list[pt], splFlag = False, **kwargs):
         else:
             lc = None
             if (latLonFlag):
-                lc = [(i[1], i[0]) for i in ptSeq]
+                lc = [(i[1], i[0]) for i in path]
             else:
-                lc = ptSeq
+                lc = path
 
-            points = np.array(ptSeq)
+            points = np.array(path)
             tck, u = splprep(points.T, u=None, s=0.0, per=False)
             u_new = np.linspace(0, 1, lod)
             x_smooth, y_smooth = splev(u_new, tck, der=0)
@@ -1058,7 +888,177 @@ def plotPtSeq(ptSeq: list[pt], splFlag = False, **kwargs):
 
     return fig, ax
 
-def plotPtSeq3D(ptSeq3D: list[pt3D], **kwargs):
+def plotPathCover(path: list[pt], radius: float, lod: int = 30, **kwargs):
+
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Styling characters ======================================================
+    edgeColor = 'Random' if 'edgeColor' not in kwargs else kwargs['edgeColor']
+    edgeWidth = 1.0 if 'edgeWidth' not in kwargs else kwargs['edgeWidth']
+    edgeStyle = 'solid' if 'edgeStyle' not in kwargs else kwargs['edgeStyle']
+    edgeDashes = (5, 2) if 'edgeDashes' not in kwargs else kwargs['edgeDashes']
+    fillColor = None if 'fillColor' not in kwargs else kwargs['fillColor']
+    fillStyle = "///" if 'fillStyle' not in kwargs else kwargs['fillStyle']
+    opacity = 0.5 if 'opacity' not in kwargs else kwargs['opacity']
+
+    # curveArcs = {}
+    # # NOTE: 先记录每个segment的角度
+    # for i in range(1, len(path) - 2):
+    #     dir2Next = headingXY(path[i], path[i + 1])
+    #     dir2Prev = headingXY(path[i], path[i - 1])
+    fig, ax = plotCircle(
+        fig = fig,
+        ax = ax,
+        lod = lod,
+        center = path[0],
+        radius = radius,
+        edgeWidth = 0.1,
+        edgeColor = 'gray',
+        fillColor = 'gray',
+        fillStyle = '///',
+        boundingBox = boundingBox,
+        opacity = 0.3)
+
+    for i in range(1, len(path) - 1):
+        # 分别看看和上一个点、下一个点的距离，会不会让圆相交
+        # dist2Prev = distEuclideanXY(path[i], path[i - 1])
+        dist2Next = distEuclideanXY(path[i], path[i + 1])
+
+        # 如果分别到上一个和下一个都大于R，完整圆
+        if (dist2Next > 2 * radius):
+            fig, ax = plotCircle(
+                fig = fig,
+                ax = ax,
+                lod = lod,
+                center = path[i],
+                radius = radius,
+                edgeWidth = 0.1,
+                edgeColor = 'gray',
+                fillColor = 'gray',
+                fillStyle = '///',
+                boundingBox = boundingBox,
+                opacity = 0.3)
+        # 如果没有大于L
+        else:
+            cir = circleByCenterXY(path[i], radius, lod)
+            cirNext = circleByCenterXY(path[i + 1], radius, lod)
+            subCir = polysSubtract(polys = [cir], subPolys = [cirNext])[0]
+            fig, ax = plotPoly(
+                fig = fig,
+                ax = ax,
+                poly = subCir,
+                edgeWidth = 0.1,
+                edgeColor = 'gray',
+                fillColor = 'gray',
+                fillStyle = '///',
+                boundingBox = boundingBox,
+                opacity = 0.3)
+
+    for i in range(len(path) - 1):
+        deg = headingXY(path[i], path[i + 1])
+        pt1 = ptInDistXY(path[i], deg + 90, radius)
+        pt2 = ptInDistXY(path[i + 1], deg + 90, radius)
+        pt3 = ptInDistXY(path[i + 1], deg - 90, radius)
+        pt4 = ptInDistXY(path[i], deg - 90, radius)
+
+        # Case 1: L > 2R
+        L = distEuclideanXY(path[i], path[i + 1])
+        if (L > 2 * radius):
+            poly = [pt1, pt2, pt3, pt4]
+            c1 = circleByCenterXY(path[i], radius, lod)
+            c2 = circleByCenterXY(path[i + 1], radius, lod)
+            poly = polysSubtract(polys = [poly], subPolys = [c1])[0]
+            poly = polysSubtract(polys = [poly], subPolys = [c2])[0]
+            fig, ax = plotPoly(
+                fig = fig,
+                ax = ax,
+                poly = poly,
+                edgeWidth = 0.1,
+                edgeColor = 'gray',
+                fillColor = 'gray',
+                fillStyle = '///',
+                boundingBox = boundingBox,
+                opacity = 0.3)
+        # Case 2: L <= 2R
+        elif (L > radius):
+            poly = [pt1, pt2, pt3, pt4]
+            c1 = circleByCenterXY(path[i], radius, lod)
+            c2 = circleByCenterXY(path[i + 1], radius, lod)
+            poly = polysSubtract(polys = [poly], subPolys = [c1])[0]
+            polys = polysSubtract(polys = [poly], subPolys = [c2])
+
+            poly1 = polys[0]
+            fig, ax = plotPoly(
+                fig = fig,
+                ax = ax,
+                poly = poly1,
+                edgeWidth = 0.1,
+                edgeColor = 'gray',
+                fillColor = 'gray',
+                fillStyle = '///',
+                boundingBox = boundingBox,
+                opacity = 0.3)
+
+            try:
+                poly2 = polys[1]
+                fig, ax = plotPoly(
+                    fig = fig,
+                    ax = ax,
+                    poly = poly2,
+                    edgeWidth = 0.1,
+                    edgeColor = 'gray',
+                    fillColor = 'gray',
+                    fillStyle = '///',
+                    boundingBox = boundingBox,
+                    opacity = 0.3)
+            except:
+                pass
+                
+        # Case 3: L < R
+        elif (L < radius):
+            try:
+                poly = [pt1, pt2, pt3, pt4]
+                c1 = circleByCenterXY(path[i], radius, lod)
+                c2 = circleByCenterXY(path[i + 1], radius, lod)
+                polys = polysSubtract(polys = [poly], subPolys = [c1])
+                poly1 = polys[0]
+                poly2 = polys[1]
+                poly1 = polysSubtract(polys = [poly1], subPolys = [c2])[0]
+                poly2 = polysSubtract(polys = [poly2], subPolys = [c2])[0]
+
+                fig, ax = plotPoly(
+                    fig = fig,
+                    ax = ax,
+                    poly = poly1,
+                    edgeWidth = 0.1,
+                    edgeColor = 'gray',
+                    fillColor = 'gray',
+                    fillStyle = '///',
+                    boundingBox = boundingBox,
+                    opacity = 0.3)
+                fig, ax = plotPoly(
+                    fig = fig,
+                    ax = ax,
+                    poly = poly2,
+                    edgeWidth = 0.1,
+                    edgeColor = 'gray',
+                    fillColor = 'gray',
+                    fillStyle = '///',
+                    boundingBox = boundingBox,
+                    opacity = 0.3)
+            except:
+                pass
+
+    return fig, ax
+
+def plotPath3D(path3D: list[pt3D], **kwargs):
 
     # Matplotlib characters ===================================================
     fig = None if 'fig' not in kwargs else kwargs['fig']
@@ -1079,8 +1079,8 @@ def plotPtSeq3D(ptSeq3D: list[pt3D], **kwargs):
     latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
 
     # Check for required fields ===============================================
-    if (ptSeq3D == None):
-        raise MissingParameterError("ERROR: Missing required field `ptSeq3D`.")
+    if (path3D == None):
+        raise MissingParameterError("ERROR: Missing required field `path3D`.")
 
     # If no based matplotlib figure provided, define boundary =================
     if (fig == None or ax == None):
@@ -1088,7 +1088,7 @@ def plotPtSeq3D(ptSeq3D: list[pt3D], **kwargs):
         ax = plt.axes(projection = '3d')
         (xMin, xMax, yMin, yMax, zMin, zMax) = defaultBoundingBox3D(
             boundingBox3D = boundingBox3D,
-            pts3D = ptSeq3D)
+            pts3D = path3D)
         ax.set_xlim(xMin, xMax)
         ax.set_ylim(yMin, yMax)
         ax.set_zlim(zMin, zMax)
@@ -1096,7 +1096,7 @@ def plotPtSeq3D(ptSeq3D: list[pt3D], **kwargs):
     x = []
     y = []
     z = []
-    for pt in ptSeq3D:
+    for pt in path3D:
         if (not latLonFlag):
             x.append(pt[0])
             y.append(pt[1])
@@ -1128,7 +1128,7 @@ def plotPtSeq3D(ptSeq3D: list[pt3D], **kwargs):
 
     return fig, ax
 
-def plotNodeSeq(nodes: dict, nodeSeq: list[int|str], **kwargs):
+def plotNodeSeq(nodes: dict, seq: list[int|str], **kwargs):
 
     """Given a `nodes` dictionary and a sequence of node IDs, plot a route that visits each node by IDs.
 
@@ -1136,7 +1136,7 @@ def plotNodeSeq(nodes: dict, nodeSeq: list[int|str], **kwargs):
     ----------
     nodes: dict, required
         A `node` dictionary. See :ref:`nodes` for reference.
-    nodeSeq: list[int|str], required
+    seq: list[int|str], required
         A list of nodeIDs which will form a visiting sequence
 
     Returns
@@ -1170,16 +1170,16 @@ def plotNodeSeq(nodes: dict, nodeSeq: list[int|str], **kwargs):
     ptFieldName = 'pt' if 'ptFieldName' not in kwargs else kwargs['ptFieldName']
 
     # Create arcs =============================================================
-    if (nodeSeq == None):
-        raise MissingParameterError("ERROR: Missing required field `nodeSeq`.")
+    if (seq == None):
+        raise MissingParameterError("ERROR: Missing required field `seq`.")
     # Call plotArcs ===========================================================
-    for n in nodeSeq:
+    for n in seq:
         if (n not in nodes):
             raise UnsupportedInputError("ERROR: Cannot find %s in nodes" % n)
 
     arcs = {}
-    for i in range(len(nodeSeq) - 1):
-        arcs[i] = {'arc': [nodes[nodeSeq[i]][ptFieldName], nodes[nodeSeq[i + 1]][ptFieldName]]}
+    for i in range(len(seq) - 1):
+        arcs[i] = {'arc': [nodes[seq[i]][ptFieldName], nodes[seq[i + 1]][ptFieldName]]}
 
     # Color ===================================================================
     if (lineColor == 'Random'):
@@ -1394,14 +1394,14 @@ def plotTimedPoly(timedPoly, triGridSurface = None, plotPolyFlag = True, plotSur
     # Plot polys in time ======================================================
     if (plotPolyFlag):
         for k in timedPoly:
-            ptSeq3D = []
+            path3D = []
             for pt in k[0]:
-                ptSeq3D.append((pt[0], pt[1], k[1]))
-            ptSeq3D.append((k[0][0][0], k[0][0][1], k[1]))
-            fig, ax = plotPtSeq3D(
+                path3D.append((pt[0], pt[1], k[1]))
+            path3D.append((k[0][0][0], k[0][0][1], k[1]))
+            fig, ax = plotPath3D(
                 fig = fig,
                 ax = ax,
-                ptSeq3D = ptSeq3D,
+                path3D = path3D,
                 lineColor = lineColor,
                 lineWidth = lineWidth,
                 lineStyle = lineStyle,

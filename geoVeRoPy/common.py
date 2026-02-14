@@ -504,6 +504,22 @@ def splitIntoSubSeq(inputList, selectFlag):
         splitSub.append([k for k in sub])
     return splitSub
 
+def splitBinariesIntoGroupsOfIndex(binList):
+    groups = []
+
+    g = []
+    for i in range(len(binList)):
+        if (binList[i] == 1):
+            g.append(i)
+        else:
+            if (len(g) > 0):
+                groups.append(g)
+            g = []
+    if (binList[-1] == 1):
+        groups.append(g)
+
+    return groups
+
 def countContinuousSubarrays(nums:list[int]) -> int:
     """
     判断一个数字数组中有多少个连续的子序列

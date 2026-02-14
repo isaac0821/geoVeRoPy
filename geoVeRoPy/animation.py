@@ -62,14 +62,14 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
     # Styling characters ======================================================
     # Nodes -------------------------------------------------------------------
     ptFieldName = 'pt' if 'ptFieldName' not in kwargs else kwargs['ptFieldName']
-    nodeTimedSeqFieldName = 'timedSeq' if 'nodeTimedSeqFieldName' not in kwargs else kwargs['nodeTimedSeqFieldName']
+    nodeTimedPtFieldName = 'timedPt' if 'nodeTimedPtFieldName' not in kwargs else kwargs['nodeTimedPtFieldName']
     nodeTimeWindowFieldName = 'timeWindow' if 'nodeTimeWindowFieldName' not in kwargs else kwargs['nodeTimeWindowFieldName']
     nodeColor = 'black' if 'nodeColor' not in kwargs else kwargs['nodeColor']
     nodeMarker = 'o' if 'nodeMarker' not in kwargs else kwargs['nodeMarker']
     nodeMarkerSize = 2 if 'nodeMarkerSize' not in kwargs else kwargs['nodeMarkerSize']
 
     # Vehicles ----------------------------------------------------------------
-    vehTimedSeqFieldName = 'timedSeq' if 'vehTimedSeqFieldName' not in kwargs else kwargs['vehTimedSeqFieldName']
+    vehTimedPtFieldName = 'timedPt' if 'vehTimedPtFieldName' not in kwargs else kwargs['vehTimedPtFieldName']
     vehLabelFieldName = 'label' if 'vehLabelFieldName' not in kwargs else kwargs['vehLabelFieldName']
     vehNoteFieldName = 'note' if 'vehNoteFieldName' not in kwargs else kwargs['vehNoteFieldName']
     vehColor = 'blue' if 'vehColor' not in kwargs else kwargs['vehColor']
@@ -87,7 +87,7 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
 
     # Polygons ----------------------------------------------------------------
     polyAnchorFieldName = None if 'polyAnchorFieldName' not in kwargs else kwargs['polyAnchorFieldName']
-    polyTimedSeqFieldName = None if 'polyTimedSeqFieldName' not in kwargs else kwargs['polyTimedSeqFieldName']
+    polyTimedPtFieldName = None if 'polyTimedPtFieldName' not in kwargs else kwargs['polyTimedPtFieldName']
     polyTimeWindowFieldName = None if 'polyTimeWindowFieldName' not in kwargs else kwargs['polyTimeWindowFieldName']
     polyFieldName = 'poly' if 'polyFieldName' not in kwargs else kwargs['polyFieldName']
     polyEdgeColor = 'black' if 'polyEdgeColor' not in kwargs else kwargs['polyEdgeColor']
@@ -297,18 +297,18 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
                     else:
                         for p in polygons[pID][polyFieldName]:
                             pt = None
-                            if (polyAnchorFieldName in polygons[pID] and polyTimedSeqFieldName in polygons[pID]):
+                            if (polyAnchorFieldName in polygons[pID] and polyTimedPtFieldName in polygons[pID]):
                                 # 如果还没开始动，在原点不动
-                                if (clock < polygons[pID][polyTimedSeqFieldName][0][1]):
+                                if (clock < polygons[pID][polyTimedPtFieldName][0][1]):
                                     pt = p
                                 # 如果到达终点了，在终点不动
-                                elif (clock > polygons[pID][polyTimedSeqFieldName][-1][1]):
-                                    dx = (polygons[pID][polyTimedSeqFieldName][-1][0][0] - polygons[pID][polyAnchorFieldName][0])
-                                    dy = (polygons[pID][polyTimedSeqFieldName][-1][0][1] - polygons[pID][polyAnchorFieldName][1])
+                                elif (clock > polygons[pID][polyTimedPtFieldName][-1][1]):
+                                    dx = (polygons[pID][polyTimedPtFieldName][-1][0][0] - polygons[pID][polyAnchorFieldName][0])
+                                    dy = (polygons[pID][polyTimedPtFieldName][-1][0][1] - polygons[pID][polyAnchorFieldName][1])
                                     pt = (p[0] + dx, p[1] + dy)
                                 else: 
-                                    curSnap = snapInTimedSeq(
-                                        timedSeq = polygons[pID][polyTimedSeqFieldName],
+                                    curSnap = snapInTimedPt(
+                                        timedPt = polygons[pID][polyTimedPtFieldName],
                                         t = clock)
                                     dx = (curSnap['pt'][0] - polygons[pID][polyAnchorFieldName][0])
                                     dy = (curSnap['pt'][1] - polygons[pID][polyAnchorFieldName][1])
@@ -362,11 +362,11 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
                 y = None       
                 curPt = None         
                 if (plotNodeFlag):
-                    if (nodeTimedSeqFieldName not in nodes[nID]):
+                    if (nodeTimedPtFieldName not in nodes[nID]):
                         curPt = nodes[nID][ptFieldName]
                     else:
-                        curSnap = snapInTimedSeq(
-                            timedSeq = nodes[nID][nodeTimedSeqFieldName],
+                        curSnap = snapInTimedPt(
+                            timedPt = nodes[nID][nodeTimedPtFieldName],
                             t = clock)
                         curPt = curSnap['pt']
 
@@ -397,11 +397,11 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
                     pathX = []
                     pathY = []
                     if (not xyReverseFlag):
-                        pathX = [vehicles[vID][vehTimedSeqFieldName][i][0][0] for i in range(len(vehicles[vID][vehTimedSeqFieldName]))]
-                        pathY = [vehicles[vID][vehTimedSeqFieldName][i][0][1] for i in range(len(vehicles[vID][vehTimedSeqFieldName]))]
+                        pathX = [vehicles[vID][vehTimedPtFieldName][i][0][0] for i in range(len(vehicles[vID][vehTimedPtFieldName]))]
+                        pathY = [vehicles[vID][vehTimedPtFieldName][i][0][1] for i in range(len(vehicles[vID][vehTimedPtFieldName]))]
                     else:
-                        pathX = [vehicles[vID][vehTimedSeqFieldName][i][0][1] for i in range(len(vehicles[vID][vehTimedSeqFieldName]))]
-                        pathY = [vehicles[vID][vehTimedSeqFieldName][i][0][0] for i in range(len(vehicles[vID][vehTimedSeqFieldName]))]
+                        pathX = [vehicles[vID][vehTimedPtFieldName][i][0][1] for i in range(len(vehicles[vID][vehTimedPtFieldName]))]
+                        pathY = [vehicles[vID][vehTimedPtFieldName][i][0][0] for i in range(len(vehicles[vID][vehTimedPtFieldName]))]
                     ax.plot(pathX, pathY, color=vehicleStyle[vID]['pathColor'], linewidth = 1)
 
                 # Plot trace
@@ -412,8 +412,8 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
                         ts = max(te - vehicleStyle[vID]['traceShadowTime'], timeRange[0])
 
                     if (ts < te):
-                        trace = traceInTimedSeq(
-                            timedSeq = vehicles[vID][vehTimedSeqFieldName],
+                        trace = traceInTimedPt(
+                            timedPt = vehicles[vID][vehTimedPtFieldName],
                             ts = ts,
                             te = te)
                         if (len(trace) > 0 and 'traceColor' in vehicleStyle[vID]):
@@ -428,8 +428,8 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
                             ax.plot(traceX, traceY, color=vehicleStyle[vID]['traceColor'], linewidth = 1)
 
                 # Plot vehicle
-                curSnap = snapInTimedSeq(
-                    timedSeq = vehicles[vID][vehTimedSeqFieldName],
+                curSnap = snapInTimedPt(
+                    timedPt = vehicles[vID][vehTimedPtFieldName],
                     t = clock)
                 curPt = curSnap['pt']
                 ax.plot(curPt[0], curPt[1], 
@@ -448,13 +448,13 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
                 
                 if (vehShowNoteFlag and vehNoteFieldName in vehicles[vID]):
                     note = ""
-                    if (clock <= vehicles[vID]['timedSeq'][0][1]):
+                    if (clock <= vehicles[vID]['timedPt'][0][1]):
                         note = vehicles[vID][vehNoteFieldName][0]
-                    elif (clock >= vehicles[vID]['timedSeq'][-1][1]):
+                    elif (clock >= vehicles[vID]['timedPt'][-1][1]):
                         note = vehicles[vID][vehNoteFieldName][-1]
                     else:
-                        for i in range(len(vehicles[vID]['timedSeq']) - 1):
-                            if (vehicles[vID]['timedSeq'][i][1] <= clock < vehicles[vID]['timedSeq'][i + 1][1]):
+                        for i in range(len(vehicles[vID]['timedPt']) - 1):
+                            if (vehicles[vID]['timedPt'][i][1] <= clock < vehicles[vID]['timedPt'][i + 1][1]):
                                 note = vehicles[vID][vehNoteFieldName][i]
                                 break
                     ax.annotate(lbl + "\n" + note, (curPt[0], curPt[1]))

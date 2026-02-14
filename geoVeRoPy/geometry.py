@@ -2277,6 +2277,22 @@ def isPolyConvex(poly: poly):
                 return False    
     return True
 
+def isCircleIntCircle(circle1: dict, circle2: dict):
+    D = distEuclideanXY(circle1['center'], circle2['center'])
+    R1 = circle1['radius']
+    R2 = circle2['radius']
+    # Case 1: D > R1 + R2
+    if (D > R1 + R2):
+        return False
+
+    # Case 2: abs(R1 - R2) <= D <= R1 + R2
+    if (abs(R1 - R2) <= D <= R1 + R2):
+        return True
+
+    # Case 3: abs(R1 - R2) > D
+    if (abs(R1 - R2) > D):
+        return False
+
 # Distance from Point to Object ===============================================
 def distPt2Line(pt: pt, line: line) -> float:
     """
@@ -2793,6 +2809,16 @@ def ptInSeqMileage(seq: list[pt], dist: int|float, dimension: str = 'XY') -> pt:
     x = nextPt[0] + (remainDist / segDist) * (prePt[0] - nextPt[0])
     y = nextPt[1] + (remainDist / segDist) * (prePt[1] - nextPt[1])
     return (x, y)
+
+def mileageInPath(pt: pt, path: list[pt]):
+    acc = 0
+    for i in range(len(path) - 1):
+        if (isPtOnSeg(pt, [path[i], path[i + 1]])):
+            acc += distEuclideanXY(path[i], pt)
+            break
+        else:
+            acc += distEuclideanXY(path[i], path[i - 1])
+    return acc
 
 def ptMid(seg) -> pt:
     return [

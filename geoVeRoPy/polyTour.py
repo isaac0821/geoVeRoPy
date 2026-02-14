@@ -5,13 +5,13 @@ from .geometry import *
 from .common import *
 
 # Path touring through polygons ===============================================
-def seqRemoveDegen(seq: list[pt]):
+def pathRemoveDegen(path: list[pt]):
     """
     Given a sequence of points, returns a subset of points that only includes turning points of the sequence. If there are multiple points overlapped at the same location, keeps one of those points.
 
     Parameters
     ----------
-    seq: list[pt], required
+    path: list[pt], required
         The coordinates of a sequence of points.
 
     Returns
@@ -20,25 +20,25 @@ def seqRemoveDegen(seq: list[pt]):
         A new dictionary, in the format of 
         
         >>> {
-        ...     'newSeq': newSeq, 
+        ...     'newPath': newPath, 
         ...     'aggNodeList': aggNodeList, 
         ...     'removedFlag': removedFlag, 
         ...     'locatedSeg': locatedSeg
         ... }
 
-        - The 'newSeq' returns a new sequence which only has turn points of the origin sequence
+        - The 'newPath' returns a new sequence which only has turn points of the origin sequence
         - The 'aggNodeList' is a list of lists, if a point overlaps with its previous/next point, the index of both points will be aggregated into the same list.
-        - The 'removedFlag' indicates whether a point is removed as a non-turning point, true if the point is not included in the 'newSeq'
-        - The 'locatedSeq' returns a list of line segments, for each point removed, it returns the line segment it belongs to 
+        - The 'removedFlag' indicates whether a point is removed as a non-turning point, true if the point is not included in the 'newPath'
+        - The 'locatedPath' returns a list of line segments, for each point removed, it returns the line segment it belongs to 
 
     Examples
     --------
     For the following inputs
-        >>> seq = [[-1, 0], [0, 0], [0, 0], [1, 0], [2, 0], [2, 1], [1, 1], [1, 0], [1, -1]]
-        >>> res = seqRemoveDegen(seq)
+        >>> path = [[-1, 0], [0, 0], [0, 0], [1, 0], [2, 0], [2, 1], [1, 1], [1, 0], [1, -1]]
+        >>> res = pathRemoveDegen(path)
     The result is as follows
         >>> res = {
-        ...     'newSeq': [[-1, 0], [2, 0], [2, 1], [1, 1], [1, -1]],
+        ...     'newPath': [[-1, 0], [2, 0], [2, 1], [1, 1], [1, -1]],
         ...     'aggNodeList': [[0], [1, 2], [3], [4], [5], [6], [7], [8]],
         ...     'removedFlag': [False, True, True, False, False, False, True, False],
         ...     'locatedSeg': [None,
@@ -50,25 +50,25 @@ def seqRemoveDegen(seq: list[pt]):
         ...         [[1, 1], [1, -1]],
         ...         None]
         ... }
-    The result shows that, the new sequence is [[-1, 0], [2, 0], [2, 1], [1, 1], [1, -1]], in the new sequence, seq[1], seq[2], seq[6] are not included since they are not turn points.
-    seq[1] and seq[2] are aggregated due to overlaps. Although seq[3] and seq[6] are overlapped, they are not aggregated because they are not neighboring. 
-    For the removed points, 'locatedSeq' finds the segment they located.
+    The result shows that, the new sequence is [[-1, 0], [2, 0], [2, 1], [1, 1], [1, -1]], in the new sequence, path[1], path[2], path[6] are not included since they are not turn points.
+    path[1] and path[2] are aggregated due to overlaps. Although path[3] and path[6] are overlapped, they are not aggregated because they are not neighboring. 
+    For the removed points, 'locatedPath' finds the segment they located.
 
     """
 
     # Step 1: 先按是否重合对点进行聚合  
-    curPtList = [seq[0]]
+    curPtList = [path[0]]
     curAgg = [0]
     aggNodeList = []
     # 挤香肠算法
-    for i in range(1, len(seq)):
+    for i in range(1, len(path)):
         # 如果当前点和任意一个挤出来的点足够近，则计入
         samePtFlag = False
 
         for pt in curPtList:
-            if (is2PtsSame(pt, seq[i])):
+            if (is2PtsSame(pt, path[i])):
                 curAgg.append(i)
-                curPtList.append(seq[i])
+                curPtList.append(path[i])
                 samePtFlag = True
                 break
 
@@ -76,7 +76,7 @@ def seqRemoveDegen(seq: list[pt]):
         if (not samePtFlag):
             aggNodeList.append([k for k in curAgg])
             curAgg = [i]
-            curPtList = [seq[i]]
+            curPtList = [path[i]]
 
     aggNodeList.append([k for k in curAgg])
 
@@ -84,9 +84,9 @@ def seqRemoveDegen(seq: list[pt]):
     # NOTE: removeFlag的长度和aggNodeList一致
     removedFlag = [False]
     for i in range(1, len(aggNodeList) - 1):
-        prePt = seq[aggNodeList[i - 1] if type(aggNodeList[i - 1]) != list else aggNodeList[i - 1][0]]
-        curPt = seq[aggNodeList[i] if type(aggNodeList[i]) != list else aggNodeList[i][0]]
-        sucPt = seq[aggNodeList[i + 1] if type(aggNodeList[i + 1]) != list else aggNodeList[i + 1][0]]
+        prePt = path[aggNodeList[i - 1] if type(aggNodeList[i - 1]) != list else aggNodeList[i - 1][0]]
+        curPt = path[aggNodeList[i] if type(aggNodeList[i]) != list else aggNodeList[i][0]]
+        sucPt = path[aggNodeList[i + 1] if type(aggNodeList[i + 1]) != list else aggNodeList[i + 1][0]]
 
         if (is2PtsSame(prePt, sucPt)):
             removedFlag.append(False)
@@ -103,31 +103,31 @@ def seqRemoveDegen(seq: list[pt]):
     removedFlag.append(False)
 
     # 得到去掉共线和重合点后的折线
-    newSeq = []
+    newPath = []
     for i in range(len(aggNodeList)):
         if (removedFlag[i] == False):
             if (type(aggNodeList[i]) == list):
-                newSeq.append(seq[aggNodeList[i][0]])
+                newPath.append(path[aggNodeList[i][0]])
             else:
-                newSeq.append(seq[aggNodeList[i]])
+                newPath.append(path[aggNodeList[i]])
 
     # 对于被移除的共线点，找到其所在的线段
     locatedSeg = []
     # 把没有移除的点的序号记一下
-    seqPre = []
-    seqSuc = []
+    pathPre = []
+    pathSuc = []
     # 查找移除点之前和之后一个removeFlag为False的对应aggNode，得到对应线段
     for i in range(len(removedFlag)):
         # Log the prev that is not removed
         if (removedFlag[i] == False):
-            seqPre.append(i)
+            pathPre.append(i)
         else:
-            seqPre.append(seqPre[-1])
+            pathPre.append(pathPre[-1])
         # Log the next that is not removed
         if (removedFlag[len(removedFlag) - 1 - i] == False):
-            seqSuc.insert(0, len(removedFlag) - 1 - i)
+            pathSuc.insert(0, len(removedFlag) - 1 - i)
         else:
-            seqSuc.insert(0, seqSuc[0])
+            pathSuc.insert(0, pathSuc[0])
 
     for i in range(len(removedFlag)):
         if (removedFlag[i] == False):
@@ -135,30 +135,30 @@ def seqRemoveDegen(seq: list[pt]):
             para = []
         else:
             startPt = None
-            if (type(aggNodeList[seqPre[i]]) == list):
-                startPt = seq[aggNodeList[seqPre[i]][0]]
+            if (type(aggNodeList[pathPre[i]]) == list):
+                startPt = path[aggNodeList[pathPre[i]][0]]
             else:
-                startPt = seq[aggNodeList[seqPre[i]]]
+                startPt = path[aggNodeList[pathPre[i]]]
             endPt = None
-            if (type(aggNodeList[seqSuc[i]]) == list):
-                endPt = seq[aggNodeList[seqSuc[i]][0]]
+            if (type(aggNodeList[pathSuc[i]]) == list):
+                endPt = path[aggNodeList[pathSuc[i]][0]]
             else:
-                endPt = seq[aggNodeList[seqSuc[i]]]
+                endPt = path[aggNodeList[pathSuc[i]]]
             locatedSeg.append([startPt, endPt])
 
     return {
-        'newSeq': newSeq,
+        'newPath': newPath,
         'aggNodeList': aggNodeList,
         'removedFlag': removedFlag,
         'locatedSeg': locatedSeg
     }
 
-def ptSetSeq2Poly(seq, polygons:dict, polyFieldName = 'polygon', seqDegenedFlag: bool = True):
-    """Given a sequence and a dictionary of polygons, finds the intersection points between seq and polygons
+def ptSetPath2Poly(path, polygons:dict, polyFieldName = 'polygon', pathDegenedFlag: bool = True):
+    """Given a sequence and a dictionary of polygons, finds the intersection points between path and polygons
 
     Parameters
     ----------
-    seq: list[pt], required
+    path: list[pt], required
         A list of points as a sequence
     polygons: dict, required
         A dictionary, each key is the ID of polygon, the field of polygon is in `polyFieldName`
@@ -176,16 +176,16 @@ def ptSetSeq2Poly(seq, polygons:dict, polyFieldName = 'polygon', seqDegenedFlag:
         raise MissingParameterError("ERROR: Missing required field 'polygons'.")
 
     # NOTE: 简化线段，去掉穿越点，如果已经处理过了，就不用重复计算了
-    if (not seqDegenedFlag):
-        seq = seqRemoveDegen(seq)['newSeq']
+    if (not pathDegenedFlag):
+        path = pathRemoveDegen(path)['newPath']
 
-    # First, for each leg in the seq, find the individual polygons intersect with the leg
+    # First, for each leg in the path, find the individual polygons intersect with the leg
     actions = []
     accMileage = 0
 
-    for i in range(len(seq) - 1):
+    for i in range(len(path) - 1):
         # seg[0]的mileage更小
-        seg = [seq[i], seq[i + 1]]
+        seg = [path[i], path[i + 1]]
 
         # NOTE: 准备用segment tree
         # NOTE: For now use the naive way - checking the bounding box
@@ -293,21 +293,22 @@ def ptSetSeq2Poly(seq, polygons:dict, polyFieldName = 'polygon', seqDegenedFlag:
 
     return actions
 
-def segSetSeq2Circle(seq: list, circles: dict, seqDegenedFlag: bool = True):
-    if (not seqDegenedFlag):
-        seq = seqRemoveDegen(seq)['newSeq']
+# NOTE: 精度不够
+def segSetPath2Circle(path: list, circles: dict, pathDegenedFlag: bool = True):
+    if (not pathDegenedFlag):
+        path = pathRemoveDegen(path)['newPath']
 
     # Step 0: turnPts =========================================================
     # NOTE: 只有出现了转折点本身在一个多边形的边缘上才需要记录tangle的形式，否则都会作为seg的一部分
     turnPts = {
         0: {
-            'pt': seq[0],
+            'pt': path[0],
             'tangCircle': [],
             'inerCircle': []
         }
     }
-    for i in range(1, len(seq) - 1):
-        pt = seq[i]
+    for i in range(1, len(path) - 1):
+        pt = path[i]
         tangCircle = []
         inerCircle = []
         for p in circles:
@@ -319,33 +320,22 @@ def segSetSeq2Circle(seq: list, circles: dict, seqDegenedFlag: bool = True):
                 if (p not in inerCircle):
                     inerCircle.append(p)
         turnPts[i] = {
-            'pt': seq[i],
+            'pt': path[i],
             'tangCircle': tangCircle,
             'inerCircle': inerCircle,
         }
-    turnPts[len(seq) - 1] = {
-        'pt': seq[-1],
+    turnPts[len(path) - 1] = {
+        'pt': path[-1],
         'tangCircle': [],
         'inerCircle': [],
     }
 
-    # for p in circles:
-    #     closestIdx = None
-    #     closestErr = float('inf')
-    #     hasTurnPtFlag = False
-    #     for i in turnPts:
-    #         if (turnPts[i]['closestToBoundaryIdx'] != None and p in turnPts[i]['closestToBoundaryIdx']):
-    #             hasTurnPtFlag = True
-    #             break
-    #         else:
-    #             if (closestErr > turnPts[i])
-
     # Step 1: Initialize ======================================================
     segIntCircle = {}
     accMileage = 0
-    for i in range(len(seq) - 1):
+    for i in range(len(path) - 1):
         segIntCircle[i] = {
-            'seg': [seq[i], seq[i + 1]],
+            'seg': [path[i], path[i + 1]],
             'startMileage': accMileage,
             'intCircles': [],
             'stTangPt': None,
@@ -353,13 +343,13 @@ def segSetSeq2Circle(seq: list, circles: dict, seqDegenedFlag: bool = True):
         }
         if (len(turnPts[i]['tangCircle']) > 0):
             segIntCircle[i]['stTangPt'] = {
-                'shape': seq[i],
+                'shape': path[i],
                 'type': 'Point',
                 'belong': turnPts[i]['inerCircle'],
                 'mileage': accMileage,
                 'segID': i
             }
-        accMileage += distEuclideanXY(seq[i], seq[i + 1])
+        accMileage += distEuclideanXY(path[i], path[i + 1])
         segIntCircle[i]['endMileage'] = accMileage
 
     # Step 2: For each segment, gets polygon intersected ======================
@@ -372,10 +362,10 @@ def segSetSeq2Circle(seq: list, circles: dict, seqDegenedFlag: bool = True):
 
         for p in circles:
             # 如果有一段距离过短，视作点
-            if (is2PtsSame(seq[i], seq[i + 1])):
-                segIntCircle[i]['intMileageList'].append((st, p, seq[i], 'tangle'))
+            if (is2PtsSame(path[i], path[i + 1])):
+                segIntCircle[i]['intMileageList'].append((st, p, path[i], 'tangle'))
             else:
-                segInt = intSeg2Circle(seg = [seq[i], seq[i + 1]], circle = circles[p], detailFlag = True)
+                segInt = intSeg2Circle(seg = [path[i], path[i + 1]], circle = circles[p], detailFlag = True)
                 # 如果交出一个线段，计算线段的起始结束mileage
                 if (segInt['status'] == 'Cross' and segInt['intersectType'] == 'Segment'):
                     int1 = segInt['intersect'][0]
@@ -433,161 +423,18 @@ def segSetSeq2Circle(seq: list, circles: dict, seqDegenedFlag: bool = True):
 
     return segSet
 
-def segSetSeq2CircleBak(seq: list, circles: dict, seqDegenedFlag: bool = True):
-    if (not seqDegenedFlag):
-        seq = seqRemoveDegen(seq)['newSeq']
-
-    # Step 0: turnPts =========================================================
-    # NOTE: 所有的转折点必须在一个多边形的边缘上，所以必须给每个turn point找到一个polygon
-    # NOTE: 只有出现了转折点本身在一个多边形的边缘上才需要记录tangle的形式，否则都会作为seg的一部分
-    turnPts = {
-        0: {
-            'pt': seq[0],
-            'tangCircle': [],
-            'inerCircle': []
-        }
-    }
-    for i in range(1, len(seq) - 1):
-        pt = seq[i]
-        tangCircle = []
-        inerCircle = []
-
-        closestToBoundaryIdx = []
-        closestToBoundaryErr = float('inf')
-        for p in circles:
-            # 必须找到一个圆，如果找不到，就按最合适的那个算
-            d2Circle = distEuclideanXY(pt, circles[p]['center'])
-            if (d2Circle < circles[p]['radius'] - ERRTOL['distPt2Poly']):
-                inerCircle.append(p)
-            
-            if (circles[p]['radius'] + ERRTOL['distPt2Poly'] >= d2Circle >= circles[p]['radius'] - ERRTOL['distPt2Poly']):
-                tangCircle.append(p)
-                if (p not in inerCircle):
-                    inerCircle.append(p)
-            else:
-                if (abs(d2Circle - circles[p]['radius']) < closestToBoundaryErr):
-                    closestToBoundaryIdx = p
-                    closestToBoundaryErr = abs(d2Circle - circles[p]['radius'])
-        if (len(tangCircle) == 0):
-            tangCircle.append(closestToBoundaryIdx)
-            inerCircle.append(closestToBoundaryIdx)
-            warnings.warn(f"WARNING: Did not find the corresponding circle for node {i}, the smallest error is {closestToBoundaryErr}, to circle {closestToBoundaryIdx}")
-        turnPts[i] = {
-            'pt': seq[i],
-            'tangCircle': tangCircle,
-            'inerCircle': inerCircle
-        }
-    turnPts[len(seq) - 1] = {
-        'pt': seq[-1],
-        'tangCircle': [],
-        'inerCircle': []
-    }
-
-    # Step 1: Initialize ======================================================
-    segIntCircle = {}
-    accMileage = 0
-    for i in range(len(seq) - 1):
-        segIntCircle[i] = {
-            'seg': [seq[i], seq[i + 1]],
-            'startMileage': accMileage,
-            'intCircles': [],
-            'stTangPt': None,
-            'segID': i
-        }
-        if (len(turnPts[i]['tangCircle']) > 0):
-            segIntCircle[i]['stTangPt'] = {
-                'shape': seq[i],
-                'type': 'Point',
-                'belong': turnPts[i]['inerCircle'],
-                'mileage': accMileage,
-                'segID': i
-            }
-        accMileage += distEuclideanXY(seq[i], seq[i + 1])
-        segIntCircle[i]['endMileage'] = accMileage
-
-    # Step 2: For each segment, gets polygon intersected ======================
-    for i in segIntCircle:
-        segIntCircle[i]['intMileageList'] = []
-        st = segIntCircle[i]['startMileage']
-        ed = segIntCircle[i]['endMileage']
-
-        segIntCircle[i]['intMileageList'].append((st, -1, segIntCircle[i]['seg'][0], 'start'))
-
-        for p in circles:
-            # 如果有一段距离过短，视作点
-            if (is2PtsSame(seq[i], seq[i + 1])):
-                segIntCircle[i]['intMileageList'].append((st, p, seq[i], 'tangle'))
-            else:
-                segInt = intSeg2Circle(seg = [seq[i], seq[i + 1]], circle = circles[p], detailFlag = True)
-                # 如果交出一个线段，计算线段的起始结束mileage
-                if (segInt['status'] == 'Cross' and segInt['intersectType'] == 'Segment'):
-                    int1 = segInt['intersect'][0]
-                    int2 = segInt['intersect'][1]
-                    d1 = segInt['mileage'][0]
-                    d2 = segInt['mileage'][1]
-                    if (d1 < d2):
-                        segIntCircle[i]['intMileageList'].append((d1 + st, p, int1, 'enter'))
-                        segIntCircle[i]['intMileageList'].append((d2 + st, p, int2, 'leave'))
-                    else:
-                        segIntCircle[i]['intMileageList'].append((d2 + st, p, int2, 'enter'))
-                        segIntCircle[i]['intMileageList'].append((d1 + st, p, int1, 'leave'))
-                # 如果交出一个点，计算点的mileage
-                elif (segInt['status'] == 'Cross' and segInt['intersectType'] == 'Point'):
-                    intP = segInt['intersect']
-                    dP = segInt['mileage']
-                    segIntCircle[i]['intMileageList'].append((dP + st, p, intP, 'tangle'))
-
-        # 对intMileageList进行排序
-        segIntCircle[i]['intMileageList'].sort()
-        segIntCircle[i]['intMileageList'].append((ed, -1, segIntCircle[i]['seg'][1], 'end'))
-
-    # Step 3: Restore =========================================================
-    segSet = []
-    for i in segIntCircle:
-        circleInside = []
-        segIntCircle[i]['segSet'] = []
-        curMileage = segIntCircle[i]['startMileage']
-        curPt = segIntCircle[i]['seg'][0]
-        if (segIntCircle[i]['stTangPt'] != None):
-            segSet.append(segIntCircle[i]['stTangPt'])
-
-        for k in range(len(segIntCircle[i]['intMileageList'])):
-            # 下一个点
-            newMileage = segIntCircle[i]['intMileageList'][k][0]
-            newPt = segIntCircle[i]['intMileageList'][k][2]
-
-            # 如果mileage不增长，则不会单独交一段出来，除非是有tangle
-            if (abs(newMileage - curMileage) > ERRTOL['distPt2Pt']):
-                segSet.append({
-                    'shape': [curPt, newPt],
-                    'type': 'Segment',
-                    'belong': [k for k in circleInside],
-                    'mileage': [curMileage, newMileage],
-                    'segID': i
-                    })
-                curMileage = newMileage
-                curPt = newPt
-
-            if (segIntCircle[i]['intMileageList'][k][3] == 'enter'):
-                circleInside.append(segIntCircle[i]['intMileageList'][k][1])
-
-            elif (segIntCircle[i]['intMileageList'][k][3] == 'leave'):
-                circleInside.remove(segIntCircle[i]['intMileageList'][k][1])
-
-    return segSet
-
-def segSetSeq2Poly(seq: list, polygons: dict, polyFieldName: str = 'polygon', seqDegenedFlag: bool = True):
-    """Given a sequence and a dictionary of polygons, finds the intersection between seq and polygons
+def segSetPath2Poly(path: list, polygons: dict, polyFieldName: str = 'polygon', pathDegenedFlag: bool = True):
+    """Given a sequence and a dictionary of polygons, finds the intersection between path and polygons
 
     Parameters
     ----------
-    seq: list[pt], required
+    path: list[pt], required
         A list of points as a sequence
     polygons: dict, required
         A dictionary, each key is the ID of polygon, the field of polygon is in `polyFieldName`
     polyFieldName: string, optional, default 'polygon'
         Default field name for polygon
-    seqDegenedFlag: boolean, optional, default False
+    pathDegenedFlag: boolean, optional, default False
         True if the sequence has already been processed to remove degenerated points.
 
     Return
@@ -598,15 +445,15 @@ def segSetSeq2Poly(seq: list, polygons: dict, polyFieldName: str = 'polygon', se
     """
 
     # NOTE: 简化线段，去掉穿越点，如果已经处理过了，就不用重复计算了
-    if (not seqDegenedFlag):
-        seq = seqRemoveDegen(seq)['newSeq']
+    if (not pathDegenedFlag):
+        path = pathRemoveDegen(path)['newPath']
 
     # Step 0: turnPts =========================================================
     # NOTE: 每个poly都需要至少一个seg
     # NOTE: 只有出现了转折点本身在一个多边形的边缘上才需要记录tangle的形式，否则都会作为seg的一部分
     turnPts = {}
-    for i in range(len(seq)):
-        pt = seq[i]
+    for i in range(len(path)):
+        pt = path[i]
         # 记录到每个polygon的距离，找到最近的那个，得是它的交点
         tansPolys = []
         inerPolys = []  
@@ -614,7 +461,7 @@ def segSetSeq2Poly(seq: list, polygons: dict, polyFieldName: str = 'polygon', se
         closestDist = float('inf')
         foundClosest = False
         for p in polygons:
-            d2Edge = distPt2Seq(pt = pt, seq = polygons[p][polyFieldName], closedFlag = True)
+            d2Edge = distPt2Path(pt = pt, path = polygons[p][polyFieldName], closedFlag = True)
             # 找到最近的
             if (d2Edge < closestDist):
                 closestDist = d2Edge
@@ -630,7 +477,7 @@ def segSetSeq2Poly(seq: list, polygons: dict, polyFieldName: str = 'polygon', se
             tansPolys.append(closestIdx)
             inerPolys.append(closestIdx)
         turnPts[i] = {
-            'pt': seq[i],
+            'pt': path[i],
             'tansPolys': tansPolys,
             'inerPolys': inerPolys
         }
@@ -638,21 +485,21 @@ def segSetSeq2Poly(seq: list, polygons: dict, polyFieldName: str = 'polygon', se
     # Step 1: Initialize ======================================================
     segIntPoly = {}
     accMileage = 0
-    for i in range(len(seq) - 1):
+    for i in range(len(path) - 1):
         segIntPoly[i] = {
-            'seg': [seq[i], seq[i + 1]],
+            'seg': [path[i], path[i + 1]],
             'startMileage': accMileage,
             'intPolys': [],
             'stTangPt': None,
         }
         if (len(turnPts[i]['tansPolys']) > 0):
             segIntPoly[i]['stTangPt'] = {
-                'shape': seq[i],
+                'shape': path[i],
                 'type': 'Point',
                 'belong': turnPts[i]['inerPolys'],
                 'mileage': accMileage
             }
-        accMileage += distEuclideanXY(seq[i], seq[i + 1])
+        accMileage += distEuclideanXY(path[i], path[i + 1])
         segIntPoly[i]['endMileage'] = accMileage
 
     # Step 2: For each segment, gets polygon intersected ======================
@@ -664,7 +511,7 @@ def segSetSeq2Poly(seq: list, polygons: dict, polyFieldName: str = 'polygon', se
         segIntPoly[i]['intMileageList'].append((st, -1, segIntPoly[i]['seg'][0], 'start'))
 
         for p in polygons:
-            segInt = intSeg2Poly([seq[i], seq[i + 1]], polygons[p][polyFieldName])
+            segInt = intSeg2Poly([path[i], path[i + 1]], polygons[p][polyFieldName])
             # 如果交出多个来的话，分别计算
             if (type(segInt) == list):
                 for s in segInt:

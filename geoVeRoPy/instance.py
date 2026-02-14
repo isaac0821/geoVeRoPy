@@ -7,7 +7,7 @@ from .common import *
 from .geometry import *
 from .road import *
 
-def rndPts(N: int, distr = 'UniformSquareXY', **kwargs) -> list:
+def rndPts(N: int, distr = 'UniformSquareXY', seed = None, **kwargs) -> list:
 
     """Randomly create a list of N locations
 
@@ -68,6 +68,9 @@ def rndPts(N: int, distr = 'UniformSquareXY', **kwargs) -> list:
     EmptyError
         The sample area is empty.
     """
+
+    if (seed != None):
+        random.seed(seed)
 
     nodePts = []
     # Uniformly sample from a square on the Euclidean space
@@ -200,7 +203,7 @@ def rndPts(N: int, distr = 'UniformSquareXY', **kwargs) -> list:
 
     return nodePts
 
-def rndNodes(N: int|None = None, nodeIDs: list[int|str] = [], nodes: dict|None = None, distr = 'UniformSquareXY', **kwargs) -> dict:
+def rndNodes(N: int|None = None, nodeIDs: list[int|str] = [], nodes: dict|None = None, distr = 'UniformSquareXY', seed = None, **kwargs) -> dict:
 
     """Randomly create a nodes dictionary
 
@@ -234,6 +237,8 @@ def rndNodes(N: int|None = None, nodeIDs: list[int|str] = [], nodes: dict|None =
         raise MissingParameterError("ERROR: Missing `nodeIDs` and `N`, one of the fields must be provided.")
     elif (nodeIDs == [] and N != None):
         nodeIDs = [i for i in range(N)]
+    if (seed != None):
+        random.seed(seed)
 
     # Field names =============================================================
     ptFieldName = 'pt' if 'ptFieldName' not in kwargs else kwargs['ptFieldName']
@@ -252,7 +257,7 @@ def rndNodes(N: int|None = None, nodeIDs: list[int|str] = [], nodes: dict|None =
 
     return nodes
 
-def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str = 'Circle', **kwargs) -> dict:
+def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str = 'Circle', seed = None, **kwargs) -> dict:
 
     """Given a node dictionary, create neighborhood to selected nodes
 
@@ -311,7 +316,9 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             for i in nodeIDs:
                 if (i not in nodes):
                     raise OutOfRangeError("ERROR: Node %s is not in `nodes`." % i)
-    
+    if (seed != None):
+        random.seed(seed)
+
     # Field names =============================================================
     ptFieldName = 'pt' if 'ptFieldName' not in kwargs else kwargs['ptFieldName']
     neighborFieldName = 'neighbor' if 'neighborFieldName' not in kwargs else kwargs['neighborFieldName']
@@ -653,7 +660,7 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
 
     return nodes
 
-def rndPolys(P: int|None = None, polyIDs: list[int|str]|None = None, distr = 'UniformSquareXY', shape = 'RndConvexPoly',  allowOverlapFlag = True, returnAsListFlag = True, **kwargs) -> dict:
+def rndPolys(P: int|None = None, polyIDs: list[int|str]|None = None, distr = 'UniformSquareXY', shape = 'RndConvexPoly', seed = None, allowOverlapFlag = True, returnAsListFlag = True, **kwargs) -> dict:
 
     """
     Randomly create polygons
@@ -700,7 +707,9 @@ def rndPolys(P: int|None = None, polyIDs: list[int|str]|None = None, distr = 'Un
         if ('minDiag' not in kwargs):
             kwargs['minDiag'] = 7
             warnings.warn("WARNING: Missing `minDiag`, set to be default as 7")
-
+    if (seed != None):
+        random.seed(seed)
+        
     # Field names =============================================================
     anchorFieldName = 'anchor' if 'anchorFieldName' not in kwargs else kwargs['anchorFieldName']
     polyFieldName = 'poly' if 'polyFieldName' not in kwargs else kwargs['polyFieldName']

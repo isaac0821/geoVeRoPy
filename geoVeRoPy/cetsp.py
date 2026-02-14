@@ -1076,7 +1076,7 @@ def _solveCETSPGACircle(
                 endPt = self.endPt,
                 circles = circles,
                 algo = 'SOCP')
-            degen = seqRemoveDegen(seq = c2c['path'])
+            degen = pathRemoveDegen(path = c2c['path'])
 
             # 找turn point/trespass point
             # NOTE: 这里的trespass point不完整，足够避免重复计算了
@@ -1087,7 +1087,7 @@ def _solveCETSPGACircle(
                 if (degen['removedFlag'][i] == False):
                     self.turning.extend([seqTra[k] for k in degen['aggNodeList'][i]])
                     self.aggTurning.append([seqTra[k] for k in degen['aggNodeList'][i]])
-            self.path = degen['newSeq']
+            self.path = degen['newPath']
             self.dist = c2c['dist']
 
             # 少进行一次circle2CirclePath()
@@ -1119,10 +1119,10 @@ def _solveCETSPGACircle(
                         endPt = self.endPt,
                         circles = circles,
                         algo = 'SOCP')
-                    degen = seqRemoveDegen(seq = c2c['path'])
+                    degen = pathRemoveDegen(path = c2c['path'])
 
                     self.trespass = []
-                    self.path = degen['newSeq']
+                    self.path = degen['newPath']
                     self.dist = c2c['dist']
 
                 # 判断剩余的点是否为trespass点
@@ -1131,7 +1131,7 @@ def _solveCETSPGACircle(
                     if (i not in self.turning):
                         res = distPt2Seq(
                             pt = self.nodes[i]['pt'], 
-                            seq = degen['newSeq'],
+                            seq = degen['newPath'],
                             closedFlag = False,
                             detailFlag = True)
                         if (res['dist'] <= radius if radius != None else self.nodes[i][radiusFieldName]):
@@ -1409,7 +1409,7 @@ def _solveCETSPGALatLon(
             for i in range(1, len(seqTra) - 1):
                 polys.append(self.polyXYMercator[i])
             p2p = poly2PolyPath(startPt = self.startPtMercator, endPt = self.endPtMercator, polys = polys)
-            degen = seqRemoveDegen(seq = p2p['path'])
+            degen = pathRemoveDegen(path = p2p['path'])
 
             # 找turn point/trespass point
             # NOTE: 这里的trespass point不完整，足够避免重复计算了
@@ -1418,7 +1418,7 @@ def _solveCETSPGALatLon(
             for i in range(len(degen['aggNodeList'])):
                 if (degen['removedFlag'][i] == False):
                     self.turning.extend([seqTra[k] for k in degen['aggNodeList'][i]])
-            self.path = degen['newSeq']
+            self.path = degen['newPath']
             self.dist = p2p['dist']
 
             # 少进行一次circle2CirclePath()
@@ -1442,10 +1442,10 @@ def _solveCETSPGALatLon(
                     for i in (1, len(self.turning) - 1):
                         polys.append(self.polyXYMercator[i])
                     p2p = poly2PolyPath(startPt = self.startPtMercator, endPt = self.endPtMercator, polys = polys)
-                    degen = seqRemoveDegen(seq = p2p['path'])
+                    degen = pathRemoveDegen(path = p2p['path'])
   
                     self.trespass = []
-                    self.path = degen['newSeq']
+                    self.path = degen['newPath']
                     self.dist = p2p['dist']
 
                 # 判断剩余的点是否为trespass点
@@ -1454,7 +1454,7 @@ def _solveCETSPGALatLon(
                     if (i not in self.turning):
                         # 先判断seq和poly是不是相交
                         inteFlag = isSeqIntPoly(
-                            seq = degen['newSeq'],
+                            seq = degen['newPath'],
                             poly = polyXYMercator[i], 
                             interiorOnly = True)
                         # 如果相交，直接确定为trespass
@@ -1463,11 +1463,11 @@ def _solveCETSPGALatLon(
                         # 如果不相交，计算poly加入到seq的最短距离
                         else:
                             calEach = []
-                            for k in range(len(degen['newSeq']) - 1):
-                                oriDist = distEuclideanXY(degen['newSeq'][k], degen['newSeq'][k + 1])
+                            for k in range(len(degen['newPath']) - 1):
+                                oriDist = distEuclideanXY(degen['newPath'][k], degen['newPath'][k + 1])
                                 newDist = poly2PolyPath(
-                                    startPt = degen['newSeq'][k],
-                                    endPt = degen['newSeq'][k + 1],
+                                    startPt = degen['newPath'][k],
+                                    endPt = degen['newPath'][k + 1],
                                     polys = [polyXYMercator[i]])['dist']
                                 calEach.append({'deltaDist': newDist - oriDist, 'nearestIdx': [k, k + 1]})
                             self.dist2NotInclude[i] = min(calEach, key = lambda x: x['deltaDist'])
@@ -1755,7 +1755,7 @@ def _solveCETSPILSCircle(
                 endPt = self.endPt,
                 circles = circles,
                 algo = 'SOCP')
-            degen = seqRemoveDegen(seq = c2c['path'])          
+            degen = pathRemoveDegen(path = c2c['path'])          
 
             # 计算转折点，重合转折点，穿越点等
             # self.turning - 转折点，注意这里的转折点可能重合
@@ -1768,7 +1768,7 @@ def _solveCETSPILSCircle(
                     self.turning.extend([seqTra[k] for k in degen['aggNodeList'][i]])
                     self.aggTurning.append([seqTra[k] for k in degen['aggNodeList'][i]])
             # 新的路径，去重后，长度应当与self.aggTurning一致
-            self.path = degen['newSeq']
+            self.path = degen['newPath']
             # 总长度
             self.dist = c2c['dist']
 
@@ -2043,7 +2043,7 @@ def _solveCETSPBnBCircle(
         for i in range(1, len(c2c['path']) - 1):
             repPt[seq[i - 1]] = c2c['path'][i]
 
-        degen = seqRemoveDegen(seq = c2c['path'])
+        degen = pathRemoveDegen(path = c2c['path'])
 
         seqTra = [-1]
         seqTra.extend(seq)
@@ -2052,7 +2052,7 @@ def _solveCETSPBnBCircle(
             if (degen['removedFlag'][i] == False):
                 turning.extend([seqTra[k] for k in degen['aggNodeList'][i]])
         
-        path = degen['newSeq']
+        path = degen['newPath']
         ofv = c2c['dist']
 
         for i in range(len(path) - 1):

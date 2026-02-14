@@ -2,6 +2,8 @@ import networkx as nx
 import gurobipy as grb
 import datetime
 
+import guid
+
 from .geometry import *
 from .ring import *
 from .curveArc import *
@@ -578,10 +580,12 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
 def _circle2CirclePathGurobi(startPt: pt, endPt: pt, circles: list[dict], outputFlag: bool = False):
 
     model = grb.Model("SOCP")
-    model.setParam('OutputFlag', 1 if outputFlag else 0)
-    model.setParam('BarHomogeneous', 1)
-    # model.setParam('BarConvTol', 1e-3)
+    model.setParam('OutputFlag', 0) #1 if outputFlag else 0)
+    # model.setParam('BarHomogeneous', 0)
+    # model.setParam('BarQCPConvTol', 1e-7)
     # model.setParam('PreSolve', 0)
+    # model.setParam('ScaleFlag', 2)
+    # model.setParam('NumericFocus', 2)
 
     # Parameters ==============================================================
     # anchor starts from startPt, in between are a list of circles, ends with endPt
@@ -613,7 +617,7 @@ def _circle2CirclePathGurobi(startPt: pt, endPt: pt, circles: list[dict], output
     # where startPt = (x[0], y[0]) and endPt = (x[len(circles) + 1], y[len(circles) + 1])
     d = {}
     for i in range(len(circles) + 1):
-        d[i] = model.addVar(vtype = grb.GRB.CONTINUOUS, name = 'd_%s' % i)
+        d[i] = model.addVar(vtype = grb.GRB.CONTINUOUS, name = 'd_%s' % i, lb = 0)
     model.setObjective(grb.quicksum(d[i] for i in range(len(circles) + 1)), grb.GRB.MINIMIZE)
 
     # Aux vars - distance between (x, y)
@@ -646,14 +650,15 @@ def _circle2CirclePathGurobi(startPt: pt, endPt: pt, circles: list[dict], output
 
     # Distance btw visits
     for i in range(len(circles) + 1):
-        model.addQConstr(d[i] ** 2 >= dx[i] ** 2 + dy[i] ** 2)
+        model.addConstr(dx[i] ** 2 + dy[i] ** 2 <= d[i] ** 2)
+        # model.addConstr(d[i] >= grb.norm(dx[i], dy[i]), name = f"cone_{i}")
         # model.addQConstr(dx[i] ** 2 + dy[i] ** 2 >= 0.1)
 
     for i in range(1, len(circles) + 1):
-        model.addQConstr(rx[i] ** 2 + ry[i] ** 2 <= circles[i - 1]['radius'] ** 2)
+        model.addConstr(rx[i] ** 2 + ry[i] ** 2 <= circles[i - 1]['radius'] ** 2)
 
     model.modelSense = grb.GRB.MINIMIZE
-    # model.write("SOCP.lp")
+    # model.write(f"SOCP/SOCP_{guid.GUID()}.mps")
     model.optimize()
 
     # Post-processing =========================================================
