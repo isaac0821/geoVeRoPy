@@ -3,6 +3,7 @@ import math
 import datetime
 import functools
 import warnings
+import inspect
 
 try:
     import pickle5 as pickle
@@ -34,6 +35,8 @@ def configSetError(errorType, err):
         ERRTOL[errorType] = err
     else:
         print(f"ERROR: {errorType} is not a valid ERRTOL parameter")
+    print("Current error tolerance setting: ")
+    print(ERRTOL)
     return
 
 def configSetLog(param, value):
@@ -42,6 +45,8 @@ def configSetLog(param, value):
         DEBUG[param] = value
     else:
         print(f"ERROR: {param} is not a valid DEBUG parameter")
+    print("Current debug setting: ")
+    print(DEBUG)
     return
 
 # Earth radius
@@ -609,5 +614,23 @@ def deprecated(newFuncName):
             result = func(*args, **kwargs)
             warnings.warn(f"{func.__name__} is deprecated and will be removed in future versions. Use {funcName}.", DeprecationWarning) 
             return result
+        return fun
+    return deco
+
+globalCallAnalysis = {}
+def callStats(funcName):
+    def deco(func):
+        @functools.wraps(func)
+        def fun(*args, **kwargs):
+            callerFrame = inspect.stack()[2]
+            callerName = callerFrame.function
+            global globalCallAnalysis
+            if (funcName not in globalCallAnalysis):
+                globalCallAnalysis[funcName] = {}
+            if (callerName not in globalCallAnalysis[funcName]):
+                globalCallAnalysis[funcName][callerName] = 1
+            else:
+                globalCallAnalysis[funcName][callerName] += 1
+            return func(*args, **kwargs)
         return fun
     return deco

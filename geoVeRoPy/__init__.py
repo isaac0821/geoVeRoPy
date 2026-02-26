@@ -26,7 +26,6 @@ from .geometry import *
 from .obj2Obj import *
 from .polyTour import *
 from .grid import *
-from .stPath import *
 
 from .ctpst import *
 

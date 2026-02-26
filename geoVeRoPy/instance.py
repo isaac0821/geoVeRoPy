@@ -660,6 +660,78 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
 
     return nodes
 
+def rndArcs(A: int|None = None, arcIDs: list[int|str] = [], distr = 'UniformLengthInSquareXY', seed = None, **kwargs) -> dict:
+
+    """Randomly create a set of arcs 
+
+    Parameters
+    ----------
+
+    A: integer, optional, default as None
+        Number of arcs to be visited
+    arcIDs: list, optional, default as None
+        Alternative input parameter of `A`. A list of arc IDs, `A` will be overwritten if `arcIDs` is given
+    distr: str, optional, default as 'UniformLengthInSquareXY'
+        The distribution of arcs. Options and required additional inputs are as follows:
+
+        1) (default) 'UniformLengthInSquareXY', uniformly sample from a square on the Euclidean space, with uniformly selected length
+            - xRange: 2-tuple, with minimum/maximum range of x, default as (0, 100)
+            - yRange: 2-tuple, with minimum/maximum range of y, default as (0, 100)
+            - minLen: float, minimum length of the arcs
+            - maxLen: float, maximum length of the arcs
+    **kwargs: optional
+        Provide additional inputs for different `distr` options
+
+    Returns
+    -------
+    dict
+        A dictionary of randomly created arcs.
+
+    """
+
+    # Sanity check ============================================================
+    arcs = {}
+    if (arcIDs == [] and A == None):
+        raise MissingParameterError(ERROR_MISSING_N)
+    elif (arcIDs == [] and A != None):
+        arcIDs = [i for i in range(A)]
+    if (seed != None):
+        random.seed(seed)
+
+    # Field names =============================================================
+    arcFieldName = 'arc' if 'arcFieldName' not in kwargs else kwargs['arcFieldName']
+
+    # Generate instance =======================================================
+    if (distr == 'UniformLengthInSquareXY'):
+        if ('minLen' not in kwargs or 'maxLen' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required field 'minLen' and/or 'maxLen'")
+        if ('minDeg' not in kwargs):
+            kwargs['minDeg'] = 0
+        if ('maxDeg' not in kwargs):
+            kwargs['maxDeg'] = 360
+        xRange = None
+        yRange = None
+        if ('xRange' not in kwargs or 'yRange' not in kwargs):
+            xRange = [0, 100]
+            yRange = [0, 100]
+            warnings.warn("WARNING: Set sample area to be default as a (0, 100) x (0, 100) square")
+        else:
+            xRange = [float(kwargs['xRange'][0]), float(kwargs['xRange'][1])]
+            yRange = [float(kwargs['yRange'][0]), float(kwargs['yRange'][1])]
+        for n in arcIDs:
+            length = random.uniform(kwargs['minLen'], kwargs['maxLen'])
+            direction = random.uniform(kwargs['minDeg'], kwargs['maxDeg'])
+            xStart = random.uniform(xRange[0], xRange[1])
+            yStart = random.uniform(yRange[0], yRange[1])
+            (xEnd, yEnd) = ptInDistXY((xStart, yStart), direction, length)
+            arcs[n] = {
+                arcFieldName : ((xStart, yStart), (xEnd, yEnd))
+            }
+    else:
+        raise UnsupportedInputError("ERROR: Unsupported option for `distr`.")
+
+    return arcs
+
 def rndPolys(P: int|None = None, polyIDs: list[int|str]|None = None, distr = 'UniformSquareXY', shape = 'RndConvexPoly', seed = None, allowOverlapFlag = True, returnAsListFlag = True, **kwargs) -> dict:
 
     """
