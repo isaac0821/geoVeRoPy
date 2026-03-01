@@ -96,8 +96,8 @@ def defaultBoundingBox(
     ptFieldName = 'pt',
     arcs: dict = None,
     arcFieldName = 'arc',
-    arcStartLocFieldName = 'startLoc',
-    arcEndLocFieldName = 'endLoc',
+    arcStartPtFieldName = 'startPt',
+    arcEndPtFieldName = 'endPt',
     poly: poly = None,
     polys: polys = None, 
     polygons: dict = None,
@@ -172,11 +172,11 @@ def defaultBoundingBox(
                 allX.append(arcs[i][arcFieldName][1][0])
                 allY.append(arcs[i][arcFieldName][0][1])
                 allY.append(arcs[i][arcFieldName][1][1])
-            elif (arcStartLocFieldName in arcs[i] and arcEndLocFieldName in arcs[i]):
-                allX.append(arcs[i][arcStartLocFieldName][0])
-                allY.append(arcs[i][arcStartLocFieldName][1])
-                allX.append(arcs[i][arcEndLocFieldName][0])
-                allY.append(arcs[i][arcEndLocFieldName][1])     
+            elif (arcStartPtFieldName in arcs[i] and arcEndPtFieldName in arcs[i]):
+                allX.append(arcs[i][arcStartPtFieldName][0])
+                allY.append(arcs[i][arcStartPtFieldName][1])
+                allX.append(arcs[i][arcEndPtFieldName][0])
+                allY.append(arcs[i][arcEndPtFieldName][1])     
     if (poly != None):
         for pt in poly:
             allX.append(pt[0])

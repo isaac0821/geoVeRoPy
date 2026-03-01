@@ -27,7 +27,7 @@ from .obj2Obj import *
 from .polyTour import *
 from .grid import *
 
-from .ctpst import *
+# from .ctpst import *
 
 # Classical TSP
 from .tsp import *

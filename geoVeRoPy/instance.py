@@ -153,7 +153,7 @@ def rndPts(N: int, distr = 'UniformSquareXY', seed = None, **kwargs) -> list:
         if ('polyLatLon' not in kwargs and 'polyLatLons' not in kwargs):
             raise MissingParameterError("ERROR: Missing required args 'polyXY' or 'polyXYs', which indicates a polygon / a list of polygons in the Euclidean space")
         # TODO: Mercator projection
-        raise VrpSolverNotAvailableError("ERROR: 'UniformPolyLatLon' is not available yet, please stay tune.")
+        raise UnsupportedInputError("ERROR: 'UniformPolyLatLon' is not available yet, please stay tune.")
 
     # Uniformly sample from a circle by lat/lon
     elif (distr == 'UniformCircleLatLon'):
@@ -199,7 +199,7 @@ def rndPts(N: int, distr = 'UniformSquareXY', seed = None, **kwargs) -> list:
             kwargs['roadClass'] if 'roadClass' in kwargs else ['residential'])
     
     else:
-        raise UnsupportedInputError(ERROR_MISSING_NODES_DISTR)
+        raise UnsupportedInputError("ERROR: Unsupported `distr`.")
 
     return nodePts
 

@@ -6,7 +6,6 @@ import guid
 
 from .geometry import *
 from .ring import *
-from .curveArc import *
 from .common import *
 from .plot import *
 
@@ -580,7 +579,7 @@ def _circle2CirclePathAdaptIter(startPt: pt, endPt: pt, circles: list[dict], ada
 def _circle2CirclePathGurobi(startPt: pt, endPt: pt, circles: list[dict], outputFlag: bool = False):
 
     model = grb.Model("SOCP")
-    model.setParam('OutputFlag', 0) #1 if outputFlag else 0)
+    model.setParam('OutputFlag', 1 if outputFlag else 0)
     # model.setParam('BarHomogeneous', 0)
     # model.setParam('BarQCPConvTol', 1e-7)
     # model.setParam('PreSolve', 0)
@@ -613,7 +612,7 @@ def _circle2CirclePathGurobi(startPt: pt, endPt: pt, circles: list[dict], output
     for i in range(1, len(circles) + 1):
         x[i] = model.addVar(vtype = grb.GRB.CONTINUOUS, name = "x_%s" % i, lb = lbX, ub = ubX)
         y[i] = model.addVar(vtype = grb.GRB.CONTINUOUS, name = "y_%s" % i, lb = lbY, ub = ubY)
-    # Distance from ((xi, yi)) to (x[i + 1], y[i + 1]), 
+    # Distance from (xi, yi) to (x[i + 1], y[i + 1]), 
     # where startPt = (x[0], y[0]) and endPt = (x[len(circles) + 1], y[len(circles) + 1])
     d = {}
     for i in range(len(circles) + 1):
