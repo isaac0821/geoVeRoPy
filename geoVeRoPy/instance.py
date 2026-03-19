@@ -674,7 +674,7 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                 r = kwargs['minDiag'] / 2 + random.uniform(0, 1) * (kwargs['maxDiag'] - kwargs['minDiag']) / 2
                 polyPts.append(ptInDistXY(
                     pt = nodes[n][ptFieldName], direction = degs[i], dist = r))
-            nodes[n][neighborFieldName] = [polyPts[i] for i in range(len(polyPts)) if distEuclideanXY(polyPts[i], polyPts[i - 1]) > ERRTOL['distPt2Pt']]
+            nodes[n][neighborFieldName] = [list(polyPts[i]) for i in range(len(polyPts)) if distEuclideanXY(polyPts[i], polyPts[i - 1]) > ERRTOL['distPt2Pt']]
 
         # Adjust each location
         if ('precision' in kwargs):
