@@ -201,6 +201,13 @@ def rndPts(N: int, distr = 'UniformSquareXY', seed = None, **kwargs) -> list:
     else:
         raise UnsupportedInputError("ERROR: Unsupported `distr`.")
 
+    # Precision ===============================================================
+    # Adjust each location
+    if ('precision' in kwargs):
+        for i in range(len(nodePts)):
+            nodePts[i][0] = round(nodePts[i][0], kwargs['precision'])
+            nodePts[i][1] = round(nodePts[i][1], kwargs['precision'])
+
     return nodePts
 
 def rndNodes(N: int|None = None, nodeIDs: list[int|str] = [], nodes: dict|None = None, distr = 'UniformSquareXY', seed = None, **kwargs) -> dict:
@@ -332,6 +339,13 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             nodes[n]['neiShape'] = 'Poly'
             poly = [[i[0] + nodes[n][ptFieldName][0], i[1] + nodes[n][ptFieldName][1]] for i in kwargs['poly']]
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
+
+        # Adjust each location
+        if ('precision' in kwargs):
+            for n in nodes:
+                for i in range(len(nodes[n][neighborFieldName])):
+                    nodes[n][neighborFieldName][i][0] = round(nodes[n][neighborFieldName][i][0], kwargs['precision'])
+                    nodes[n][neighborFieldName][i][1] = round(nodes[n][neighborFieldName][i][1], kwargs['precision'])
             
     elif (shape == 'Circle'):
         for n in nodeIDs:
@@ -409,7 +423,7 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                 B = (y ** 2 / c ** 2 - 1) * (a - b)
                 C = (y ** 2 / c ** 2 - 1) * a * b
                 X = (-B - math.sqrt(B ** 2 - 4 * A * C)) / (2 * A)
-                polyL.append((X, y))
+                polyL.append([X, y])
                 xStart = X
             for d in range(vTLod + 1):
                 y = c * 0.4 * d / vHLod
@@ -417,12 +431,12 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                 B = (y ** 2 / c ** 2 - 1) * (a - b)
                 C = (y ** 2 / c ** 2 - 1) * a * b
                 X = (-B + math.sqrt(B ** 2 - 4 * A * C)) / (2 * A)
-                polyR.insert(0, (X, y))
+                polyR.insert(0, [X, y])
                 xEnd = X
             for d in range(hLod + 1):
                 x = xStart + (xEnd - xStart) * d / hLod
                 Y = math.sqrt(c * c * (1 - (x * x) / ((a - b) * x + a * b)))
-                polyM.append((x, Y))
+                polyM.append([x, Y])
             polyHf = []
             polyHf.extend(polyL)
             polyHf.extend(polyM)
@@ -624,9 +638,16 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             }
 
             polyShapely = shapely.convex_hull(shapely.MultiPoint(points = polyPts))
-            poly = [i for i in shapely.geometry.mapping(polyShapely)['coordinates'][0]]
+            poly = [list(i) for i in shapely.geometry.mapping(polyShapely)['coordinates'][0]]
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
 
+        # Adjust each location
+        if ('precision' in kwargs):
+            for n in nodes:
+                for i in range(len(nodes[n][neighborFieldName])):
+                    nodes[n][neighborFieldName][i][0] = round(nodes[n][neighborFieldName][i][0], kwargs['precision'])
+                    nodes[n][neighborFieldName][i][1] = round(nodes[n][neighborFieldName][i][1], kwargs['precision'])
+            
     elif (shape == 'RndStar'):
         for n in nodeIDs:
             if ('maxNumSide' not in kwargs):
@@ -655,6 +676,13 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                     pt = nodes[n][ptFieldName], direction = degs[i], dist = r))
             nodes[n][neighborFieldName] = [polyPts[i] for i in range(len(polyPts)) if distEuclideanXY(polyPts[i], polyPts[i - 1]) > ERRTOL['distPt2Pt']]
 
+        # Adjust each location
+        if ('precision' in kwargs):
+            for n in nodes:
+                for i in range(len(nodes[n][neighborFieldName])):
+                    nodes[n][neighborFieldName][i][0] = round(nodes[n][neighborFieldName][i][0], kwargs['precision'])
+                    nodes[n][neighborFieldName][i][1] = round(nodes[n][neighborFieldName][i][1], kwargs['precision'])
+            
     else:
         raise UnsupportedInputError("ERROR: Unsupported option for `kwargs`. Supported 'shape' includes: 'Poly', 'Circle', 'Egg', 'RndSquare', 'RndConvexPoly' and 'RndCurvy'.")
 
@@ -858,13 +886,13 @@ def rndPolys(P: int|None = None, polyIDs: list[int|str]|None = None, distr = 'Un
 def _rndPtUniformSquareXY(xRange: list[int]|list[float], yRange: list[int]|list[float]) -> pt:
     x = random.uniform(xRange[0], xRange[1])
     y = random.uniform(yRange[0], yRange[1])
-    return (x, y)
+    return [x, y]
 
 def _rndPtUniformCubeXYZ(xRange: list[int]|list[float], yRange: list[int]|list[float], zRange: list[int]|list[float]) -> pt3D:
     x = random.uniform(xRange[0], xRange[1])
     y = random.uniform(yRange[0], yRange[1])
     z = random.uniform(zRange[0], zRange[1])
-    return (x, y, z)
+    return [x, y, z]
 
 def _rndPtUniformTriangleXY(triangle: poly) -> pt:
     
@@ -879,7 +907,7 @@ def _rndPtUniformTriangleXY(triangle: poly) -> pt:
     x = (1 - math.sqrt(rndR1)) * x1 + math.sqrt(rndR1) * (1 - rndR2) * x2 + math.sqrt(rndR1) * rndR2 * x3
     y = (1 - math.sqrt(rndR1)) * y1 + math.sqrt(rndR1) * (1 - rndR2) * y2 + math.sqrt(rndR1) * rndR2 * y3
 
-    return (x, y)
+    return [x, y]
 
 def _rndPtUniformPolyXY(poly: poly) -> pt:
     # Get list of triangles ===================================================
@@ -893,9 +921,9 @@ def _rndPtUniformPolyXY(poly: poly) -> pt:
 
     # Select a triangle and randomize a point in the triangle =================
     idx = rndPick(lstWeight)
-    (x, y) = _rndPtUniformTriangleXY(lstTriangle[idx])
+    [x, y] = _rndPtUniformTriangleXY(lstTriangle[idx])
 
-    return (x, y)
+    return [x, y]
 
 def _rndPtUniformPolyXYs(polys: polys) -> pt:
     # Get all triangulated triangles ==========================================
@@ -911,17 +939,17 @@ def _rndPtUniformPolyXYs(polys: polys) -> pt:
 
     # Select a triangle and randomize a point in the triangle =================
     idx = rndPick(lstWeight)
-    (x, y) = _rndPtUniformTriangleXY(lstTriangle[idx])
+    [x, y] = _rndPtUniformTriangleXY(lstTriangle[idx])
 
-    return (x, y)
+    return [x, y]
 
 def _rndPtUniformAvoidPolyXY(poly: poly, xRange: list[int]|list[float], yRange: list[int]|list[float]) -> pt:
     # Use the low efficient accept-denial approach
     while (True):
         x = random.uniform(xRange[0], xRange[1])
         y = random.uniform(yRange[0], yRange[1])
-        if (not isPtInPoly((x, y), poly)):
-            return (x, y)
+        if (not isPtInPoly([x, y], poly)):
+            return [x, y]
 
 def _rndPtUniformAvoidPolyXYs(polys: polys, xRange: list[int]|list[float], yRange: list[int]|list[float]) -> pt:
     while (True):
@@ -929,11 +957,11 @@ def _rndPtUniformAvoidPolyXYs(polys: polys, xRange: list[int]|list[float], yRang
         y = random.uniform(yRange[0], yRange[1])
         notInPolys = True
         for p in polys:
-            if (isPtInPoly((x, y), p)):
+            if (isPtInPoly([x, y], p)):
                 notInPolys = False
                 break
         if (notInPolys):
-            return (x, y)
+            return [x, y]
 
 def _rndPtUniformCircleXY(radius: float, center: pt) -> pt:
     theta = random.uniform(0, 2 * math.pi)
@@ -941,7 +969,7 @@ def _rndPtUniformCircleXY(radius: float, center: pt) -> pt:
     x = center[0] + r * math.cos(theta)
     y = center[1] + r * math.sin(theta)
 
-    return (x, y)
+    return [x, y]
 
 def _rndPtUniformCircleLatLon(radius: float, center: pt) -> pt:
     theta = random.uniform(0, 2 * math.pi)
