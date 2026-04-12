@@ -1312,6 +1312,190 @@ def plotPoly(poly: poly, **kwargs):
 
     return fig, ax
 
+def plotTriangle3D(triangle3D: list[pt3D], **kwargs):
+    """
+    Plot a 3D triangle on a figure
+    Parameters
+    ----------
+    triangle3D: list of pt3D, required
+        A list of 3 points defining the triangle
+    **kwargs: optional
+        Additional matplotlib information
+    Returns
+    -------
+    fig, ax
+        matplotlib.pyplot object
+    """
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox3D = (None, None, None, None, None, None) if 'boundingBox3D' not in kwargs else kwargs['boundingBox3D']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+    
+    # Styling characters ======================================================
+    edgeWidth = 0.5 if 'edgeWidth' not in kwargs else kwargs['edgeWidth']
+    edgeColor = 'Random' if 'edgeColor' not in kwargs else kwargs['edgeColor']
+    fillColor = None if 'fillColor' not in kwargs else kwargs['fillColor']
+    latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
+    
+    # Check for required fields ===============================================
+    if (triangle3D == None):
+        raise MissingParameterError("ERROR: Missing required field `triangle3D`.")
+    
+    # Validate triangle3D has exactly 3 points
+    if len(triangle3D) != 3:
+        raise ValueError("ERROR: triangle3D must contain exactly 3 points")
+    
+    # If no based matplotlib figure provided, define boundary =================
+    if (fig == None or ax == None):
+        fig = plt.figure()
+        ax = plt.axes(projection = '3d')
+        (xMin, xMax, yMin, yMax, zMin, zMax) = defaultBoundingBox3D(
+            boundingBox3D = boundingBox3D,
+            pts3D = triangle3D)
+        ax.set_xlim(xMin, xMax)
+        ax.set_ylim(yMin, yMax)
+        ax.set_zlim(zMin, zMax)
+    
+    # Extract coordinates
+    x = []
+    y = []
+    z = []
+    for pt in triangle3D:
+        if (not latLonFlag):
+            x.append(pt[0])
+            y.append(pt[1])
+        else:
+            x.append(pt[1])
+            y.append(pt[0])
+        z.append(pt[2])
+    
+    # Close the triangle by appending the first point
+    x.append(x[0])
+    y.append(y[0])
+    z.append(z[0])
+    
+    # Handle edge color
+    edge_color = None
+    if (edgeColor == 'Random'):
+        edge_color = rndColor()
+    else:
+        edge_color = edgeColor
+    
+    # Plot the triangle edges
+    ax.plot(x, y, z, c=edge_color, linewidth=edgeWidth)
+    
+    # Handle fill color if specified
+    if fillColor is not None:
+        # Create a triangular surface
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+        # Create triangle vertices
+        triangle = [list(zip(x[:3], y[:3], z[:3]))]
+        # Create a polygon collection
+        poly3d = Poly3DCollection(triangle, alpha=0.5, facecolor=fillColor, edgecolor=edge_color)
+        ax.add_collection3d(poly3d)
+    
+    # Axis on and off =========================================================
+    if (not showAxis):
+        plt.axis('off')
+    
+    # Save figure =============================================================
+    if (saveFigPath != None and isinstance(fig, plt.Figure)):
+        fig.savefig(saveFigPath)
+    if (not showFig):
+        plt.close(fig)
+    
+    return fig, ax
+
+def plotTriGridSurface(trig: TriGridSurface, **kwargs):
+    """
+    Plot a 3D triangular grid surface on a figure
+    Parameters
+    ----------
+    trig: TriGridSurface, required
+        A TriGridSurface object containing triangles to be plotted
+    **kwargs: optional
+        Additional matplotlib information
+    Returns
+    -------
+    fig, ax
+        matplotlib.pyplot object
+    """
+    # Matplotlib characters ===================================================
+    fig = None if 'fig' not in kwargs else kwargs['fig']
+    ax = None if 'ax' not in kwargs else kwargs['ax']
+    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
+    boundingBox3D = (None, None, None, None, None, None) if 'boundingBox3D' not in kwargs else kwargs['boundingBox3D']
+    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
+    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
+    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+    
+    # Styling characters ======================================================
+    edgeWidth = 0.5 if 'edgeWidth' not in kwargs else kwargs['edgeWidth']
+    edgeColor = 'Random' if 'edgeColor' not in kwargs else kwargs['edgeColor']
+    fillColor = None if 'fillColor' not in kwargs else kwargs['fillColor']
+    latLonFlag = False if 'latLonFlag' not in kwargs else kwargs['latLonFlag']
+    
+    # Check for required fields ===============================================
+    if (trig == None):
+        raise MissingParameterError("ERROR: Missing required field `trig`.")
+    
+    if not hasattr(trig, 'tris') or trig.tris is None:
+        raise MissingParameterError("ERROR: TriGridSurface must have a 'tris' attribute")
+    
+    # Collect all triangle points for bounding box calculation
+    all_points = []
+    for triangle3D in trig.tris:
+        if isinstance(triangle3D, list) and len(triangle3D) == 3:
+            all_points.extend(triangle3D)
+    
+    if not all_points:
+        raise ValueError("ERROR: No points found in the triangulation")
+    
+    # If no based matplotlib figure provided, define boundary =================
+    if (fig == None or ax == None):
+        fig = plt.figure()
+        ax = plt.axes(projection = '3d')
+        (xMin, xMax, yMin, yMax, zMin, zMax) = defaultBoundingBox3D(
+            boundingBox3D = boundingBox3D,
+            pts3D = all_points)
+        ax.set_xlim(xMin, xMax)
+        ax.set_ylim(yMin, yMax)
+        ax.set_zlim(zMin, zMax)
+    
+    # Plot each triangle using the plotTriangle3D function
+    for triangle3D in trig.tris:
+        if not isinstance(triangle3D, list) or len(triangle3D) != 3:
+            continue  # Skip invalid triangles
+            
+        # Create a copy of kwargs and update with triangle-specific parameters
+        triangle_kwargs = kwargs.copy()
+        triangle_kwargs['fig'] = fig
+        triangle_kwargs['ax'] = ax
+        triangle_kwargs['edgeWidth'] = edgeWidth
+        triangle_kwargs['edgeColor'] = edgeColor
+        triangle_kwargs['fillColor'] = fillColor
+        triangle_kwargs['latLonFlag'] = latLonFlag
+        
+        # Call plotTriangle3D for each triangle
+        # Note: We don't need to return anything since we're reusing the same fig and ax
+        plotTriangle3D(triangle3D, **triangle_kwargs)
+    
+    # Axis on and off =========================================================
+    if (not showAxis):
+        plt.axis('off')
+    
+    # Save figure =============================================================
+    if (saveFigPath != None and isinstance(fig, plt.Figure)):
+        fig.savefig(saveFigPath)
+    if (not showFig):
+        plt.close(fig)
+    
+    return fig, ax
+    
 def plotCircle(center: pt, radius: float, lod: int = 30, **kwargs):
 
     # Matplotlib characters ===================================================
@@ -1509,18 +1693,7 @@ def plotPolygons(polygons: dict, **kwargs):
 
     return fig, ax
 
-def plotMapChina(
-    regionList: list,
-    readFromLocalFlag: bool = True,
-    localDirectory: str = "D:/Zoo/gull/geoVeRoPy/data/map",
-    saveToLocalFlag: bool = True,
-    edgeWidth: float = 0.5,
-    edgeColor: str = 'Random',
-    fillColor: str|None = None,
-    fillStyle: str = "///",
-    opacity: float = 0.5,   
-    **kwargs
-    ):
+def plotMapChina(regionList: list, **kwargs):
 
     # Matplotlib characters ===================================================
     fig = None if 'fig' not in kwargs else kwargs['fig']
@@ -1532,6 +1705,16 @@ def plotMapChina(
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
 
     multiPoly = []
+
+    # Other settings ==========================================================
+    readFromLocalFlag = True if 'readFromLocalFlag' not in kwargs else kwargs['readFromLocalFlag']
+    localDirectory = "D:/Zoo/gull/geoVeRoPy/data/map" if 'localDirectory' not in kwargs else kwargs['localDirectory']
+    saveToLocalFlag = True if 'saveToLocalFlag' not in kwargs else kwargs['saveToLocalFlag']
+    edgeWidth = 0.5 if 'edgeWidth' not in kwargs else kwargs['edgeWidth']
+    edgeColor = 'Random' if 'edgeColor' not in kwargs else kwargs['edgeColor']
+    fillColor = None if 'fillColor' not in kwargs else kwargs['fillColor']
+    fillStyle = "///" if 'fillStyle' not in kwargs else kwargs['fillStyle']
+    opacity = 0.5 if 'opacity' not in kwargs else kwargs['opacity']
 
     # 一会儿要绘制的边界线们
     for region in regionList:
@@ -1575,15 +1758,7 @@ def plotMapChina(
 
     return fig, ax
 
-def plotMapUS(
-    stateList: list[str]|str = [],
-    edgeWidth: float = 0.5,
-    edgeColor: str = 'Random',
-    fillColor: str|None = None,
-    fillStyle: str = "///",
-    opacity: float = 0.5,   
-    **kwargs
-    ):
+def plotMapUS(stateList: list[str]|str, **kwargs):
 
     # Matplotlib characters ===================================================
     fig = None if 'fig' not in kwargs else kwargs['fig']
@@ -1593,6 +1768,13 @@ def plotMapUS(
     showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
     saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
     showFig = True if 'showFig' not in kwargs else kwargs['showFig']
+
+    # Other settings ==========================================================
+    edgeWidth = 0.5 if 'edgeWidth' not in kwargs else kwargs['edgeWidth']
+    edgeColor = 'Random' if 'edgeColor' not in kwargs else kwargs['edgeColor']
+    fillColor = None if 'fillColor' not in kwargs else kwargs['fillColor']
+    fillStyle = "///" if 'fillStyle' not in kwargs else kwargs['fillStyle']
+    opacity = 0.5 if 'opacity' not in kwargs else kwargs['opacity']
 
     if (fig == None or ax == None):
         fig, ax = plt.subplots()
@@ -1636,249 +1818,7 @@ def plotMapUS(
 
     return fig, ax
 
-def plotRoads(
-    roads: dict,
-    roadBoundary: poly|polys = None,
-    roadWidth: dict[str,float]|float = {
-            'motorway': 2,
-            'motorway_link': 2,
-            'truck': 1.5,
-            'truck_link': 1.5,
-            'primary': 1.2,
-            'primary_link': 1.2,
-            'secondary': 1,
-            'secondary_link': 1,
-            'tertiary': 1,
-            'tertiary_link': 1,
-            'residential': 0.8,
-            'others': 0.8
-        },
-    roadColors: dict[str,str]|str = {
-            'motorway': 'red',
-            'motorway_link': 'red',
-            'truck': 'orange',
-            'truck_link': 'orange',
-            'primary': 'orange',
-            'primary_link': 'orange',
-            'secondary': 'orange',
-            'secondary_link': 'orange',
-            'tertiary': 'orange',
-            'tertiary_link': 'orange',
-            'residential': 'green',
-            'others': 'gray'
-        },
-    roadShowFlags: list[str, bool]|str|bool = 'All',
-    **kwargs
-    ): 
-
-    # Matplotlib characters ===================================================
-    fig = None if 'fig' not in kwargs else kwargs['fig']
-    ax = None if 'ax' not in kwargs else kwargs['ax']
-    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
-    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
-    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
-    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
-    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
-
-    # FIXME: In future, we might want to distinguish roads by max speed or show the names of roads
-    # If no based matplotlib figure, define boundary ==========================
-    if (fig == None or ax == None):
-        fig, ax = plt.subplots()
-        allX = []
-        allY = []
-        if (roadBoundary != None):
-            try:    
-                for poly in roadBoundary:
-                    for pt in poly:
-                        allX.append(float(pt[0]))
-                        allY.append(float(pt[1]))
-            except:
-                for pt in roadBoundary:
-                    allX.append(float(pt[0]))
-                    allY.append(float(pt[1]))
-        else:
-            for road in roads:
-                for pt in roads[road]['shape']:
-                    allX.append(pt[0])
-                    allY.append(pt[1])
-
-        (xMin, xMax, yMin, yMax) = boundingBox
-        if (xMin == None):
-            xMin = min(allX) - 0.05 * abs(max(allX) - min(allX))
-        if (xMax == None):
-            xMax = max(allX) + 0.05 * abs(max(allX) - min(allX))
-        if (yMin == None):
-            yMin = min(allY) - 0.05 * abs(max(allY) - min(allY))
-        if (yMax == None):
-            yMax = max(allY) + 0.05 * abs(max(allY) - min(allY))
-        boundingBox = (xMin, xMax, yMin, yMax)
-        figSize = defaultFigSize(boundingBox, figSize[0], figSize[1], True)
-        (width, height) = figSize
-
-        fig.set_figwidth(width)
-        fig.set_figheight(height)
-        ax.set_xlim(yMin, yMax)
-        ax.set_ylim(xMin, xMax)
-
-    # Plot roads ==============================================================
-    for road in roads:
-        if (roadShowFlags == 'All' or roadShowFlags == True 
-            or (type(roadShowFlags) == list 
-                and roads[road]['class'] in roadShowFlags)):
-            x = []
-            y = []
-            for pt in roads[road]['shape']:
-                x.append(pt[1])
-                y.append(pt[0])
-            color = None
-            if (roadColors == 'Random'):
-                color = rndColor()
-            elif (type(roadColors) == str):
-                color = roadColors
-            elif (type(roadColors) == dict):
-                if (roads[road]['class'] in roadColors):
-                    color = roadColors[roads[road]['class']]
-                else:
-                    color = roadColors['others']
-            rw = 1
-            if (type(roadWidth) == dict):
-                if (roads[road]['class'] in roadWidth):
-                    rw = roadWidth[roads[road]['class']]
-            else:
-                rw = roadWidth
-            ax.plot(x, y, color = color, linewidth = rw)
-
-    # Axis on and off =========================================================
-    if (not showAxis):
-        plt.axis('off')
-
-    # Save figure =============================================================
-    if (saveFigPath != None):
-        fig.savefig(saveFigPath)
-    if (not showFig):
-        plt.close(fig)
-
-    return fig, ax
-
-def plotBuildings(
-    buildings: dict,
-    buildingBoundary: poly|polys = None,
-    buildingColors: dict[str,str]|str = {
-            'building': 'yellow',
-            'commercial': 'yellow',
-            'residential': 'green',
-            'house': 'green',
-            'static_caravan': 'green',
-            'industrial': 'orange',
-            'manufacture': 'orange'
-        },
-    buildingShowFlags: list[str, bool]|str|bool = False,
-    **kwargs
-    ):
-
-    # Matplotlib characters ===================================================
-    fig = None if 'fig' not in kwargs else kwargs['fig']
-    ax = None if 'ax' not in kwargs else kwargs['ax']
-    figSize = (None, 5) if 'figSize' not in kwargs else kwargs['figSize']
-    boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
-    showAxis = True if 'showAxis' not in kwargs else kwargs['showAxis']
-    saveFigPath = None if 'saveFigPath' not in kwargs else kwargs['saveFigPath']
-    showFig = True if 'showFig' not in kwargs else kwargs['showFig']
-
-    # FIXME: In future, we might want to distinguish roads by max speed or show the names of roads
-    # If no based matplotlib figure, define boundary ==========================
-    if (fig == None or ax == None):
-        fig, ax = plt.subplots()
-        allX = []
-        allY = []
-        if (buildingBoundary != None):
-            try:    
-                for poly in buildingBoundary:
-                    for pt in poly:
-                        allX.append(float(pt[1]))
-                        allY.append(float(pt[0]))
-            except:
-                for pt in buildingBoundary:
-                    allX.append(float(pt[1]))
-                    allY.append(float(pt[0]))
-
-        (xMin, xMax, yMin, yMax) = boundingBox
-        if (xMin == None):
-            xMin = min(allX) - 0.1 * abs(max(allX) - min(allX))
-        if (xMax == None):
-            xMax = max(allX) + 0.1 * abs(max(allX) - min(allX))
-        if (yMin == None):
-            yMin = min(allY) - 0.1 * abs(max(allY) - min(allY))
-        if (yMax == None):
-            yMax = max(allY) + 0.1 * abs(max(allY) - min(allY))
-        width = 0
-        height = 0
-        if (figSize == None or (figSize[0] == None and figSize[1] == None)):
-            if (xMax - xMin > yMax - yMin):
-                width = 5
-                height = 5 * ((yMax - yMin) / (xMax - xMin))
-            else:
-                width = 5 * ((xMax - xMin) / (yMax - yMin))
-                height = 5
-        elif (figSize != None and figSize[0] != None and figSize[1] == None):
-            width = figSize[0]
-            height = figSize[0] * ((yMax - yMin) / (xMax - xMin))
-        elif (figSize != None and figSize[0] == None and figSize[1] != None):
-            width = figSize[1] * ((xMax - xMin) / (yMax - yMin))
-            height = figSize[1]
-        else:
-            (width, height) = figSize
-
-        if (isinstance(fig, plt.Figure)):
-            fig.set_figwidth(width)
-            fig.set_figheight(height)
-            ax.set_xlim(xMin, xMax)
-            ax.set_ylim(yMin, yMax)
-
-    # Plot buildings ==========================================================
-    for building in buildings:
-        if (buildingShowFlags == 'All' or buildingShowFlags == True
-            or (type(buildingShowFlags) == list
-                and buildings[building]['type'] in buildingShowFlags)):
-            x = []
-            y = []
-            color = None
-            for pt in buildings[building]['shape']:
-                x.append(pt[1])
-                y.append(pt[0])
-            if (buildingColors == 'Random'):
-                color = rndColor()
-            elif (type(buildingColors) == str):
-                color = buildingColors
-            elif (type(buildingColors) == dict):
-                if (buildings[building]['type'] in buildingColors):
-                    color = buildingColors[buildings[building]['type']]
-                else:
-                    color = 'gray'
-            ax.fill(x, y, facecolor=color)
-
-    # Axis on and off =========================================================
-    if (not showAxis):
-        plt.axis('off')
-
-    # Save figure =============================================================
-    if (saveFigPath != None):
-        fig.savefig(saveFigPath)
-    if (not showFig):
-        plt.close(fig)
-
-    return fig, ax
-
-def plotGantt(
-    gantt: list[dict],
-    group: list[dict] | None = None, 
-    phase: list[dict] | None = None,
-    xlabel: str = "Time",
-    ylabel: str = "",
-    startTime: float = 0,
-    endTime: float|None = None,
-    **kwargs
-    ) -> "Given a Gantt dictionary, plot Gantt":
+def plotGantt(gantt: list[dict], group: list[dict]|None = None, phase: list[dict]|None = None, **kwargs) -> "Given a Gantt dictionary, plot Gantt":
 
     """Given a Gantt dictionary, plot a Gantt chart
 
@@ -1938,6 +1878,14 @@ def plotGantt(
     phaseSeparatorColor = 'gray' if 'phaseSeparatorColor' not in kwargs else kwargs['phaseSeparatorColor']
     entitiesOffset = {} if 'entitiesOffset' not in kwargs else kwargs['entitiesOffset']
 
+    # Other settings ==========================================================
+    xlabel = "Time" if 'xlabel' not in kwargs else kwargs['xlabel']
+    ylabel = "" if 'ylabel' not in kwargs else kwargs['ylabel']
+    startTime = 0 if 'startTime' not in kwargs else kwargs['startTime']
+    endTime = None if 'endTime' not in kwargs else kwargs['endTime']
+    showTailFlag = True if 'showTailFlag' not in kwargs else kwargs['showTailFlag']
+    showGridFlag = False if 'showGridFlag' not in kwargs else kwargs['showGridFlag']
+
     # Check for required fields ===============================================
     if (gantt == None):
         raise MissingParameterError("ERROR: Missing required field `gantt`.")
@@ -1983,7 +1931,7 @@ def plotGantt(
     totalHeight = len([i for i in entities if i != None]) * ganttBlockHeight + len([i for i in entities if i == None]) * groupSeparatorHeight
     yAcc = 0.5 * ganttBlockHeight
     yticks = [0.5 * ganttBlockHeight]
-    for i in range(1, len(entities)):        
+    for i in range(1, len(entities)):
         if (entities[i - 1] != None and entities[i] != None):
             yAcc += ganttBlockHeight
             yticks.append(yAcc)

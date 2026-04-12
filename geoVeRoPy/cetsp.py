@@ -14,16 +14,7 @@ from .obj2Obj import *
 from .tsp import *
 from .bnbTree import *
 
-def solveCETSP(
-    nodes: dict, 
-    depotPt: pt = None,
-    startPt: pt = None,
-    endPt: pt = None,    
-    neighbor: str = "Circle",
-    dimension: str = 'Euclidean',
-    algo: str = "Exact",
-    method: str = 'BnB',
-    **kwargs):
+def solveCETSP(nodes: dict, depotPt: pt = None, startPt: pt = None, endPt: pt = None, neighbor: str = "Circle", dimension: str = 'Euclidean', algo: str = "Exact", method: str = 'BnB', **kwargs):
 
     """Use MISOCP(GBD)/metaheuristic to find shortest CETSP tour
 
@@ -224,15 +215,7 @@ def solveCETSP(
         raise UnsupportedInputError("ERROR: Combination of `dimension`, `neighbor`, `algo`, and `method` is not supported yet.")
     return cetsp
 
-def _solveCETSPGBDCircle(
-    startPt: pt,
-    endPt: pt,
-    nodes: dict,
-    radius: float | None = None,
-    radiusFieldName: str = 'radius',
-    c2cAlgo: str = 'SOCP',
-    timeLimit: int | None = None
-    ) -> dict | None:
+def _solveCETSPGBDCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | None = None, radiusFieldName: str = 'radius', c2cAlgo: str = 'SOCP', timeLimit: int | None = None) -> dict | None:
 
     # Model initialization ====================================================
     CETSP = grb.Model("CETSP")
@@ -505,14 +488,7 @@ def _solveCETSPGBDCircle(
         'cutCount': cutCount
     }
 
-def _solveCETSPGBDPoly(
-    startPt: pt,
-    endPt: pt,
-    nodes: dict, # Index from 1
-    polyFieldName: str = 'poly',
-    c2cAlgo: str = 'SOCP',
-    timeLimit: int | None = None
-    ) -> dict | None:
+def _solveCETSPGBDPoly(startPt: pt, endPt: pt, nodes: dict, polyFieldName: str = 'poly', c2cAlgo: str = 'SOCP', timeLimit: int | None = None) -> dict | None:
 
     # Model initialization ====================================================
     CETSP = grb.Model("CETSP")
@@ -756,13 +732,7 @@ def _solveCETSPGBDPoly(
         'cutCount': cutCount
     }
 
-def _solveCETSPGBDLatLon(
-    startPt: pt,
-    endPt: pt,
-    nodes: dict, # Index from 1
-    polyXYMercator: dict,
-    timeLimit: int | None = None
-    ) -> dict | None:
+def _solveCETSPGBDLatLon(startPt: pt, endPt: pt, nodes: dict,  polyXYMercator: dict, timeLimit: int | None = None) -> dict | None:
 
     # Model initialization ====================================================
     CETSP = grb.Model("CETSP")
@@ -1016,17 +986,7 @@ def _solveCETSPGBDLatLon(
         'cutCount': cutCount
     }
 
-def _solveCETSPGACircle(
-    startPt: pt,
-    endPt: pt,
-    nodes: dict, # Index from 1
-    popSize: int,
-    neighRatio: dict = {},
-    stop: dict = {},
-    radius: float | None = None,
-    radiusFieldName: str = 'radius',
-    **kwargs
-    ) -> dict | None:
+def _solveCETSPGACircle(startPt: pt, endPt: pt, nodes: dict, popSize: int, neighRatio: dict = {}, stop: dict = {}, radius: float | None = None, radiusFieldName: str = 'radius', **kwargs) -> dict | None:
 
     class chromosomeCETSP:
         def __init__(self, startPt, endPt, nodes, seq):
@@ -1357,16 +1317,7 @@ def _solveCETSPGACircle(
         'convergence': convergence,
     }
 
-def _solveCETSPGALatLon(
-    startPtMercator: pt,
-    endPtMercator: pt,
-    nodes: dict, # Index from 1
-    polyXYMercator: dict,
-    popSize: int,
-    neighRatio: dict = {},
-    stop: dict = {},
-    **kwargs
-    ) -> dict | None:
+def _solveCETSPGALatLon(startPtMercator: pt, endPtMercator: pt, nodes: dict,  polyXYMercator: dict, popSize: int, neighRatio: dict = {}, stop: dict = {}, **kwargs) -> dict | None:
 
     class chromosomeCETSP:
         def __init__(self, startPtMercator, endPtMercator, nodes, polyXYMercator, seq):
@@ -1689,22 +1640,7 @@ def _solveCETSPGALatLon(
         'convergence': convergence,
     }
 
-def _solveCETSPILSCircle(
-    startPt: pt,
-    endPt: pt,
-    nodes: dict, # Index from 1
-    radius: float | None = None,
-    radiusFieldName: str = 'radius',
-    initTemp: float = 100,
-    coolRate: float = 0.95,
-    neighRatio: dict = {
-        'Swap': 0.1,
-        'Exchange': 0.1,
-        'Rotate': 0.3,
-        'rndDestroy': 0.4
-    },
-    stop: dict = {},
-    ) -> dict | None:
+def _solveCETSPILSCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | None = None, radiusFieldName: str = 'radius', initTemp: float = 100, coolRate: float = 0.95, neighRatio: dict = { 'Swap': 0.1, 'Exchange': 0.1, 'Rotate': 0.3, 'rndDestroy': 0.4 }, stop: dict = {}, **kwargs) -> dict | None:
 
     class chromosomeCETSP:
         def __init__(self, startPt, endPt, nodes, seq):
@@ -1982,14 +1918,7 @@ def _solveCETSPILSCircle(
         'convergence': convergence,
     }
 
-def _solveCETSPBnBCircle(
-    startPt: pt,
-    endPt: pt,
-    nodes: dict,
-    radius: float | None = None,
-    radiusFieldName: str = 'radius',
-    timeLimit: int | None = None
-    ) -> dict | None:
+def _solveCETSPBnBCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | None = None, radiusFieldName: str = 'radius', timeLimit: int | None = None) -> dict | None:
 
     def cetspNew(startPt, endPt, nodes, funcSolve, funcBranch, funcUBEstimate):
         seq = []

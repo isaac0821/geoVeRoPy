@@ -224,7 +224,7 @@ def rndNodes(N: int|None = None, nodeIDs: list[int|str] = [], nodes: dict|None =
     nodes: dict, optional
         A nodes dictionary, if given, new locations will be append into this dictionary
     distr: string, optional, default as 'UniformSquareXY'
-        See `distr` docstring in :func:`~geoVeRoPy.instance.rndPts()`
+        See `distr` docstring in :func:`~instance.rndPts()`
     ptFieldName: str, optional, default as 'pt'
         The key in nodes dictionary to indicate the locations
     **kwargs: optional
@@ -331,12 +331,13 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
     neighborFieldName = 'neighbor' if 'neighborFieldName' not in kwargs else kwargs['neighborFieldName']
 
     # Add neighborhood by 'shape' =============================================
+    for n in nodeIDs:
+        nodes[n]['neiShape'] = shape
     if (shape == 'Poly'):
         for n in nodeIDs:
             if ('poly' not in kwargs):
                 raise MissingParameterError("ERROR: Missing required args 'poly'")
             
-            nodes[n]['neiShape'] = 'Poly'
             poly = [[i[0] + nodes[n][ptFieldName][0], i[1] + nodes[n][ptFieldName][1]] for i in kwargs['poly']]
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
 
@@ -356,7 +357,6 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             if ('lod' in kwargs and type(kwargs['lod']) == int):
                 lod = kwargs['lod']
 
-            nodes[n]['neiShape'] = 'Circle'
             nodes[n]['radius'] = kwargs['radius']
 
             poly = [[
@@ -378,7 +378,6 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
 
             radius = random.uniform(kwargs['minRadius'], kwargs['maxRadius'])
 
-            nodes[n]['neiShape'] = 'Circle'
             nodes[n]['radius'] = radius
 
             poly = [[
@@ -398,7 +397,6 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             if ('lod' in kwargs and type(kwargs['lod']) == int):
                 lod = kwargs['lod']
             
-            nodes[n]['neiShape'] = 'Poly'
             # Formulation:
             # \frac{x^2}{(a - b)x + ab} + \frac{y^2}{c^2} = 1
             a = kwargs['a']
@@ -460,7 +458,6 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                 warnings.warn("WARNING: 'minLen' is greater than 'maxLen', will be swapped")
                 kwargs['maxLen'], kwargs['minLen'] = kwargs['minLen'], kwargs['maxLen']
             
-            nodes[n]['neiShape'] = 'Poly'            
             length = random.uniform(kwargs['minLen'], kwargs['maxLen'])
 
             nodes[n]['parameter'] = {
@@ -491,7 +488,6 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                 warnings.warn("WARNING: 'minLength' is greater than 'maxLength', will be swapped")
                 kwargs['maxLength'], kwargs['minLength'] = kwargs['minLength'], kwargs['maxLength']
 
-            nodes[n]['neiShape'] = 'Poly'
             width = random.uniform(kwargs['minWidth'], kwargs['maxWidth'])
             height = random.uniform(kwargs['minLength'], kwargs['maxLength'])
 
@@ -529,7 +525,6 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             if ('numEdgePt' not in kwargs):
                 kwargs['numEdgePt'] = 5
 
-            nodes[n]['neiShape'] = 'Poly'
             width = random.uniform(kwargs['minWidth'], kwargs['maxWidth'])
             height = random.uniform(kwargs['minLength'], kwargs['maxLength'])
             
@@ -597,7 +592,6 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                 for i in range(lod + 1):
                     r[i] += a * math.sin(b * 2 * i * math.pi / lod + math.pi * c)
 
-            nodes[n]['neiShape'] = 'Poly'
 
             nodes[n]['parameter'] = {
                 'N': N,
@@ -623,7 +617,6 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             if ('minDiag' not in kwargs):
                 raise MissingParameterError("ERROR: Missing required args 'minDiag'")
             
-            nodes[n]['neiShape'] = 'Poly'
             polyPts = []
             for i in range(kwargs['maxNumSide']):
                 deg = random.uniform(0, 1) * 360
@@ -657,7 +650,6 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             if ('minDiag' not in kwargs):
                 raise MissingParameterError("ERROR: Missing required args 'minDiag'")
 
-            nodes[n]['neiShape'] = 'Poly'
             degs = []
             for i in range(kwargs['maxNumSide']):
                 degs.append(random.uniform(0, 1) * 360)
@@ -683,11 +675,492 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                     nodes[n][neighborFieldName][i][0] = round(nodes[n][neighborFieldName][i][0], kwargs['precision'])
                     nodes[n][neighborFieldName][i][1] = round(nodes[n][neighborFieldName][i][1], kwargs['precision'])
             
+    elif (shape == 'IsoCircle'):
+        for n in nodeIDs:
+            # By default, a circle is plotted by a 30-gon
+            lod = 30
+            if ('lod' in kwargs and type(kwargs['lod']) == int):
+                lod = kwargs['lod']
+            if ('radiusList' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'radiusList'")
+
+            nodes[n][neighborFieldName] = []
+            nodes[n]['radiusList'] = kwargs['radiusList']
+            for r in kwargs['radiusList']:
+                poly = [[
+                    nodes[n][ptFieldName][0] + r * math.sin(2 * d * math.pi / lod),
+                    nodes[n][ptFieldName][1] + r * math.cos(2 * d * math.pi / lod),
+                ] for d in range(lod + 1)]
+                nodes[n][neighborFieldName].append([poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']])
+    
+    elif (shape == 'IsoConvexPoly'):
+        for n in nodeIDs:
+            if ('maxNumSide' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'maxNumSide'")
+            if ('maxDiag' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'maxDiag'")
+            if ('minDiag' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'minDiag'")
+            if ('radiusList' not in kwargs):
+                raise MissingParameterError("ERROR: Missing required args 'radiusList'")
+            
+            polyPts = []
+            for c in range(len(kwargs['radiusList'])):
+                polyPts.append([])
+            for i in range(kwargs['maxNumSide']):
+                deg = random.uniform((360 / kwargs['maxNumSide']) * i, (360 / kwargs['maxNumSide']) * (i + 1))
+                r = kwargs['minDiag'] / 2 + random.uniform(0, 1) * (kwargs['maxDiag'] - kwargs['minDiag']) / 2
+                for c in range(len(kwargs['radiusList'])):
+                    polyPts[c].append(ptInDistXY(
+                        pt = nodes[n][ptFieldName], direction = deg, dist = r * kwargs['radiusList'][c]))
+
+            nodes[n]['parameter'] = {
+                'numSide': kwargs['maxNumSide'],
+                'minDiag': kwargs['minDiag'],
+                'maxDiag': kwargs['maxDiag']
+            }
+
+            nodes[n][neighborFieldName] = []
+            for c in range(len(kwargs['radiusList'])):
+                polyShapely = shapely.convex_hull(shapely.MultiPoint(points = polyPts[c]))
+                poly = [i for i in shapely.geometry.mapping(polyShapely)['coordinates'][0]]
+                nodes[n][neighborFieldName].append([poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']])
+
+    elif (shape == 'Ring'):
+        if ('innerRadius' not in kwargs):
+            raise MissingParameterError("ERROR: Missing `innerRadius`")
+        if ('outerRadius' not in kwargs):
+            raise MissingParameterError("ERROR: Missing `outerRadius`")
+        innerRadius = kwargs['innerRadius']
+        outerRadius = kwargs['outerRadius']
+        if (innerRadius >= outerRadius):
+            raise UnsupportedInputError("ERROR: innerRadius should be smaller than outerRadius.")  
+
+        # Create ring
+        for n in nodes:
+            nodes[n]['innerRadius'] = innerRadius
+            nodes[n]['outerRadius'] = outerRadius
+       
+        # Create all no-fly
+        nofly = []
+        for p in barriers:
+            nofly.append(shapely.Polygon(p))
+        for n in nodes:
+            inner = [[
+                nodes[n][ptFieldName][0] + (innerRadius - ERRTOL['distPt2Poly'] * 10) * math.sin(2 * d * math.pi / lod),
+                nodes[n][ptFieldName][1] + (innerRadius - ERRTOL['distPt2Poly'] * 10) * math.cos(2 * d * math.pi / lod),
+            ] for d in range(lod + 1)]
+            nofly.append(shapely.Polygon(inner))
+        allNoFly = shapely.union_all(nofly)
+
+        # Create neighborhoods
+        for n in nodes:
+            # nodes[n]['neiShell'] => list[poly]
+            nodes[n]['neiShell'] = []
+            # nodes[n]['neiHoles'] => list[poly]
+            nodes[n]['neiHoles'] = None
+
+            # Ring, before cutting nofly
+            outerCircle = [[
+                nodes[n][ptFieldName][0] + outerRadius * math.sin(2 * d * math.pi / lod),
+                nodes[n][ptFieldName][1] + outerRadius * math.cos(2 * d * math.pi / lod),
+            ] for d in range(lod + 1)]
+            innerCircle = [[
+                nodes[n][ptFieldName][0] + innerRadius * math.sin(2 * d * math.pi / lod),
+                nodes[n][ptFieldName][1] + innerRadius * math.cos(2 * d * math.pi / lod),
+            ] for d in range(lod + 1)]
+            ring = shapely.Polygon(
+                shell = outerCircle,
+                holes = [innerCircle])
+
+            nei = shapely.difference(ring, allNoFly)
+            if (type(nei) == shapely.Polygon):
+                shl = [i for i in nei.exterior.coords]
+                shl = [shl[i] for i in range(len(shl)) if distEuclideanXY(shl[i], shl[i - 1]) > ERRTOL['distPt2Pt']]
+                nodes[n]['neiShell'] = [shl]
+                if (len(nei.interiors) > 0):
+                    nodes[n]['neiHoles'] = []
+                    for p in nei.interiors:
+                        itr = [i for i in p.coords]
+                        itr = [itr[i] for i in range(len(itr)) if distEuclideanXY(itr[i], itr[i - 1]) > ERRTOL['distPt2Pt']]
+                        nodes[n]['neiHoles'].append(itr)
+            elif (type(nei) == shapely.MultiPolygon):
+                for g in nei.geoms:
+                    if (type(g) == shapely.Polygon):
+                        shl = [i for i in g.exterior.coords]
+                        shl = [shl[i] for i in range(len(shl)) if distEuclideanXY(shl[i], shl[i - 1]) > ERRTOL['distPt2Pt']]
+                        nodes[n]['neiShell'].append(shl)
+
+        # Check if all neighborhoods are accessible
+        noFlyShell = []
+        if (type(allNoFly) == shapely.Polygon):
+            shl = [i for i in allNoFly.exterior.coords]
+            shl = [shl[i] for i in range(len(shl)) if distEuclideanXY(shl[i], shl[i - 1]) > ERRTOL['distPt2Pt']]
+            noFlyShell = [shl]
+        elif (type(allNoFly) == shapely.MultiPolygon):
+            for g in allNoFly.geoms:
+                shl = [i for i in g.exterior.coords]
+                shl = [shl[i] for i in range(len(shl)) if distEuclideanXY(shl[i], shl[i - 1]) > ERRTOL['distPt2Pt']]
+                if (type(g) == shapely.Polygon):
+                    noFlyShell.append(shl)
+
+        # Find a point that is ``outside'' the area
+        corner = []
+        allX = []
+        allY = []
+        for n in nodes:
+            allX.append(nodes[n][ptFieldName][0])
+            allY.append(nodes[n][ptFieldName][1])
+        corner = [min(allX) - outerRadius, min(allY) - outerRadius]
+
+        # Check accessibility
+        polyVG = polysVisibleGraph(noFlyShell)
+        for n in nodes:
+            reachable = False
+            for k in range(len(nodes[n]['neiShell'])):
+                try:
+                    d = distBtwPolysXY(corner, nodes[n]['neiShell'][k][0], noFlyShell, polyVG = polyVG)
+                    if (d != None):
+                        reachable = True
+                        break
+                except:
+                    pass
+
+            if (reachable == False):
+                print("ERROR: Include inaccessible region.")
+                return None
+
+    elif (shape == 'NonOverlapByCircle'):
+        # 构造每个customer的圆，然后构造自己的弧
+        for n in nodeIDs:
+            nodes[n]['circle'] = {
+                'center': nodes[n][ptFieldName],
+                'radius': kwargs['radius'] if 'radius' in kwargs else nodes[i][kwargs['radiusFieldName']]
+            }
+            nodes[n]['curveArcCircle'] = CurveArc(
+                center = nodes[n][ptFieldName],
+                radius = kwargs['radius'] if 'radius' in kwargs else nodes[i][kwargs['radiusFieldName']],
+                startDeg = 0,
+                endDeg = 360)
+            nodes[n]['curveArcOuter'] = [CurveArc(
+                center = nodes[n][ptFieldName],
+                radius = kwargs['radius'] if 'radius' in kwargs else nodes[i][kwargs['radiusFieldName']],
+                startDeg = 0,
+                endDeg = 360)]
+            nodes[n]['curveArcInner'] = []
+
+        # 先构造自己的圆被其他的圆给切掉剩下的弧
+        for n in nodeIDs:
+            # 每个圆都来切一下
+            for i in nodeIDs:
+                if (i != n):
+                    newRaws = []
+                    for cv in nodes[n]['curveArcOuter']:
+                        if (cv != None):
+                            cvs = minusCurveArc2Circle(cv, nodes[i]['circle'])
+                            newRaws.extend(cvs)
+                    nodes[n]['curveArcOuter'] = newRaws
+
+        # 然后，对于第i个圆，计算和第n个圆的相交部分，若有相交，用其他不是i和n的圆切掉
+        for n in nodeIDs:
+            for i in nodeIDs:
+                if (i != n):
+                    # 先计算n和i的相交，这个应该最多只有一段，但是这段之后有可能会被切割成几份
+                    intN2I = [intCurveArc2Circle(nodes[i]['curveArcCircle'], nodes[n]['circle'])]
+                    if (intN2I[0] != None):
+                        # 每一块intN2I，都需要尝试被每个其他的圆切掉，切完的结果如果不是为空的话，存起来
+                        for j in nodeIDs:
+                            if (j != n and j != i):
+                                intN2IAfterCut = []
+                                for intN2IPiece in intN2I:                        
+                                    intN2IPieceMinusJ = minusCurveArc2Circle(intN2IPiece, nodes[j]['circle'])
+                                    if (len(intN2IPieceMinusJ) > 0):
+                                        intN2IAfterCut.extend(intN2IPieceMinusJ)
+                                intN2I = intN2IAfterCut
+                                if (len(intN2I) == 0 or intN2I[0] == None):
+                                    break
+                    if (len(intN2I) > 0 and intN2I[0] != None):
+                        nodes[n]['curveArcInner'].extend(intN2I)
+
+        # 然后，对于第i个圆的每一段curveArc，细分成小段的弧，弧角度不超过360 / lod
+        lod = 12
+        if ('lod' in kwargs):
+            lod = kwargs['lod']
+        deg = 360 / lod
+        
+        for n in nodeIDs:
+            newCurveArc = []
+            # 把curveArcOuter更新            
+            for arc in nodes[n]['curveArcOuter']:
+                split = splitCurveArcByDeg(arc, deg)
+                for sp in split:
+                    newCurveArc.append((sp, 'Outer'))
+            # 把curveArcInner更新
+            for arc in nodes[n]['curveArcInner']:
+                split = splitCurveArcByDeg(arc, deg)
+                for sp in split:
+                    newCurveArc.append((sp, 'Inner'))
+            nodes[n]['curveArcSeg'] = newCurveArc
+
+        for n in nodeIDs:
+            arcSeg = []
+            for arc in nodes[n]['curveArcSeg']:
+                if (arc[1] == 'Outer'):
+                    arcSeg.append(([arc[0].head.pt, arc[0].tail.pt], arc[0], arc[1]))
+                else:
+                    arcSeg.append(([arc[0].tail.pt, arc[0].head.pt], arc[0], arc[1]))
+            nodes[n]['arcSeg'] = arcSeg
+
+        # 把segments拼凑出来一个或者多个闭合的多边形，使用Ring()的结构，每个RingNode是一个segment和一个curveArc
+        for n in nodeIDs:
+            nodes[n]['polyRings'] = []
+            # print(hyphenStr(str(n)))
+            copyArcSeg = nodes[n]['arcSeg'].copy()
+
+            curRing = Ring()
+            sKey = 0
+
+            headPt = None
+            tailPt = None
+
+            while(len(copyArcSeg) > 0):
+                # 如果当前curRing为空，选择第一个arc作为virtual starting arc，但不从copyArcSeg中移除
+                if (curRing.count == 0):
+                    headPt = copyArcSeg[0][0][0]
+                    tailPt = copyArcSeg[0][0][1]
+                    # print("New Ring: ", headPt, tailPt)
+                
+                # 找到startPt离tailPt最近的对应idx，加入尾部
+                closestIdx = None
+                closestDist = float('inf')
+                closestNextPt = None
+                for i in range(len(copyArcSeg)):
+                    dist2Tail = distEuclideanXY(copyArcSeg[i][0][0], tailPt)
+                    if (dist2Tail < closestDist):
+                        closestDist = dist2Tail
+                        closestIdx = i
+                        closestNextPt = copyArcSeg[i][0][0]
+                # print("Find Next:", copyArcSeg[closestIdx])
+
+                s = RingNode(
+                    key = sKey,
+                    value = copyArcSeg[closestIdx],
+                    startPt = copyArcSeg[closestIdx][0][0],
+                    endPt = copyArcSeg[closestIdx][0][1],
+                    hasCurve = True,
+                    curveArc = copyArcSeg[closestIdx][1],
+                    curveSide = copyArcSeg[closestIdx][2])
+                curRing.append(s)
+                tailPt = copyArcSeg[closestIdx][0][1]
+                sKey += 1
+                copyArcSeg.pop(closestIdx)                
+
+                # 如果最近的那个startPt就是headPt，则结束该Ring
+                if (is2PtsSame(headPt, closestNextPt)):
+                    # print("Ring closed")
+                    nodes[n]['polyRings'].append(curRing)
+                    if (len(copyArcSeg) > 0):
+                        curRing = Ring()
+                        headPt = None
+                        tailPt = None
+
     else:
-        raise UnsupportedInputError("ERROR: Unsupported option for `kwargs`. Supported 'shape' includes: 'Poly', 'Circle', 'Egg', 'RndSquare', 'RndConvexPoly' and 'RndCurvy'.")
+        raise UnsupportedInputError("ERROR: Unsupported option for `shape`.")
 
     return nodes
 
+def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str = 'Egg', seed = None, **kwargs) -> dict:
+
+    # Sanity check ============================================================
+    if (type(nodeIDs) is not list):
+        if (nodeIDs == 'All'):
+            nodeIDs = [i for i in nodes]
+        else:
+            for i in nodeIDs:
+                if (i not in nodes):
+                    raise OutOfRangeError("ERROR: Node %s is not in `nodes`." % i)
+    if (seed != None):
+        random.seed(seed)
+
+    # Field names =============================================================
+    ptFieldName = 'pt' if 'ptFieldName' not in kwargs else kwargs['ptFieldName']
+    neighborFieldName = 'neighbor' if 'neighborFieldName' not in kwargs else kwargs['neighborFieldName']
+
+    # Add neighborhood by 'shape' =============================================
+    for n in nodeIDs:
+        nodes[n]['neiShape'] = shape
+    if (shape == 'Egg'):
+        if ('T' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'T'.")
+        T = kwargs['T']
+        if ('dirT' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'dirT'.")
+        dirT = kwargs['dirT']
+
+        aT = None
+        bT = None
+        cT = None
+        if ('aT' not in kwargs or 'bT' not in kwargs or 'cT' not in kwargs):
+            if ('a' in kwargs and 'b' in kwargs and 'c' in kwargs):
+                aT = [kwargs['a'] for k in range(len(T))]
+                bT = [kwargs['b'] for k in range(len(T))]
+                cT = [kwargs['c'] for k in range(len(T))]
+            else:
+                raise MissingParameterError("ERROR: Missing required args 'a', 'b', and/or 'c'.")
+        else:        
+            # 先给出不同时刻的各个参数
+            aT = kwargs['aT']
+            bT = kwargs['bT']
+            cT = kwargs['cT']
+
+        for n in nodeIDs:
+            lod = 30
+            if ('lod' in kwargs and type(kwargs['lod']) == int):
+                lod = kwargs['lod']
+
+            timedPoly = []
+
+            for k in range(len(T)):
+                # Formulation:
+                # \frac{x^2}{(a - b)x + ab} + \frac{y^2}{c^2} = 1
+                direction = dirT[k]
+                a = aT[k]
+                b = bT[k]
+                c = cT[k]
+                
+                vHLod = math.ceil(lod * 2 / 9)
+                vTLod = math.ceil(lod / 3)
+                hLod = math.ceil(lod * 2 / 3)
+
+                polyL = []
+                polyM = []
+                polyR = []
+                for d in range(vHLod + 1):
+                    y = c * 0.75 * d / vHLod
+                    A = 1
+                    B = (y ** 2 / c ** 2 - 1) * (a - b)
+                    C = (y ** 2 / c ** 2 - 1) * a * b
+                    X = (-B - math.sqrt(B ** 2 - 4 * A * C)) / (2 * A)
+                    polyL.append((X, y))
+                    xStart = X
+                for d in range(vTLod + 1):
+                    y = c * 0.4 * d / vHLod
+                    A = 1
+                    B = (y ** 2 / c ** 2 - 1) * (a - b)
+                    C = (y ** 2 / c ** 2 - 1) * a * b
+                    X = (-B + math.sqrt(B ** 2 - 4 * A * C)) / (2 * A)
+                    polyR.insert(0, (X, y))
+                    xEnd = X
+                for d in range(hLod + 1):
+                    x = xStart + (xEnd - xStart) * d / hLod
+                    Y = math.sqrt(c * c * (1 - (x * x) / ((a - b) * x + a * b)))
+                    polyM.append((x, Y))
+                polyHf = []
+                polyHf.extend(polyL)
+                polyHf.extend(polyM)
+                polyHf.extend(polyR)
+
+                polyB4Rot = [i for i in polyHf]
+                polyB4Rot.extend([(polyHf[len(polyHf) - 1 - k][0], - polyHf[len(polyHf) - 1 - k][1]) for k in range(len(polyHf))])
+                
+                u = math.cos(math.radians(direction))
+                v = math.sin(math.radians(direction))
+                poly = [(nodes[n][ptFieldName][0] + u * pt[0] + v * pt[1], nodes[n][ptFieldName][1] + -v * pt[0] + u * pt[1]) for pt in polyB4Rot]
+                timedPoly.append([[poly[i] for i in range(len(poly)) if not is2PtsSame(poly[i], poly[i - 1])], T[k]])
+
+            nodes[n]['timedPoly'] = timedPoly
+            nodes[n][neighborFieldName] = TriGridSurface(timedPoly)
+
+    elif (shape == 'MovingCircle'):
+        if ('duration' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'duration'.")
+        duration = kwargs['duration']
+        if ('interval' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'interval'.")
+        interval = kwargs['interval']
+        if ('R' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'R'.")
+        R = kwargs['R']
+        if ('dirRange' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'dirRange'.")
+        dirRange = kwargs['dirRange']
+        if ('spdRange' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'spdRange'.")
+        spdRange = kwargs['spdRange']
+
+        for n in nodeIDs:
+            direction = random.uniform(dirRange[0], dirRange[1])
+            speed = random.uniform(spdRange[0], spdRange[1])
+            (vx, vy) = ptInDistXY(
+                pt = (0, 0),
+                direction = direction,
+                dist = speed)
+
+            timedPoly = []
+
+            numT = (int)(duration / interval) + 1
+            for k in range(numT):
+                newCenter = ptInDistXY(
+                    pt = nodes[n][ptFieldName],
+                    direction = direction,
+                    dist = speed * k * interval)
+                newNeighborPoly = circleByCenterXY(
+                    center = newCenter,
+                    radius = R)
+                timedPoly.append([newNeighborPoly, k * interval])
+
+            nodes[n]['timedPoly'] = timedPoly
+            nodes[n][neighborFieldName] = TriGridSurface(timedPoly)
+            nodes[n]['duration'] = duration
+            nodes[n]['interval'] = interval
+            nodes[n]['radius'] = R
+            nodes[n]['direction'] = direction
+            nodes[n]['speed'] = speed
+            nodes[n]['vx'] = vx
+            nodes[n]['vy'] = vy
+
+    elif (shape == 'TimeWindowCircle'):
+        if ('R' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'R'.")
+        R = kwargs['R']
+        if ('minDuration' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'minDuration'.")
+        minDuration = kwargs['minDuration']
+        if ('maxDuration' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'maxDuration'.")
+        maxDuration = kwargs['maxDuration']
+        if ('makespan' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'makespan'.")
+        makespan = kwargs['makespan']
+        if ('interval' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'interval'.")
+        interval = kwargs['interval']
+
+        for n in nodeIDs:
+            timedPoly = []
+
+            dur = random.uniform(minDuration, maxDuration)
+            startTime = random.uniform(0, makespan - dur)
+
+            numT = (int)(dur / interval) + 1
+            for k in range(numT):
+                newNeighborPoly = circleByCenterXY(
+                    center = nodes[n][ptFieldName],
+                    radius = R)
+                timedPoly.append([newNeighborPoly, k * interval])
+
+            nodes[n]['timedPoly'] = timedPoly
+            nodes[n][neighborFieldName] = TriGridSurface(timedPoly)
+            nodes[n]['interval'] = interval
+            nodes[n]['radius'] = R
+            nodes[n]['startTime'] = startTime
+            nodes[n]['endTime'] = startTime + dur
+
+    else:
+        raise UnsupportedInputError("ERROR: Unsupported option for `shape`.")
+
+    return nodes
+    
 def rndArcs(A: int|None = None, arcIDs: list[int|str] = [], distr = 'UniformLengthInSquareXY', seed = None, **kwargs) -> dict:
 
     """Randomly create a set of arcs 
@@ -773,9 +1246,9 @@ def rndPolys(P: int|None = None, polyIDs: list[int|str]|None = None, distr = 'Un
     polyIDs: list[int|str]|None, optional, default as None
         A list of ids for the polygons to be created, an alternative option for `P`
     distr: str, optional, default as 'UniformSquareXY'
-        Anchor locations of each polygon. Options and required additional information are referred to :func:`~geoVeRoPy.instance.rndPts()`.
+        Anchor locations of each polygon. Options and required additional information are referred to :func:`~instance.rndPts()`.
     shape: str, optional, default as 'Circle',
-        Shape of the polygons. Options and required additional information are referred to :func:`~geoVeRoPy.instance.rndNodeNeighbors()`.
+        Shape of the polygons. Options and required additional information are referred to :func:`~instance.rndNodeNeighbors()`.
     anchorFieldName: str, optional, default as 'anchor'
         The key value of the anchor location
     polyFieldName: str, optional, default as 'poly',

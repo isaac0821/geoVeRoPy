@@ -234,10 +234,6 @@ def _poly2PolyPathGurobi(startPt: pt, endPt: pt, polys: polys, outputFlag = Fals
         timeLimit = timeLimit)
 
 def _seg2SegPathGurobi(startPt: pt, endPt: pt, segs: list[line], outputFlag = False, gapTol = None, timeLimit = None):
-    try:
-        import gurobipy as grb
-    except(ImportError):
-        raise ImportError("ERROR: Cannot find Gurobi")
 
     model = grb.Model("SOCP")
     model.setParam('OutputFlag', 0 if outputFlag == False else 1)
