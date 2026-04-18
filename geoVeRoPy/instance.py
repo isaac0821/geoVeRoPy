@@ -402,11 +402,9 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             a = kwargs['a']
             b = kwargs['b']
             c = kwargs['c']
-            nodes[n]['parameter'] = {
-                'a': a,
-                'b': b,
-                'c': c
-            }
+            nodes[n]['a'] = a
+            nodes[n]['b'] = b
+            nodes[n]['c'] = c
             
             vHLod = math.ceil(lod * 2 / 9)
             vTLod = math.ceil(lod / 9)
@@ -460,9 +458,7 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             
             length = random.uniform(kwargs['minLen'], kwargs['maxLen'])
 
-            nodes[n]['parameter'] = {
-                'length': length
-            }
+            nodes[n]['length'] = length
 
             nodes[n][neighborFieldName] = [
                 [nodes[n][ptFieldName][0] - length / 2, nodes[n][ptFieldName][1] - length / 2], 
@@ -491,10 +487,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             width = random.uniform(kwargs['minWidth'], kwargs['maxWidth'])
             height = random.uniform(kwargs['minLength'], kwargs['maxLength'])
 
-            nodes[n]['parameter'] = {
-                'width': width,
-                'height': height
-            }
+            nodes[n]['width'] = width
+            nodes[n]['height'] = height
 
             nodes[n][neighborFieldName] = [
                 [nodes[n][ptFieldName][0] - width / 2, nodes[n][ptFieldName][1] - height / 2], 
@@ -528,10 +522,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             width = random.uniform(kwargs['minWidth'], kwargs['maxWidth'])
             height = random.uniform(kwargs['minLength'], kwargs['maxLength'])
             
-            nodes[n]['parameter'] = {
-                'width': width,
-                'height': height
-            }
+            nodes[n]['width'] = width
+            nodes[n]['height'] = height
 
             # 先生成bounding的矩形
             bounding = [
@@ -591,12 +583,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                 c = random.uniform(0, 2)
                 for i in range(lod + 1):
                     r[i] += a * math.sin(b * 2 * i * math.pi / lod + math.pi * c)
-
-
-            nodes[n]['parameter'] = {
-                'N': N,
-                'w': w
-            }
+            nodes[n]['N'] = N
+            nodes[n]['w'] = w
 
             maxRI = max(r)
             for i in range(len(r)):
@@ -624,11 +612,9 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                 polyPts.append(ptInDistXY(
                     pt = nodes[n][ptFieldName], direction = deg, dist = r))
 
-            nodes[n]['parameter'] = {
-                'numSide': kwargs['maxNumSide'],
-                'minDiag': kwargs['minDiag'],
-                'maxDiag': kwargs['maxDiag']
-            }
+            nodes[n]['numSide'] = kwargs['maxNumSide']
+            nodes[n]['minDiag'] = kwargs['minDiag']
+            nodes[n]['maxDiag'] = kwargs['maxDiag']
 
             polyShapely = shapely.convex_hull(shapely.MultiPoint(points = polyPts))
             poly = [list(i) for i in shapely.geometry.mapping(polyShapely)['coordinates'][0]]
@@ -655,11 +641,9 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                 degs.append(random.uniform(0, 1) * 360)
             degs.sort()
 
-            nodes[n]['parameter'] = {
-                'numSide': kwargs['maxNumSide'],
-                'minDiag': kwargs['minDiag'],
-                'maxDiag': kwargs['maxDiag']
-            }
+            nodes[n]['numSide'] = kwargs['maxNumSide']
+            nodes[n]['minDiag'] = kwargs['minDiag']
+            nodes[n]['maxDiag'] = kwargs['maxDiag']
 
             polyPts = []
             for i in range(kwargs['maxNumSide']):
@@ -714,11 +698,9 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                     polyPts[c].append(ptInDistXY(
                         pt = nodes[n][ptFieldName], direction = deg, dist = r * kwargs['radiusList'][c]))
 
-            nodes[n]['parameter'] = {
-                'numSide': kwargs['maxNumSide'],
-                'minDiag': kwargs['minDiag'],
-                'maxDiag': kwargs['maxDiag']
-            }
+            nodes[n]['numSide'] = kwargs['maxNumSide']
+            nodes[n]['minDiag'] = kwargs['minDiag']
+            nodes[n]['maxDiag'] = kwargs['maxDiag']
 
             nodes[n][neighborFieldName] = []
             for c in range(len(kwargs['radiusList'])):
