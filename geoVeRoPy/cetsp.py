@@ -1949,111 +1949,10 @@ def _solveCETSPBnBCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | No
             repPt = {})
         return n
 
-    def cetspCheckVisit(n: BnBTreeNode, seq):
-        turning = []
-        trespass = []
-        missing = []
-
-        # 需要先得到一组turn point
-        # 当前的序列
-        circles = []
-        for i in seq:
-            circles.append({
-                'center': n.nodes[i]['pt'],
-                'radius': n.nodes[i]['radius']
-            })
-
-        # 计算SOCP
-        c2c = circle2CirclePath(
-            startPt = n.startPt,
-            endPt = n.endPt,
-            circles = circles)
-        repPt = {}
-        for i in range(1, len(c2c['path']) - 1):
-            repPt[seq[i - 1]] = c2c['path'][i]
-
-        degen = pathRemoveDegen(path = c2c['path'])
-
-        seqTra = [-1]
-        seqTra.extend(seq)
-        seqTra.append(-1)
-        for i in range(len(degen['aggNodeList'])):
-            if (degen['removedFlag'][i] == False):
-                turning.extend([seqTra[k] for k in degen['aggNodeList'][i]])
-        
-        path = degen['newPath']
-        ofv = c2c['dist']
-
-        for i in range(len(path) - 1):
-            # 分段的线段
-            seg = [path[i], path[i + 1]]    
-            # 对于每个线段，测试哪些圆是经过了的
-            for j in n.nodes:
-                if (j not in turning and j not in trespass):
-                    dist2Seg = distPt2Seg(
-                        pt = n.nodes[j]['pt'],
-                        seg = seg)
-                    if (dist2Seg <= n.nodes[j]['radius']):
-                        trespass.append(j)
-        # 注意，n.turning中不包括startPt和endPt
-        turning = turning[1:-1]
-        for j in n.nodes:
-            if (j not in turning and j not in trespass):
-                missing.append(j)
-
-        return {
-            'ofv': ofv,
-            'path': path,
-            'turning': turning,
-            'trespass': trespass,
-            'missing': missing,
-            'repPt': repPt
-        }
-
-    def cetspSortInsertion(n: BnBTreeNode, repPt, turning, toInsert):
-        # 随机选出一个后，计算该点到每一段的距离
-        distPt2Seg = []
-        heapq.heapify(distPt2Seg)
-
-        # 第一段
-        seg = [n.startPt, repPt[turning[0]]]
-        delta = circle2CirclePath(
-            startPt = n.startPt,
-            endPt = repPt[turning[0]],
-            circles = [{
-                'center': n.nodes[toInsert]['pt'],
-                'radius': n.nodes[toInsert]['radius']
-            }])['dist'] - distEuclideanXY(seg[0], seg[1])
-        heapq.heappush(distPt2Seg, (delta, 0))
-
-        # 中间部分
-        for i in range(len(turning) - 1):
-            seg = [repPt[turning[i]], repPt[turning[i + 1]]]
-            delta = circle2CirclePath(
-                startPt = repPt[turning[i]],
-                endPt = repPt[turning[i + 1]],
-                circles = [{
-                    'center': n.nodes[toInsert]['pt'],
-                    'radius': n.nodes[toInsert]['radius']
-                }])['dist'] - distEuclideanXY(seg[0], seg[1])
-            heapq.heappush(distPt2Seg, (delta, i + 1))
-
-        # 最后一段
-        seg = [repPt[turning[-1]], n.endPt]
-        delta = circle2CirclePath(
-            startPt = repPt[turning[-1]],
-            endPt = n.endPt,
-            circles = [{
-                'center': n.nodes[toInsert]['pt'],
-                'radius': n.nodes[toInsert]['radius']
-            }])['dist'] - distEuclideanXY(seg[0], seg[1])
-        heapq.heappush(distPt2Seg, (delta, len(turning)))
-        return distPt2Seg 
-
     def cetspSolve(n: BnBTreeNode):
         '''Given ordering of nodes, returns the path of CETSP'''
         seq = n.rep
-        checkVisit = cetspCheckVisit(n, seq)
+        checkVisit = cetspCheckVisit(n.startPt, n.endPt, n.nodes, seq)
 
         n.ofv = checkVisit['ofv']
         n.path = checkVisit['path']
@@ -2079,7 +1978,7 @@ def _solveCETSPBnBCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | No
         children = []
         # FIXME 先按简单的来，随机选一个未被分配的，然后按照可能的顺序进行分配
         toInsert = random.choice(n.missing)
-        distPt2Seg = cetspSortInsertion(n, n.repPt, n.turning, toInsert)
+        distPt2Seg = cetspSortInsertion(n.startPt, n.endPt, n.nodes, n.repPt, n.turning, toInsert)
 
         while(len(distPt2Seg) > 0):
             newSeq = [k for k in n.turning]
@@ -2115,13 +2014,13 @@ def _solveCETSPBnBCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | No
         while (len(missing) > 0):
 
             toInsert = random.choice(missing)
-            d2s = cetspSortInsertion(n, repPt, seq, toInsert)
+            d2s = cetspSortInsertion(n.startPt, n.endPt, n.nodes, repPt, seq, toInsert)
             closest = heapq.heappop(d2s)
 
             seq = [k for k in seq]
             seq.insert(closest[1], toInsert)
 
-            update = cetspCheckVisit(n, seq)
+            update = cetspCheckVisit(n.startPt, n.endPt, n.nodes, seq)
 
             seq = update['turning']
             missing = update['missing']
@@ -2155,3 +2054,109 @@ def _solveCETSPBnBCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | No
         'runtime': bnbTree.convergence[-1][2],
         'convergence': bnbTree.convergence,
     }
+
+def cetspCheckVisit(startPt, endPt, nodes, seq, algo = 'SOCP'):
+    turning = []
+    trespass = []
+    missing = []
+
+    # 需要先得到一组turn point
+    # 当前的序列
+    circles = []
+    for i in seq:
+        circles.append({
+            'center': nodes[i]['pt'],
+            'radius': nodes[i]['radius']
+        })
+
+    # 计算SOCP
+    c2c = circle2CirclePath(
+        startPt = startPt,
+        endPt = endPt,
+        circles = circles,
+        algo = algo
+    )
+    repPt = {}
+    for i in range(1, len(c2c['path']) - 1):
+        repPt[seq[i - 1]] = c2c['path'][i]
+
+    degen = pathRemoveDegen(path = c2c['path'])
+
+    seqTra = [-1]
+    seqTra.extend(seq)
+    seqTra.append(-1)
+    for i in range(len(degen['aggNodeList'])):
+        if (degen['removedFlag'][i] == False):
+            turning.extend([seqTra[k] for k in degen['aggNodeList'][i]])
+    
+    path = degen['newPath']
+    ofv = c2c['dist']
+
+    for i in range(len(path) - 1):
+        # 分段的线段
+        seg = [path[i], path[i + 1]]    
+        # 对于每个线段，测试哪些圆是经过了的
+        for j in nodes:
+            if (j not in turning and j not in trespass):
+                dist2Seg = distPt2Seg(
+                    pt = nodes[j]['pt'],
+                    seg = seg)
+                if (dist2Seg <= nodes[j]['radius']):
+                    trespass.append(j)
+    # 注意，turning中不包括startPt和endPt
+    turning = turning[1:-1]
+    for j in nodes:
+        if (j not in turning and j not in trespass):
+            missing.append(j)
+
+    return {
+        'ofv': ofv,
+        'path': path,
+        'turning': turning,
+        'trespass': trespass,
+        'missing': missing,
+        'repPt': repPt
+    }
+
+def cetspSortInsertion(startPt, endPt, nodes, repPt, turning, toInsert, algo = "SOCP"):
+    # 计算toInsert到turning上的每一段的距离
+    distPt2Seg = []
+    heapq.heapify(distPt2Seg)
+
+    # 第一段
+    seg = [startPt, repPt[turning[0]]]
+    delta = circle2CirclePath(
+        startPt = startPt,
+        endPt = repPt[turning[0]],
+        circles = [{
+            'center': nodes[toInsert]['pt'],
+            'radius': nodes[toInsert]['radius']
+        }],
+        algo = algo)['dist'] - distEuclideanXY(seg[0], seg[1])
+    heapq.heappush(distPt2Seg, (delta, 0))
+
+    # 中间部分
+    for i in range(len(turning) - 1):
+        seg = [repPt[turning[i]], repPt[turning[i + 1]]]
+        delta = circle2CirclePath(
+            startPt = repPt[turning[i]],
+            endPt = repPt[turning[i + 1]],
+            circles = [{
+                'center': nodes[toInsert]['pt'],
+                'radius': nodes[toInsert]['radius']
+            }],
+            algo = algo)['dist'] - distEuclideanXY(seg[0], seg[1])
+        heapq.heappush(distPt2Seg, (delta, i + 1))
+
+    # 最后一段
+    seg = [repPt[turning[-1]], endPt]
+    delta = circle2CirclePath(
+        startPt = repPt[turning[-1]],
+        endPt = endPt,
+        circles = [{
+            'center': nodes[toInsert]['pt'],
+            'radius': nodes[toInsert]['radius']
+        }],
+        algo = algo)['dist'] - distEuclideanXY(seg[0], seg[1])
+    heapq.heappush(distPt2Seg, (delta, len(turning)))
+    return distPt2Seg 

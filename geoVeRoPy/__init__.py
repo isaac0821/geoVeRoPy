@@ -14,13 +14,15 @@ from .instance import *
 from .bnbTree import *
 from .ils import *
 
+from .ilsTest import *
+
 # Data structures
 from .ring import *
 from .tree import *
 from .curveArc import *
 from .gridSurface import *
 
-# Visualize modules
+# Visualization
 from .plot import *
 from .animation import *
 
@@ -29,8 +31,6 @@ from .geometry import *
 from .obj2Obj import *
 from .polyTour import *
 from .grid import *
-
-# from .ctpst import *
 
 # Classical TSP
 from .tsp import *
