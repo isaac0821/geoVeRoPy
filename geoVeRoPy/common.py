@@ -56,11 +56,16 @@ CONST_EARTH_RADIUS_METERS = 6378137.0
 # Type alias
 pt = list[float] | tuple[float, float]
 pt3D = list[float] | tuple[float, float, float]
+path = list[pt]
+line = list[pt]
+
+circle = tuple[pt, float]
 poly = list[pt]
 polys = list[poly]
+
+timedPt = list[pt, float]
+timedPath = list[timedPt]
 timedPoly = list[list[poly, float]]
-circle = tuple[pt, float]
-line = list[pt]
 
 class UnsupportedInputError(Exception):
     pass

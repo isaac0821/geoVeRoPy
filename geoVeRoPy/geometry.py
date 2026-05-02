@@ -2925,6 +2925,16 @@ def minBoundingRect(poly):
         list(np.dot([max_x, max_y], R)),
     ]
     return corner_points
+    
+def ptLerpTimedSeg(timedSeg, t: float) -> pt:
+    (p1, z1), (p2, z2) = sTimedPt, eTimedPt
+    if abs(z2 - z1) <= EPS:
+        return (float(p1[0]), float(p1[1]))
+    alpha = max(0.0, min(1.0, (t - z1) / (z2 - z1)))
+    return (
+        float(p1[0]) + alpha * (float(p2[0]) - float(p1[0])),
+        float(p1[1]) + alpha * (float(p2[1]) - float(p1[1])),
+    )
 
 # Vectors =====================================================================
 def rndVec(norm: float = 1):

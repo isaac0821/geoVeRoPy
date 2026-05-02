@@ -5,7 +5,7 @@ from .common import *
 class BnBTreeNode(TreeNode):
     # NOTE: rep - 解的输入格式
     # NOTE: 如果有gurobi的对象，传入**kwargs
-    def __init__(self, key, rep, funcSolve, funcBranch, funcUBEstimate=None, bnbUB=float('inf'), **kwargs):
+    def __init__(self, key, rep, funcSolve, funcBranch, funcFeasible=None, funcUBEstimate=None, bnbUB=float('inf'), **kwargs):
         # BnB树初始化的时候只有key和表达式rep是已知的
         self.key = key
         self.rep = rep
@@ -19,6 +19,7 @@ class BnBTreeNode(TreeNode):
         # 以下属性在solve()后补充
         self.ofv = None
         self.funcSolve = funcSolve
+        self.funcFeasible = funcFeasible
         self.funcUBEstimate = funcUBEstimate
         self.relaxFlag = None
         self.feasibleFlag = None
@@ -41,6 +42,12 @@ class BnBTreeNode(TreeNode):
         self.upperBound = p.upperBound
         self.lowerBound = p.lowerBound
 
+    # 判断是不是feasib
+    def checkFeasible(self):
+        if (self.funcFeasible != None):
+            self.feasibleFlag = self.checkFeasible(self)
+        return
+
     # 求解函数
     # NOTE: 真值
     def solve(self):
@@ -56,18 +63,26 @@ class BnBTreeNode(TreeNode):
 
     # 检查是否因为bounding把自己prun掉
     def bounding(self):
-        if (self.prunFlag == False):
-            if (self.relaxFlag == True):
-                # 松弛解
-                self.lowerBound = self.ofv
-                if (self.lowerBound > self.bnbUB):
-                    self.prunFlag = True
-            else:
-                # 非松弛解
-                self.upperBound = self.ofv
-                self.lowerBound = self.ofv
-                if (self.lowerBound > self.bnbUB):
-                    self.prunFlag = True
+        if self.prunFlag:
+            return
+
+        if (self.feasibleFlag == False):
+            self.prunFlag = True
+            return
+
+        if (self.relaxFlag == True):
+            # 松弛解
+            self.lowerBound = self.ofv
+            if (self.lowerBound > self.bnbUB):
+                self.prunFlag = True
+
+        else:
+            # 非松弛解
+            self.upperBound = self.ofv
+            self.lowerBound = self.ofv
+            if (self.lowerBound > self.bnbUB):
+                self.prunFlag = True
+        return
         
     @property
     def isNil(self):

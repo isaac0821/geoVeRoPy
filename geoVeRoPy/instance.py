@@ -69,6 +69,224 @@ def rndPts(N: int, distr = 'UniformSquareXY', seed = None, **kwargs) -> list:
         The sample area is empty.
     """
 
+    def _rndPtUniformSquareXY(xRange: list[int]|list[float], yRange: list[int]|list[float]) -> pt:
+        x = random.uniform(xRange[0], xRange[1])
+        y = random.uniform(yRange[0], yRange[1])
+        return [x, y]
+
+    def _rndPtUniformCubeXYZ(xRange: list[int]|list[float], yRange: list[int]|list[float], zRange: list[int]|list[float]) -> pt3D:
+        x = random.uniform(xRange[0], xRange[1])
+        y = random.uniform(yRange[0], yRange[1])
+        z = random.uniform(zRange[0], zRange[1])
+        return [x, y, z]
+
+    def _rndPtUniformTriangleXY(triangle: poly) -> pt:
+        
+        # Get three extreme points ================================================
+        [x1, y1] = triangle[0]
+        [x2, y2] = triangle[1]
+        [x3, y3] = triangle[2]
+
+        # Generate random points ==================================================
+        rndR1 = random.uniform(0, 1)
+        rndR2 = random.uniform(0, 1)
+        x = (1 - math.sqrt(rndR1)) * x1 + math.sqrt(rndR1) * (1 - rndR2) * x2 + math.sqrt(rndR1) * rndR2 * x3
+        y = (1 - math.sqrt(rndR1)) * y1 + math.sqrt(rndR1) * (1 - rndR2) * y2 + math.sqrt(rndR1) * rndR2 * y3
+
+        return [x, y]
+
+    def _rndPtUniformPolyXY(poly: poly) -> pt:
+        # Get list of triangles ===================================================
+        # TODO: polyTriangulation() to be replaced
+        lstTriangle = polyTriangulation(poly)
+
+        # Weight them and make draws ==============================================
+        lstWeight = []
+        for i in range(len(lstTriangle)):
+            lstWeight.append(calTriangleAreaXY(lstTriangle[i][0], lstTriangle[i][1], lstTriangle[i][2]))
+
+        # Select a triangle and randomize a point in the triangle =================
+        idx = rndPick(lstWeight)
+        [x, y] = _rndPtUniformTriangleXY(lstTriangle[idx])
+
+        return [x, y]
+
+    def _rndPtUniformPolyXYs(polys: polys) -> pt:
+        # Get all triangulated triangles ==========================================
+        # TODO: polyTriangulation() to be replaced
+        lstTriangle = []
+        for p in polys:
+            lstTriangle.extend(polyTriangulation(p))
+
+        # Weight them and make draws ==============================================
+        lstWeight = []
+        for i in range(len(lstTriangle)):
+            lstWeight.append(calTriangleAreaXY(lstTriangle[i][0], lstTriangle[i][1], lstTriangle[i][2]))
+
+        # Select a triangle and randomize a point in the triangle =================
+        idx = rndPick(lstWeight)
+        [x, y] = _rndPtUniformTriangleXY(lstTriangle[idx])
+
+        return [x, y]
+
+    def _rndPtUniformAvoidPolyXY(poly: poly, xRange: list[int]|list[float], yRange: list[int]|list[float]) -> pt:
+        # Use the low efficient accept-denial approach
+        while (True):
+            x = random.uniform(xRange[0], xRange[1])
+            y = random.uniform(yRange[0], yRange[1])
+            if (not isPtInPoly([x, y], poly)):
+                return [x, y]
+
+    def _rndPtUniformAvoidPolyXYs(polys: polys, xRange: list[int]|list[float], yRange: list[int]|list[float]) -> pt:
+        while (True):
+            x = random.uniform(xRange[0], xRange[1])
+            y = random.uniform(yRange[0], yRange[1])
+            notInPolys = True
+            for p in polys:
+                if (isPtInPoly([x, y], p)):
+                    notInPolys = False
+                    break
+            if (notInPolys):
+                return [x, y]
+
+    def _rndPtUniformCircleXY(radius: float, center: pt) -> pt:
+        theta = random.uniform(0, 2 * math.pi)
+        r = math.sqrt(random.uniform(0, radius ** 2))
+        x = center[0] + r * math.cos(theta)
+        y = center[1] + r * math.sin(theta)
+
+        return [x, y]
+
+    def _rndPtUniformCircleLatLon(radius: float, center: pt) -> pt:
+        theta = random.uniform(0, 2 * math.pi)
+        r = math.sqrt(random.uniform(0, radius ** 2))
+        (lat, lon) = ptInDistLatLon(center, theta, r)
+
+        return (lat, lon)
+
+    def _rndPtRoadNetworkPolyLatLon(N: int, roads: dict, poly: poly, roadClass: str | list[str]) -> list[pt]:
+        # If poly is given, clip road networks by poly ============================
+        clipRoad = {}
+        if (poly != None):
+            clipRoad = clipRoadsByPoly(roads, poly)
+        else:
+            clipRoad = roads
+
+        # Calculate the length of each edge =======================================
+        lengths = []
+        roadIDs = []
+        for rID in clipRoad:
+            roadLength = 0
+            includedFlag = False
+            if ('class' in clipRoad[rID] and clipRoad[rID]['class'] in roadClass):
+                for i in range(len(clipRoad[rID]['shape']) - 1):
+                    roadLength += distLatLon(clipRoad[rID]['shape'][i], clipRoad[rID]['shape'][i + 1])
+                lengths.append(roadLength)
+                roadIDs.append(rID)
+
+        # Check if there are roads included =======================================
+        if (sum(lengths) == 0):
+            raise EmptyError("ERROR: No road is found.")
+
+        # Use accept-denial to test if the node is within poly ====================
+        # FIXME: Inefficient approach, will need to be rewritten
+        # TODO: Truncate the roads that partially inside polygon
+        nodePts = []
+        for i in range(N):
+            lat = None
+            lon = None
+            idx = rndPick(lengths)
+            edgeLength = lengths[idx]
+            edgeDist = random.uniform(0, 1) * edgeLength
+            (lat, lon) = ptInSeqMileage(clipRoad[roadIDs[idx]]['shape'], edgeDist, 'LatLon')
+            nodePts.append((lat, lon))
+
+        return nodePts
+
+    def _rndPtRoadNetworkPolyLatLons(N: int, roads: dict, polys: polys, roadClass: str | list[str]) -> list[pt]:
+        # If poly is given, clip road networks by poly ============================
+        clipRoad = {}
+        if (poly != None):
+            clipRoad = clipRoadsByPolys(roads, polys)
+        else:
+            clipRoad = roads
+
+        # Calculate the length of each edge =======================================
+        lengths = []
+        roadIDs = []
+        for rID in clipRoad:
+            roadLength = 0
+            includedFlag = False
+            if ('class' in clipRoad[rID] and clipRoad[rID]['class'] in roadClass):
+                for i in range(len(clipRoad[rID]['shape']) - 1):
+                    roadLength += distLatLon(clipRoad[rID]['shape'][i], clipRoad[rID]['shape'][i + 1])
+                lengths.append(roadLength)
+                roadIDs.append(rID)
+
+        # Check if there are roads included =======================================
+        if (sum(lengths) == 0):
+            raise EmptyError("ERROR: No road is found.")
+
+        # Use accept-denial to test if the node is within poly ====================
+        # FIXME: Inefficient approach, will need to be rewritten
+        # TODO: Truncate the roads that partially inside polygon
+        nodePts = []
+        for i in range(N):
+            lat = None
+            lon = None
+            idx = rndPick(lengths)
+            edgeLength = lengths[idx]
+            edgeDist = random.uniform(0, 1) * edgeLength
+            (lat, lon) = ptInSeqMileage(clipRoad[roadIDs[idx]]['shape'], edgeDist, 'LatLon')
+            nodePts.append((lat, lon))
+
+        return nodePts
+
+    def _rndPtRoadNetworkCircleLatLon(N: int, roads: dict, radius: float, center: pt, roadClass: str | list[str]) -> list[pt]:
+        # Calculate the length of each edge =======================================
+        lengths = []
+        roadIDs = []
+        for rID in roads:
+            roadLength = 0
+            includedFlag = False
+            for i in range(len(roads[rID]['shape'])):
+                if ('class' in roads[rID] and roads[rID]['class'] in roadClass and distLatLon(roads[rID]['shape'][i], center) <= radius):
+                    includedFlag = True
+                    break
+
+            # Check if this road is inside polygon
+            if (includedFlag):
+                for i in range(len(roads[rID]['shape']) - 1):
+                    roadLength += distLatLon(roads[rID]['shape'][i], roads[rID]['shape'][i + 1])
+                lengths.append(roadLength)            
+            else:
+                lengths.append(0)
+
+            roadIDs.append(rID)
+
+
+        # Check if there are roads included =======================================
+        if (sum(lengths) == 0):
+            raise EmptyError("ERROR: No road is found.")
+
+        # Use accept-denial to test if the node is within poly ====================
+        # FIXME: Inefficient approach, will need to be rewritten
+        nodePts = []
+        for i in range(N):
+            lat = None
+            lon = None
+            insideFlag = False
+            while (not insideFlag):
+                idx = rndPick(lengths)
+                edgeLength = lengths[idx]
+                edgeDist = random.uniform(0, 1) * edgeLength
+                (lat, lon) = ptInSeqMileage(roads[roadIDs[idx]]['shape'], edgeDist, 'LatLon')
+                if (distLatLon([lat, lon], center) <= radius):
+                    insideFlag = True
+            nodePts.append((lat, lon))
+
+        return nodePts
+
     if (seed != None):
         random.seed(seed)
 
@@ -1337,222 +1555,4 @@ def rndPolys(P: int|None = None, polyIDs: list[int|str]|None = None, distr = 'Un
                 polyFieldName: polys[p]
             }
         return polygons
-
-def _rndPtUniformSquareXY(xRange: list[int]|list[float], yRange: list[int]|list[float]) -> pt:
-    x = random.uniform(xRange[0], xRange[1])
-    y = random.uniform(yRange[0], yRange[1])
-    return [x, y]
-
-def _rndPtUniformCubeXYZ(xRange: list[int]|list[float], yRange: list[int]|list[float], zRange: list[int]|list[float]) -> pt3D:
-    x = random.uniform(xRange[0], xRange[1])
-    y = random.uniform(yRange[0], yRange[1])
-    z = random.uniform(zRange[0], zRange[1])
-    return [x, y, z]
-
-def _rndPtUniformTriangleXY(triangle: poly) -> pt:
-    
-    # Get three extreme points ================================================
-    [x1, y1] = triangle[0]
-    [x2, y2] = triangle[1]
-    [x3, y3] = triangle[2]
-
-    # Generate random points ==================================================
-    rndR1 = random.uniform(0, 1)
-    rndR2 = random.uniform(0, 1)
-    x = (1 - math.sqrt(rndR1)) * x1 + math.sqrt(rndR1) * (1 - rndR2) * x2 + math.sqrt(rndR1) * rndR2 * x3
-    y = (1 - math.sqrt(rndR1)) * y1 + math.sqrt(rndR1) * (1 - rndR2) * y2 + math.sqrt(rndR1) * rndR2 * y3
-
-    return [x, y]
-
-def _rndPtUniformPolyXY(poly: poly) -> pt:
-    # Get list of triangles ===================================================
-    # TODO: polyTriangulation() to be replaced
-    lstTriangle = polyTriangulation(poly)
-
-    # Weight them and make draws ==============================================
-    lstWeight = []
-    for i in range(len(lstTriangle)):
-        lstWeight.append(calTriangleAreaXY(lstTriangle[i][0], lstTriangle[i][1], lstTriangle[i][2]))
-
-    # Select a triangle and randomize a point in the triangle =================
-    idx = rndPick(lstWeight)
-    [x, y] = _rndPtUniformTriangleXY(lstTriangle[idx])
-
-    return [x, y]
-
-def _rndPtUniformPolyXYs(polys: polys) -> pt:
-    # Get all triangulated triangles ==========================================
-    # TODO: polyTriangulation() to be replaced
-    lstTriangle = []
-    for p in polys:
-        lstTriangle.extend(polyTriangulation(p))
-
-    # Weight them and make draws ==============================================
-    lstWeight = []
-    for i in range(len(lstTriangle)):
-        lstWeight.append(calTriangleAreaXY(lstTriangle[i][0], lstTriangle[i][1], lstTriangle[i][2]))
-
-    # Select a triangle and randomize a point in the triangle =================
-    idx = rndPick(lstWeight)
-    [x, y] = _rndPtUniformTriangleXY(lstTriangle[idx])
-
-    return [x, y]
-
-def _rndPtUniformAvoidPolyXY(poly: poly, xRange: list[int]|list[float], yRange: list[int]|list[float]) -> pt:
-    # Use the low efficient accept-denial approach
-    while (True):
-        x = random.uniform(xRange[0], xRange[1])
-        y = random.uniform(yRange[0], yRange[1])
-        if (not isPtInPoly([x, y], poly)):
-            return [x, y]
-
-def _rndPtUniformAvoidPolyXYs(polys: polys, xRange: list[int]|list[float], yRange: list[int]|list[float]) -> pt:
-    while (True):
-        x = random.uniform(xRange[0], xRange[1])
-        y = random.uniform(yRange[0], yRange[1])
-        notInPolys = True
-        for p in polys:
-            if (isPtInPoly([x, y], p)):
-                notInPolys = False
-                break
-        if (notInPolys):
-            return [x, y]
-
-def _rndPtUniformCircleXY(radius: float, center: pt) -> pt:
-    theta = random.uniform(0, 2 * math.pi)
-    r = math.sqrt(random.uniform(0, radius ** 2))
-    x = center[0] + r * math.cos(theta)
-    y = center[1] + r * math.sin(theta)
-
-    return [x, y]
-
-def _rndPtUniformCircleLatLon(radius: float, center: pt) -> pt:
-    theta = random.uniform(0, 2 * math.pi)
-    r = math.sqrt(random.uniform(0, radius ** 2))
-    (lat, lon) = ptInDistLatLon(center, theta, r)
-
-    return (lat, lon)
-
-def _rndPtRoadNetworkPolyLatLon(N: int, roads: dict, poly: poly, roadClass: str | list[str]) -> list[pt]:
-    # If poly is given, clip road networks by poly ============================
-    clipRoad = {}
-    if (poly != None):
-        clipRoad = clipRoadsByPoly(roads, poly)
-    else:
-        clipRoad = roads
-
-    # Calculate the length of each edge =======================================
-    lengths = []
-    roadIDs = []
-    for rID in clipRoad:
-        roadLength = 0
-        includedFlag = False
-        if ('class' in clipRoad[rID] and clipRoad[rID]['class'] in roadClass):
-            for i in range(len(clipRoad[rID]['shape']) - 1):
-                roadLength += distLatLon(clipRoad[rID]['shape'][i], clipRoad[rID]['shape'][i + 1])
-            lengths.append(roadLength)
-            roadIDs.append(rID)
-
-    # Check if there are roads included =======================================
-    if (sum(lengths) == 0):
-        raise EmptyError("ERROR: No road is found.")
-
-    # Use accept-denial to test if the node is within poly ====================
-    # FIXME: Inefficient approach, will need to be rewritten
-    # TODO: Truncate the roads that partially inside polygon
-    nodePts = []
-    for i in range(N):
-        lat = None
-        lon = None
-        idx = rndPick(lengths)
-        edgeLength = lengths[idx]
-        edgeDist = random.uniform(0, 1) * edgeLength
-        (lat, lon) = ptInSeqMileage(clipRoad[roadIDs[idx]]['shape'], edgeDist, 'LatLon')
-        nodePts.append((lat, lon))
-
-    return nodePts
-
-def _rndPtRoadNetworkPolyLatLons(N: int, roads: dict, polys: polys, roadClass: str | list[str]) -> list[pt]:
-    # If poly is given, clip road networks by poly ============================
-    clipRoad = {}
-    if (poly != None):
-        clipRoad = clipRoadsByPolys(roads, polys)
-    else:
-        clipRoad = roads
-
-    # Calculate the length of each edge =======================================
-    lengths = []
-    roadIDs = []
-    for rID in clipRoad:
-        roadLength = 0
-        includedFlag = False
-        if ('class' in clipRoad[rID] and clipRoad[rID]['class'] in roadClass):
-            for i in range(len(clipRoad[rID]['shape']) - 1):
-                roadLength += distLatLon(clipRoad[rID]['shape'][i], clipRoad[rID]['shape'][i + 1])
-            lengths.append(roadLength)
-            roadIDs.append(rID)
-
-    # Check if there are roads included =======================================
-    if (sum(lengths) == 0):
-        raise EmptyError("ERROR: No road is found.")
-
-    # Use accept-denial to test if the node is within poly ====================
-    # FIXME: Inefficient approach, will need to be rewritten
-    # TODO: Truncate the roads that partially inside polygon
-    nodePts = []
-    for i in range(N):
-        lat = None
-        lon = None
-        idx = rndPick(lengths)
-        edgeLength = lengths[idx]
-        edgeDist = random.uniform(0, 1) * edgeLength
-        (lat, lon) = ptInSeqMileage(clipRoad[roadIDs[idx]]['shape'], edgeDist, 'LatLon')
-        nodePts.append((lat, lon))
-
-    return nodePts
-
-def _rndPtRoadNetworkCircleLatLon(N: int, roads: dict, radius: float, center: pt, roadClass: str | list[str]) -> list[pt]:
-    # Calculate the length of each edge =======================================
-    lengths = []
-    roadIDs = []
-    for rID in roads:
-        roadLength = 0
-        includedFlag = False
-        for i in range(len(roads[rID]['shape'])):
-            if ('class' in roads[rID] and roads[rID]['class'] in roadClass and distLatLon(roads[rID]['shape'][i], center) <= radius):
-                includedFlag = True
-                break
-
-        # Check if this road is inside polygon
-        if (includedFlag):
-            for i in range(len(roads[rID]['shape']) - 1):
-                roadLength += distLatLon(roads[rID]['shape'][i], roads[rID]['shape'][i + 1])
-            lengths.append(roadLength)            
-        else:
-            lengths.append(0)
-
-        roadIDs.append(rID)
-
-
-    # Check if there are roads included =======================================
-    if (sum(lengths) == 0):
-        raise EmptyError("ERROR: No road is found.")
-
-    # Use accept-denial to test if the node is within poly ====================
-    # FIXME: Inefficient approach, will need to be rewritten
-    nodePts = []
-    for i in range(N):
-        lat = None
-        lon = None
-        insideFlag = False
-        while (not insideFlag):
-            idx = rndPick(lengths)
-            edgeLength = lengths[idx]
-            edgeDist = random.uniform(0, 1) * edgeLength
-            (lat, lon) = ptInSeqMileage(roads[roadIDs[idx]]['shape'], edgeDist, 'LatLon')
-            if (distLatLon([lat, lon], center) <= radius):
-                insideFlag = True
-        nodePts.append((lat, lon))
-
-    return nodePts
 

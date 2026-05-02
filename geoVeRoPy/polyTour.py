@@ -1,5 +1,6 @@
 import gurobipy as grb
 import networkx as nx
+import numpy as np
 
 from .geometry import *
 from .common import *
@@ -153,6 +154,82 @@ def pathRemoveDegen(path: list[pt]):
         'locatedSeg': locatedSeg
     }
 
+def timedPathRemoveDegen(timedPath: list[timedPt]):
+    """
+    Remove degenerate intermediate states from a 3D time-space path.
+
+    Parameters
+    ----------
+    timedPath : list[ state ]
+        [((x, y), t), ...]
+    radius_tol : float
+        Spatial aggregation tolerance.
+    time_tol : float
+        Temporal aggregation tolerance.
+    """
+    if not timedPath:
+        return {
+            'newSeq': [],
+            'aggNodeList': [],
+            'removedFlag': [],
+            'locatedSeg': [],
+        }
+
+    aggNodeList = []
+    curAgg = [0]
+    for i in range(1, len(timedPath)):
+        pt_pre, t_pre = timedPath[i - 1]
+        pt_cur, t_cur = timedPath[i]
+        dist = np.linalg.norm(np.array(pt_cur, dtype=float) - np.array(pt_pre, dtype=float))
+        dt = abs(float(t_cur) - float(t_pre))
+        if dist <= ERRTOL['deltaDist'] and dt <= ERRTOL['vertical']:
+            curAgg.append(i)
+        else:
+            aggNodeList.append(list(curAgg))
+            curAgg = [i]
+    aggNodeList.append(list(curAgg))
+
+    removedFlag = [False] * len(aggNodeList)
+    for i in range(1, len(aggNodeList) - 1):
+        idx_a = aggNodeList[i - 1][0]
+        idx_b = aggNodeList[i][0]
+        idx_c = aggNodeList[i + 1][0]
+        p_a, p_b, p_c = timedPath[idx_a], timedPath[idx_b], timedPath[idx_c]
+        ta, tb, tc = float(p_a[1]), float(p_b[1]), float(p_c[1])
+        if tc - ta <= 1e-12:
+            continue
+        if tb < ta - 1e-12 or tb > tc + 1e-12:
+            continue
+        ratio = np.clip((tb - ta) / (tc - ta), 0.0, 1.0)
+        expected_pos = np.array(p_a[0], dtype=float) + ratio * (
+            np.array(p_c[0], dtype=float) - np.array(p_a[0], dtype=float)
+        )
+        actual_pos = np.array(p_b[0], dtype=float)
+        if np.linalg.norm(actual_pos - expected_pos) <= radius_tol:
+            removedFlag[i] = True
+
+    newSeq = [timedPath[aggNodeList[i][0]] for i in range(len(aggNodeList)) if not removedFlag[i]]
+
+    locatedSeg = [None] * len(aggNodeList)
+    for i, removed in enumerate(removedFlag):
+        if not removed:
+            continue
+        pre_idx = i - 1
+        while pre_idx >= 0 and removedFlag[pre_idx]:
+            pre_idx -= 1
+        suc_idx = i + 1
+        while suc_idx < len(removedFlag) and removedFlag[suc_idx]:
+            suc_idx += 1
+        if pre_idx >= 0 and suc_idx < len(removedFlag):
+            locatedSeg[i] = [timedPath[aggNodeList[pre_idx][0]], timedPath[aggNodeList[suc_idx][0]]]
+
+    return {
+        'newSeq': newSeq,
+        'aggNodeList': aggNodeList,
+        'removedFlag': removedFlag,
+        'locatedSeg': locatedSeg,
+    }
+
 def ptSetPath2Poly(path, polygons:dict, polyFieldName = 'polygon', pathDegenedFlag: bool = True):
     """Given a sequence and a dictionary of polygons, finds the intersection points between path and polygons
 
@@ -293,7 +370,6 @@ def ptSetPath2Poly(path, polygons:dict, polyFieldName = 'polygon', pathDegenedFl
 
     return actions
 
-# NOTE: 精度不够
 def segSetPath2Circle(path: list, circles: dict, pathDegenedFlag: bool = True):
     if (not pathDegenedFlag):
         path = pathRemoveDegen(path)['newPath']
