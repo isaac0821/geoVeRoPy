@@ -13,6 +13,7 @@ from .polyTour import *
 from .obj2Obj import *
 from .tsp import *
 from .bnbTree import *
+from .ils import *
 
 def solveCETSP(nodes: dict, depotPt: pt = None, startPt: pt = None, endPt: pt = None, neighbor: str = "Circle", dimension: str = 'Euclidean', algo: str = "Exact", method: str = 'BnB', **kwargs):
 
@@ -1642,280 +1643,173 @@ def _solveCETSPGALatLon(startPtMercator: pt, endPtMercator: pt, nodes: dict,  po
 
 def _solveCETSPILSCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | None = None, radiusFieldName: str = 'radius', initTemp: float = 100, coolRate: float = 0.95, neighRatio: dict = { 'Swap': 0.1, 'Exchange': 0.1, 'Rotate': 0.3, 'rndDestroy': 0.4 }, stop: dict = {}, **kwargs) -> dict | None:
 
-    class chromosomeCETSP:
-        def __init__(self, startPt, endPt, nodes, seq):
-            # NOTE: seq以depotID开始和结束
-            # NOTE: 每个seq都需要补全为一条合法的cetsp路径
-            # Complete logic:
-            # STEP 1: 记录得到所有的转折点
-            # STEP 2: 记录所有未经过的点，计算距离，若没有未经过点，结束
-            # STEP 3: 将最近的未经过点插入，转入STEP 2
-            
-            # 记录nodes的信息
-            self.startPt = startPt
-            self.endPt = endPt
-            self.nodes = nodes
-            self.initSeq = [i for i in seq]
 
-            # 原始输入的seq
-            self.seq = Ring()
-            for i in seq:
-                n = RingNode(i)
-                self.seq.append(n)
-            self.seq.rehead(0)
+    def cetspNew(startPt, endPt, nodes, funcCheck, funcFix):
+        # 找到两个customer，让startPt => cus1 => cus2 => endPt的距离最长
+        rawSeq = []
+        distFarest = 0
+        for i in nodes:
+            for j in nodes:
+                if (i != j):
+                    d = distEuclideanXY(startPt, nodes[i]['pt'])
+                    d += distEuclideanXY(nodes[i]['pt'], nodes[j]['pt'])
+                    d += distEuclideanXY(nodes[j]['pt'], endPt)
+                    if (d > distFarest):
+                        distFarest = d
+                        rawSeq = [i, j]
+        
+        # 构造函数
+        n = RawSolnNode(
+            key = rawSeq,
+            rawRep = rawSeq,
+            startPt = startPt,
+            endPt = endPt,
+            nodes = nodes,
+            funcCheck = funcCheck,
+            funcFix = funcFix)
+        return n
 
-            # 转折点列表
-            self.turning = []
-            self.aggTurning = []
-            # 穿越点列表
-            self.trespass = []
-            # 未访问点及距离，暂存用，最终需要为空
-            self.dist2NotInclude = {}
-            # 补全
-            self.seq2Path()
+    def cetspFix(n):
+        # 随机选中一个missing，看看能插入到最近的位置是哪里
+        if (len(n.missing) == 0):
+            n.feasibleFlag = True
+            return
+        toInsert = random.choice(n.missing)
+        distPt2Seg = cetspSortInsertion(n.startPt, n.endPt, n.nodes, n.repPt, n.turning, toInsert, algo = "SOCP")
+        n.curRep.insert(heapq.heappop(distPt2Seg)[1], toInsert)
+        return
 
-        def update(self):
-            # 需要先得到一组turn point
-            circles = []
-            seqTra = [n.key for n in self.seq.traverse()]
-            seqTra.append(0)
-            for i in range(1, len(seqTra) - 1):
-                circles.append({
-                    'center': self.nodes[seqTra[i]]['pt'],
-                    'radius': radius if radius != None else self.nodes[seqTra[i]][radiusFieldName]
-                })
+    def cetspCheck(n):
+        # 给定一个RawSolnNode，确定是否访问了所有的点
+        seq = n.curRep
+        checkVisit = cetspCheckVisit(n.startPt, n.endPt, n.nodes, seq, algo = 'SOCP')
 
-            # 得到路径，然后进行去重
-            c2c = circle2CirclePath(
-                startPt = self.startPt,
-                endPt = self.endPt,
-                circles = circles,
-                algo = 'SOCP')
-            degen = pathRemoveDegen(path = c2c['path'])          
+        n.ofv = checkVisit['ofv']
+        n.dist = checkVisit['ofv']
+        n.path = checkVisit['path']
+        n.curRep = checkVisit['turning']
 
-            # 计算转折点，重合转折点，穿越点等
-            # self.turning - 转折点，注意这里的转折点可能重合
-            self.turning = []
-            # self.aggTurning - 聚合点，list of list，每个元素是一组重合的转折点
-            self.aggTurning = []
-            # 根据去重翻译
-            for i in range(len(degen['aggNodeList'])):
-                if (degen['removedFlag'][i] == False):
-                    self.turning.extend([seqTra[k] for k in degen['aggNodeList'][i]])
-                    self.aggTurning.append([seqTra[k] for k in degen['aggNodeList'][i]])
-            # 新的路径，去重后，长度应当与self.aggTurning一致
-            self.path = degen['newPath']
-            # 总长度
-            self.dist = c2c['dist']
+        n.turning = checkVisit['turning']
+        n.trespass = checkVisit['trespass']
+        n.missing = checkVisit['missing']
+        n.repPt = checkVisit['repPt']
 
-            # 判断剩余的点是否为trespass点
-            self.dist2NotInclude = {}
-            # 现在针对每个点来判断是否穿越
-            self.trespass = []
-            # 是否所有点都覆盖
-            self.completeFlag = True
-            for i in self.nodes:
-                if (i not in self.turning):
-                    res = distPt2Seq(
-                        pt = self.nodes[i]['pt'], 
-                        seq = self.path,
-                        closedFlag = False,
-                        detailFlag = True)
-                    if (i in seqTra):
-                        self.trespass.append(i)
-                    elif (res['dist'] <= (radius if radius != None else self.nodes[i][radiusFieldName]) + 1.01 * ERRTOL["distPt2Seg"]):
-                        self.trespass.append(i)
-                    else:
-                        self.dist2NotInclude[i] = res
-                        self.completeFlag = False
-            # 检查一下degen的过程有没有把本来是相交的点给无意中移除掉了
-            sameFlag = True
-            for k in seqTra:
-                if (k != 0 and k not in self.turning and k not in self.trespass):
-                    self.trespass.append(k)
-                    warnings.warn(f"WARNING: Customer {k} is dropped.")
-
-        def seq2Path(self):
-            completeFlag = False
-            # 现在开始补齐        
-            while (not completeFlag):
-                completeFlag = True                
-                self.update()
-
-                # 将一个最近的点加入self.aggTurning
-                if (not self.completeFlag):
-                    completeFlag = False
-
-                    # 找最近的邻域
-                    closestIdx = None
-                    closestDist = float('inf')
-                    closestInsertID = None
-                    for i in self.dist2NotInclude:
-                        if (self.dist2NotInclude[i]['dist'] < closestDist):
-                            closestIdx = i
-                            closestDist = self.dist2NotInclude[i]['dist']
-                            closestInsertID = self.dist2NotInclude[i]['nearestIdx'][1]
-                    self.aggTurning.insert(closestInsertID, [closestIdx])
-                    self.turning = []
-                    for k in range(len(self.aggTurning)):
-                        self.turning.extend(self.aggTurning[k])
-
-                    # 更新seq为新的turning point
-                    self.seq = Ring()
-                    for i in range(len(self.turning) - 1):
-                        n = RingNode(self.turning[i])
-                        self.seq.append(n)
-                    self.seq.rehead(0)
-
-    def swap(chromo, idxI):
-        seq = [i.key for i in chromo.seq.traverse()]
-        if (idxI < len(seq) - 1):
-            seq[idxI], seq[idxI + 1] = seq[idxI + 1], seq[idxI]
+        if (len(n.missing) == 0):
+            n.feasibleFlag = True
+            n.rep = n.curRep
         else:
-            seq[idxI], seq[0] = seq[0], seq[idxI]
-        return chromosomeCETSP(startPt, endPt, nodes, seq)
+            n.feasibleFlag = False
 
-    def exchange(chromo, idxI, idxJ):
-        seq = [i.key for i in chromo.seq.traverse()]
-        seq[idxI], seq[idxJ] = seq[idxJ], seq[idxI]
-        return chromosomeCETSP(startPt, endPt, nodes, seq)
+        # printLog("Visit Seq: ", seq)
+        # printLog("Turning: ", n.turning)
+        # printLog("Trespass: ", n.trespass)
+        # printLog("Missing: ", n.missing)
+        
+        return n.feasibleFlag
 
-    def rotate(chromo, idxI, idxJ):
-        seq = [i.key for i in chromo.seq.traverse()]
-        if (idxI > idxJ):
-            idxI, idxJ = idxJ, idxI
-        newSeq = [seq[i] for i in range(idxI)]
-        newSeq.extend([seq[idxJ - i] for i in range(idxJ - idxI + 1)])
-        newSeq.extend([seq[i] for i in range(idxJ + 1, len(seq))])
-        return chromosomeCETSP(startPt, endPt, nodes, newSeq)
-    
-    def rndDestroy(chromo):
-        seq = [i.key for i in chromo.seq.traverse()]
+    def swap(n) -> SolnNode:
+        newSeq = [i for i in n.rawRep]
+        idxI = random.randint(0, len(newSeq) - 1)
+        if (idxI < len(newSeq) - 1):
+            newSeq[idxI], newSeq[idxI + 1] = newSeq[idxI + 1], newSeq[idxI]
+        else:
+            newSeq[idxI], newSeq[0] = newSeq[0], newSeq[idxI]
+        return RawSolnNode(
+            key = newSeq,
+            rawRep = newSeq,
+            startPt = n.startPt,
+            endPt = n.endPt,
+            nodes = n.nodes,
+            funcCheck = n.funcCheck,
+            funcFix = n.funcFix)
+
+    def exchange(n) -> SolnNode:
+        if (len(n.rawRep) > 4):
+            newSeq = [i for i in n.rawRep]
+            [idxI, idxJ] = random.sample([i for i in range(len(n.rawRep))], 2)
+            while (abs(idxJ - idxI) <= 2
+                or idxI == 0 and idxJ == len(n.rawRep) - 1
+                or idxI == len(n.rawRep) - 1 and idxJ == 0):
+                [idxI, idxJ] = random.sample([i for i in range(len(n.rawRep))], 2)
+            newSeq[idxI], newSeq[idxJ] = newSeq[idxJ], newSeq[idxI]
+        
+            return RawSolnNode(
+                key = newSeq,
+                rawRep = newSeq,
+                startPt = n.startPt,
+                endPt = n.endPt,
+                nodes = n.nodes,
+                funcCheck = n.funcCheck,
+                funcFix = n.funcFix)
+        else:
+            return n
+
+    def rotate(n) -> SolnNode:
+        if (len(n.rawRep) > 4):
+            [idxI, idxJ] = random.sample([i for i in range(len(n.rawRep))], 2)
+            while (abs(idxJ - idxI) <= 2
+                or idxI == 0 and idxJ == len(n.rawRep) - 1
+                or idxI == len(n.rawRep) - 1 and idxJ == 0):
+                [idxI, idxJ] = random.sample([i for i in range(len(n.rawRep))], 2)
+            if (idxI > idxJ):
+                idxI, idxJ = idxJ, idxI
+
+            seq = [i for i in n.rawRep]
+            newSeq = [seq[i] for i in range(idxI)]
+            newSeq.extend([seq[idxJ - i] for i in range(idxJ - idxI + 1)])
+            newSeq.extend([seq[i] for i in range(idxJ + 1, len(seq))])
+        
+            return RawSolnNode(
+                key = newSeq,
+                rawRep = newSeq,
+                startPt = n.startPt,
+                endPt = n.endPt,
+                nodes = n.nodes,
+                funcCheck = n.funcCheck,
+                funcFix = n.funcFix)
+        else:
+            return n 
+
+    def rndDestroy(n) -> SolnNode:
+        seq = [i for i in n.rawRep]
         numRemove = int(len(seq) * random.random() * 0.3)
         newSeq = [i for i in seq]
         for i in range(numRemove):
             newSeq.remove(newSeq[random.randint(0, len(newSeq) - 1)])
-        if (0 not in newSeq):
-            newSeq.append(0)
-        return chromosomeCETSP(startPt, endPt, nodes, newSeq)
 
-    # Initialize ==============================================================
-    startTime = datetime.datetime.now()
-    convergence = []
+        return RawSolnNode(
+            key = newSeq,
+            rawRep = newSeq,
+            startPt = n.startPt,
+            endPt = n.endPt,
+            nodes = n.nodes,
+            funcCheck = n.funcCheck,
+            funcFix = n.funcFix)
 
-    seq = [i for i in nodes]
-    seq.append(0)
-    random.shuffle(seq) # 没事，会rehead
-    
-    chromo = chromosomeCETSP(startPt, endPt, nodes, seq)
-    printLog("Initial Solution: ", chromo.dist, chromo.turning, chromo.trespass)
-
-    dashboard = {}
-    dashboard['bestDist'] = chromo.dist
-    dashboard['bestSeq'] = [i.key for i in chromo.seq.traverse()]
-    dashboard['bestChromo'] = chromo
-
-    contFlag = True
-    iterTotal = 0
-    iterNoImp = 0
-    while (contFlag):
-        # Select operator according to ratio
-        opt = rndPickFromDict(neighRatio)
-
-        newChromo = chromo
-
-        # swap
-        if (opt == 'Swap'):
-            idx = random.randint(0, chromo.seq.count - 1)
-            newChromo = swap(chromo, idx)
-            printLog("InterSwap: ", newChromo.dist)
-
-        # exchange
-        if (opt == 'Exchange'):
-            if (chromo.seq.count > 4):
-                [idxI, idxJ] = random.sample([i for i in range(chromo.seq.count)], 2)
-                while (abs(idxJ - idxI) <= 2
-                    or idxI == 0 and idxJ == chromo.seq.count - 1
-                    or idxI == chromo.seq.count - 1 and idxJ == 0):
-                    [idxI, idxJ] = random.sample([i for i in range(chromo.seq.count)], 2)
-                newChromo = exchange(chromo, idxI, idxJ)
-                printLog("Exchange: ", newChromo.dist)
-
-        # rotate
-        if (opt == 'Rotate'):
-            if (chromo.seq.count > 4):
-                [idxI, idxJ] = random.sample([i for i in range(chromo.seq.count)], 2)
-                while (abs(idxJ - idxI) <= 2
-                    or idxI == 0 and idxJ == chromo.seq.count - 1
-                    or idxI == chromo.seq.count - 1 and idxJ == 0):
-                    [idxI, idxJ] = random.sample([i for i in range(chromo.seq.count)], 2)
-                newChromo = rotate(chromo, idxI, idxJ)
-                printLog("Rotate: ", newChromo.dist)
-
-        # random destroy and recreate
-        if (opt == 'rndDestroy'):
-            newChromo = rndDestroy(chromo)
-            printLog("Random destroy: ", newChromo.dist)
-
-        # Update dashboard
-        newOfvFound = False
-        if (newChromo.dist < dashboard['bestDist'] - 0.00001):
-            newOfvFound = True
-            dashboard['bestDist'] = newChromo.dist
-            dashboard['bestSeq'] = [i.key for i in newChromo.seq.traverse()]
-            dashboard['bestChromo'] = newChromo
-            chromo = newChromo
-        else:
-            if (random.random() < np.exp((newChromo.dist - dashboard['bestDist']) / initTemp)):
-                chromo = newChromo
-
-        printLog("\n")
-        printLog(hyphenStr())
-        printLog("Iter: ", iterTotal, 
-            "\nRuntime [s]: ", round((datetime.datetime.now() - startTime).total_seconds(), 2), 
-            "\nBest.Turning", dashboard['bestChromo'].turning,
-            "\nBest.Trespass", dashboard['bestChromo'].trespass,
-            "\nBest.Dist: ", dashboard['bestDist'],
-            "\nCurrent.Turning", chromo.turning,
-            "\nCurrent.Trespass", chromo.trespass,
-            "\nCurrent.Dist: ", chromo.dist,
-        )
-        if (newOfvFound):
-            iterNoImp = 0
-        else:
-            iterNoImp += 1
-        iterTotal += 1
-
-        convergence.append({
-            'dist': dashboard['bestDist'],
-            'seq': dashboard['bestSeq'],
-            'path': dashboard['bestChromo'].path,
-            'runtime': (datetime.datetime.now() - startTime).total_seconds()
-        })
-
-        # Check stopping criteria
-        if ('numNoImproveIter' in stop):
-            if (iterNoImp > stop['numNoImproveIter']):
-                contFlag = False
-                break
-        if ('numIter' in stop):
-            if (iterTotal > stop['numIter']):
-                contFlag = False
-                break
-        if ('runtime' in stop):
-            if ((datetime.datetime.now() - startTime).total_seconds() > stop['runtime']):
-                contFlag = False
-                break
+    solNode = cetspNew(
+        startPt = startPt,
+        endPt = endPt,
+        nodes = nodes,
+        funcCheck = cetspCheck,
+        funcFix = cetspFix)
+    ils = ILS(
+        initNode = solNode,
+        funcNeiOps = [
+            swap,
+            exchange,
+            rotate,
+            rndDestroy])
+    ils.solve()
 
     return {
-        'ofv': dashboard['bestDist'],
-        'dist': dashboard['bestDist'],
-        'seq': dashboard['bestSeq'],
-        'path': dashboard['bestChromo'].path,
-        'turning': dashboard['bestChromo'].turning,
-        'trespass': dashboard['bestChromo'].trespass,
-        'runtime': (datetime.datetime.now() - startTime).total_seconds(),
-        'convergence': convergence,
+        'ofv': ils.bestNode.ofv,
+        'dist': ils.bestNode.dist,
+        'seq': ils.bestNode.curRep,
+        'path': ils.bestNode.path,
+        'turning': ils.bestNode.turning,
+        'trespass': ils.bestNode.trespass,
+        'runtime': ils.runtime,
+        'convergence': ils.convergence,
     }
 
 def _solveCETSPBnBCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | None = None, radiusFieldName: str = 'radius', timeLimit: int | None = None) -> dict | None:
@@ -2088,7 +1982,7 @@ def cetspCheckVisit(startPt, endPt, nodes, seq, algo = 'SOCP'):
     for i in range(len(degen['aggNodeList'])):
         if (degen['removedFlag'][i] == False):
             turning.extend([seqTra[k] for k in degen['aggNodeList'][i]])
-    
+
     path = degen['newPath']
     ofv = c2c['dist']
 
@@ -2098,11 +1992,15 @@ def cetspCheckVisit(startPt, endPt, nodes, seq, algo = 'SOCP'):
         # 对于每个线段，测试哪些圆是经过了的
         for j in nodes:
             if (j not in turning and j not in trespass):
-                dist2Seg = distPt2Seg(
-                    pt = nodes[j]['pt'],
-                    seg = seg)
-                if (dist2Seg <= nodes[j]['radius']):
+                if (j not in seq):
+                    dist2Seg = distPt2Seg(
+                        pt = nodes[j]['pt'],
+                        seg = seg)
+                    if (dist2Seg <= nodes[j]['radius']):
+                        trespass.append(j)
+                else:
                     trespass.append(j)
+
     # 注意，turning中不包括startPt和endPt
     turning = turning[1:-1]
     for j in nodes:

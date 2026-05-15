@@ -14,8 +14,6 @@ from .instance import *
 from .bnbTree import *
 from .ils import *
 
-from .ilsTest import *
-
 # Data structures
 from .ring import *
 from .tree import *

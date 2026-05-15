@@ -1432,6 +1432,101 @@ def rndArcs(A: int|None = None, arcIDs: list[int|str] = [], distr = 'UniformLeng
         raise UnsupportedInputError("ERROR: Unsupported option for `distr`.")
 
     return arcs
+def rndArcNeighbors(arcs: dict, arcIDs: list[int|str]|str = 'All', shape: str = 'FixedRadius', **kwargs) -> dict:
+
+    """Given an arc dictionary, add neighborhood to selected arcs
+
+    WARNING
+    -------
+
+    This function will modify the input dictionary `arcs`
+
+    Parameters
+    ----------
+
+    arcs: dictionary, required
+        A plain arcs dictionary to add neighborhoods.
+    arcIDs: string|list[int|str], optional, default 'All'
+        A list of arc IDs to add neighborhood, leave it as 'All' to indicate adding such information to all arcs.
+    method: dictionary, optional, default {'shape': 'FixedRadius', 'radius': 1, 'lod': 30}       
+        The shape of dictionary. Options includes
+        1) Adding fixed radius neighborhoods to a given arc
+            >>> method = {
+            ...     'shape': 'FixedRadius',
+            ...     'radius': 1,
+            ...     'lod': 30
+            ... }
+
+    Returns
+    -------
+
+    dictionary
+        Changes will apply to the original `nodes` dictionary
+
+    """
+    
+    # Sanity check ============================================================
+    if (type(arcIDs) is not list):
+        if (arcIDs == 'All'):
+            arcIDs = [i for i in arcs]
+        else:
+            for i in arcIDs:
+                if (i not in arcs):
+                    raise OutOfRangeError("ERROR: Node %s is not in `arcs`." % i)
+    
+    # Field names =============================================================
+    arcFieldName = 'arc' if 'arcFieldName' not in kwargs else kwargs['arcFieldName']
+    neiBtwFieldName = 'neiBtw' if 'neiBtwFieldName' not in kwargs else kwargs['neiBtwFieldName'] 
+    neiAFieldName = 'neiA' if 'neiAFieldName' not in kwargs else kwargs['neiAFieldName']
+    neiBFieldName = 'neiB' if 'neiBFieldName' not in kwargs else kwargs['neiBFieldName']
+    neiAllFieldName = 'neiAll' if 'neiAllFieldName' not in kwargs else kwargs['neiAllFieldName']
+
+    # Add neighborhood ========================================================    
+    if (shape == 'FixedRadius'):
+        if ('radius' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required key 'radius' in `kwargs`")
+
+        for i in arcIDs:            
+            # By default, a circle is plotted by a 30-gon
+            lod = 30
+            if ('lod' in kwargs and type(kwargs['lod']) == int):
+                lod = kwargs['lod']
+            startPt = arcs[i][arcFieldName][0]
+            endPt = arcs[i][arcFieldName][1]
+
+            heading = headingXY(startPt, endPt)
+
+            radius = kwargs['radius']
+            arcs[i][neiBtwFieldName] = [[
+                startPt[0] + radius * math.sin(2 * d * math.pi / lod + (heading - 90) * math.pi / 180),
+                startPt[1] + radius * math.cos(2 * d * math.pi / lod + (heading - 90) * math.pi / 180),
+            ] for d in range(int(lod / 2 + 1))]
+            arcs[i][neiBtwFieldName].extend([[
+                endPt[0] + radius * math.sin(2 * d * math.pi / lod + (heading + 90) * math.pi / 180),
+                endPt[1] + radius * math.cos(2 * d * math.pi / lod + (heading + 90) * math.pi / 180),
+            ] for d in range(int(lod / 2 + 1))])
+
+            arcs[i][neiAFieldName] = [[
+                    startPt[0] + radius * math.sin(2 * d * math.pi / lod + (heading + 90) * math.pi / 180),
+                    startPt[1] + radius * math.cos(2 * d * math.pi / lod + (heading + 90) * math.pi / 180),
+                ] for d in range(int(lod))]
+            arcs[i][neiBFieldName] = [[
+                    endPt[0] + radius * math.sin(2 * d * math.pi / lod + (heading - 90) * math.pi / 180),
+                    endPt[1] + radius * math.cos(2 * d * math.pi / lod + (heading - 90) * math.pi / 180),
+                ] for d in range(int(lod))]
+
+            arcs[i][neiAllFieldName] = [[
+                startPt[0] + radius * math.sin(2 * d * math.pi / lod + (heading + 90) * math.pi / 180),
+                startPt[1] + radius * math.cos(2 * d * math.pi / lod + (heading + 90) * math.pi / 180),
+            ] for d in range(int(lod / 2 + 1))]
+            arcs[i][neiAllFieldName].extend([[
+                endPt[0] + radius * math.sin(2 * d * math.pi / lod + (heading - 90) * math.pi / 180),
+                endPt[1] + radius * math.cos(2 * d * math.pi / lod + (heading - 90) * math.pi / 180),
+            ] for d in range(int(lod / 2 + 1))])
+    else:
+        raise UnsupportedInputError("ERROR: Unsupported option for `shape`. Supported 'shape' includes: 'FixedRadius'.")
+
+    return arcs
 
 def rndPolys(P: int|None = None, polyIDs: list[int|str]|None = None, distr = 'UniformSquareXY', shape = 'RndConvexPoly', seed = None, allowOverlapFlag = True, returnAsListFlag = True, **kwargs) -> dict:
 

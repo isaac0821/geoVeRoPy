@@ -24,10 +24,11 @@ class SolnNode:
         self.solvedFlag = True
         return
 
-class RawSolnNode:
+class RawSolnNode(SolnNode):
     # 对于给定一个顺序编码还需要补全的结构
     def __init__(self, key, rawRep, funcCheck, funcFix, **kwargs):
         self.key = key
+        self.rep = rawRep
         self.rawRep = rawRep
         self.curRep = rawRep
         self.__dict__.update(kwargs)
@@ -41,30 +42,35 @@ class RawSolnNode:
         self.soln = None
         return
 
+    def solve(self):
+        if (self.feasibleFlag == None):
+            self.check()
+        while (self.feasibleFlag == False):
+            self.fix()
+            self.check()
+        self.solvedFlag = True
+        return
+
     def check(self):
         self.feasibleFlag = self.funcCheck(self)
         return
 
     def fix(self):
-        if (self.feasibleFlag == None):
-            self.check()
-        while (self.feasibleFlag == False):
-            self.funcFix(self)
-            self.check()
-        self.solvedFlag = True
+        self.funcFix(self)
         return
 
 class ILS:
-    def __init__(self, initRawSoln: RawSolnNode, funcCheck, funcFix, funcfuncNeiOps, **kwargs):
+    def __init__(self, initNode: SolnNode, funcNeiOps: list, **kwargs):
         # 初始化
-        self.initNode = initRawSoln
-        self.initNode.fix()
+        self.initNode = initNode
+        self.initNode.solve()
         self.funcNeiOps = funcNeiOps
 
         # 内置一个动态表，用于减少计算
-        self.DP = {}
-        self.DP[self.initNode.key] = self.initNode
+        # self.DP = {}
+        # self.DP[self.initNode.key] = self.initNode
 
+        # 设置默认的参数，并把多余的参数存起来
         defaultParam = {
             'initTemp': 100.0,
             'coolRate': 0.95,
@@ -76,17 +82,21 @@ class ILS:
         for key, val in defaultParam.items():
             setattr(self, key, val)
         self.__dict__.update(kwargs)
-
         if (self.seed is not None):
             random.seed(self.seed)
-            np.random.seed(self.seed)
+
+        self.roulette = {}
+        for func in funcNeiOps:
+            self.roulette[func] = 1
 
         # 获得初始解
         self.currNode = self.initNode
         self.currOFV = self.currNode.ofv
-
         self.bestNode = self.currNode
         self.bestOFV = self.currOFV
+
+        self.runtime = None
+        self.convergence = []
 
         printLog("ILS initialization completed")
         printLog(f"Initial objective value: {self.currOFV:.4f}")
@@ -100,28 +110,23 @@ class ILS:
         temp = self.initTemp
 
         while (True):
-            opName = rndPickFromDict(self.funcNeiOps)
-            opFunc = self.funcNeiOps[opName][0]
-
-            newRawSeq = opFunc(self.currNode.rawSeq)
-
-            newNode = RawSolnNode(
-                key = newRawSeq,
-                rawRep = newRawSeq,
-                funcFix = self.currNode.funcFix,
-                funcSolve = self.currNode.funcSolve,
-                **kwargs
-            )
+            # 随机选择一个算子
+            opFunc = rndPickFromDict(self.roulette)
+            newNode = opFunc(self.currNode)
+            newNode.solve()
             newObj = newNode.ofv
+            printLog(f"Operator selected: {opFunc.__name__}")
 
             accept = False
             if (newObj < self.currOFV):
                 accept = True
+                self.roulette[opFunc] += 2
             else:
                 delta = newObj - self.currOFV
                 prob = np.exp(-delta / temp) if (temp > 0) else 0.0
                 if (random.random() < prob):
                     accept = True
+                    self.roulette[opFunc] += 1
 
             if (accept):
                 self.currNode = newNode
@@ -144,6 +149,8 @@ class ILS:
                 'runtime': runtime
             })
 
+            # printLog("\n")
+            printLog(hyphenStr())
             printLog(f"Iter {iteration:5d}")
             printLog(f"Runtime [s]: {runtime:.2f}")
             printLog(f"bestOFV: {self.bestOFV:.6f}")
@@ -165,11 +172,8 @@ class ILS:
         totalRuntime = (datetime.datetime.now() - startTime).total_seconds()
         printLog(f"\nILS finished. Best objective: {self.bestOFV:.6f}, total time: {totalRuntime:.2f}s")
 
-        return {
-            'bestOFV': self.bestOFV,
-            'bestNode': self.bestNode,
-            'runtime': totalRuntime,
-            'convergence': convergence,
-        }
+        self.runtime = totalRuntime
+        self.convergence = convergence
 
-# class ALNS:
+        return
+
