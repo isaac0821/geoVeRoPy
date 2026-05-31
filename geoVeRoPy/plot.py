@@ -14,7 +14,6 @@ from matplotlib import cm
 
 from .tree import *
 from .common import *
-from .color import *
 from .province import *
 from .geometry import *
 from .travel import *

@@ -8,7 +8,6 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 
 from .common import *
-from .color import *
 from .geometry import *
 from .gridSurface import *
 

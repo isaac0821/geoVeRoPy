@@ -1432,6 +1432,7 @@ def rndArcs(A: int|None = None, arcIDs: list[int|str] = [], distr = 'UniformLeng
         raise UnsupportedInputError("ERROR: Unsupported option for `distr`.")
 
     return arcs
+
 def rndArcNeighbors(arcs: dict, arcIDs: list[int|str]|str = 'All', shape: str = 'FixedRadius', **kwargs) -> dict:
 
     """Given an arc dictionary, add neighborhood to selected arcs

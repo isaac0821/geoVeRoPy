@@ -1,3 +1,5 @@
+import math
+
 from .tree import *
 from .common import *
 
@@ -18,13 +20,13 @@ class BnBTreeNode(TreeNode):
 
         # 以下属性在solve()后补充
         self.ofv = None
-        self.funcSolve = funcSolve
-        self.funcFeasible = funcFeasible
-        self.funcUBEstimate = funcUBEstimate
-        self.relaxFlag = None
-        self.feasibleFlag = None
-        self.solvedFlag = False
-        self.soln = None
+        self.funcSolve = funcSolve # 给定一个node，对node进行求解的函数
+        self.funcFeasible = funcFeasible # 给定一个node，确定该node是不是可行解的函数
+        self.funcUBEstimate = funcUBEstimate # 给定一个node，快速得到上界的函数，实际上就是启发式
+        self.relaxFlag = None # 该节点是否为松弛解
+        self.feasibleFlag = None # 该节点是否为可行解
+        self.solvedFlag = False # 给节点是否已经求解
+        self.soln = None # 该节点的解
 
         # 以下属性在自身或者其他node定界时补充
         self.bnbUB = bnbUB
@@ -124,7 +126,7 @@ class BnBTree(Tree):
         self.tabu = {}
 
     # 分支定界法主函数
-    def bnb(self, timeLimit=None):
+    def bnb(self, timeLimit=None, gapTol=0.01):
         # 算法框架（以最小化为例）
         startTime = datetime.datetime.now()
 
@@ -136,14 +138,14 @@ class BnBTree(Tree):
 
             # Step 1: 选择一个unsolved node，如果找不到unsolved，结束
             curNode = self.choose()
-            if (abs(self.lowerBound - self.upperBound) <= 0.01):
-                printLog("Iteration ends by gap.")
+            if (self.upperBound != 0 and not math.isinf(self.upperBound) and abs(self.upperBound - self.lowerBound) / abs(self.upperBound) <= self.gapTol):
+                printLog(f"Iteration ends by gap: {abs(self.lowerBound - self.upperBound) * 100 / self.upperBound}%")
                 break
             if (curNode == None):
                 printLog("Iteration ends by enumeration.")
                 break
             if (timeLimit != None and (datetime.datetime.now() - startTime).total_seconds() > timeLimit):
-                printLog("Reach time limit!")
+                printLog(f"Reach time limit: {(datetime.datetime.now() - startTime).total_seconds()} seconds")
                 break
 
             printLog("Select: ", curNode.rep)

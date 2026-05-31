@@ -7,6 +7,7 @@ from .common import *
 from .geometry import *
 from .travel import *
 
+# Orienteering Problem
 def solveOP(
     nodes: dict, 
     maxBudget: float,

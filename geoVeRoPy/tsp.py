@@ -2,12 +2,14 @@ import heapq
 import math
 import warnings
 import networkx as nx
+import gurobipy as grb
 
 from .common import *
 from .geometry import *
 from .ring import *
 from .travel import *
 
+# Traveling Salesman Problem
 def solveTSP(
     nodes: dict, 
     depotID: int|str = 0,
@@ -139,14 +141,11 @@ def solveTSP(
 
     # Check required information for different solution approach ==============
     if (algo == 'Exact'):
-        if ('solver' not in kwargs and 'fml' not in kwargs):
-            kwargs['solver'] = 'Gurobi'
+        if ('fml' not in kwargs):
             kwargs['fml'] = 'DFJ_Lazy'
-            warnings.warn("WARNING: Missing required field `solver`, set to default 'Gurobi' with DFJ + lazy cuts")
-        elif (kwargs['solver'] == 'Gurobi' and kwargs['fml'] not in ['DFJ_Lazy', 'DFJ_Plainloop', 'MTZ', 'ShortestPath', 'MultiCommodityFlow', 'QAP']):
-            raise OutOfRangeError("ERROR: Gurobi option s upports 'DFJ_Lazy', 'DFJ_Plainloop', 'MTZ', 'ShortestPath', 'MultiCommodityFlow', and 'QAP' formulations", )
-        elif (kwargs['solver'] == 'COPT' and kwargs['fml'] not in ['DFJ_Lazy']):
-            raise OutOfRangeError("ERROR: COPT option supports 'DFJ_Lazy' formulations", )
+            warnings.warn("WARNING: Missing required field `fml`, set to default DFJ + lazy cuts")
+        elif (kwargs['fml'] not in ['DFJ_Lazy', 'DFJ_Plainloop', 'MTZ', 'ShortestPath', 'MultiCommodityFlow', 'QAP']):
+            raise MissingParameterError("ERROR: fml options supports 'DFJ_Lazy', 'DFJ_Plainloop', 'MTZ', 'ShortestPath', 'MultiCommodityFlow', and 'QAP' formulations", )
     elif (algo == 'Heuristic'):
         if ('cons' not in kwargs):
             kwargs['cons'] = 'NearestNeighbor'
@@ -204,23 +203,21 @@ def solveTSP(
 
     tsp = None
     if (algo == 'Exact'):
-        tsp = _ipTSP(
+        tsp = _solveTSPIP(
             nodeIDs = nodeIDs, 
             tau = tau, 
-            solver = kwargs['solver'], 
             fml = kwargs['fml'], 
             outputFlag = False if 'outputFlag' not in kwargs else kwargs['outputFlag'], 
             timeLimit = None if 'timeLimit' not in kwargs else kwargs['timeLimit'], 
             gapTolerance = None if 'gapTolerance' not in kwargs else kwargs['gapTolerance'])
         tsp['fml'] = kwargs['fml']
-        tsp['solver'] = kwargs['solver']
 
     elif (algo == 'Heuristic'):
         nodeObj = {}
         for n in nodeIDs:
             nodeObj[n] = RouteNode(n, value=nodes[n][ptFieldName])
         # Two-phase: construction phase
-        seqObj = _consTSP(
+        seqObj = _solvTSPHeuCons(
             nodes = nodes,
             nodeObj = nodeObj, 
             tau = tau, 
@@ -229,7 +226,7 @@ def solveTSP(
             asymFlag = asymFlag, 
             **kwargs)
         # Two-phase: local improvement phase
-        tsp = _impvTSP(
+        tsp = _solveTSPHeuImpv(
             seqObj = seqObj,
             **kwargs)
         tsp['cons'] = kwargs['cons']
@@ -243,7 +240,7 @@ def solveTSP(
         # Population based
         if (kwargs['meta'] in ['GeneticAlgorithm', 'PSO', 'ACO']):
             # Two-phase: popularize phase
-            popObj = _popTSP(
+            popObj = _solveTSPHeuPop(
                 nodes = nodes,
                 nodeObj = nodeObj, 
                 tau = tau, 
@@ -252,7 +249,7 @@ def solveTSP(
                 asymFlag = asymFlag, 
                 **kwargs)
             # Two-phase: population based search phase
-            tsp = _metaPopSearchTSP(
+            tsp = _solveTSPMetaPopSearch(
                 popObj = popObj,
                 nodeObj = nodeObj,
                 tau = tau,
@@ -264,7 +261,7 @@ def solveTSP(
         # Search based
         elif (kwargs['meta'] in ['SimulatedAnnealing', 'TabuSearch', 'ALNS', 'GRASP']):
             # Two-phase: construction phase
-            seqObj = _consTSP(
+            seqObj = _solvTSPHeuCons(
                 nodes = nodes,
                 nodeObj = nodeObj, 
                 tau = tau, 
@@ -273,7 +270,7 @@ def solveTSP(
                 asymFlag = asymFlag, 
                 **kwargs)
             # Two-phase: local search phase
-            tsp = _metaLocalSearchTSP( 
+            tsp = _solveMetaLocalSearch( 
                 seqObj = seqObj, 
                 **kwargs)
             tsp['cons'] = kwargs['cons']
@@ -397,30 +394,25 @@ def solveTSP(
 
     return res
 
-def _ipTSP(nodeIDs, tau, solver, fml, outputFlag, timeLimit, gapTolerance) -> dict|None:
+def _solveTSPIP(nodeIDs, tau, fml, outputFlag, timeLimit, gapTolerance) -> dict|None:
     tsp = None
-    if (solver == 'Gurobi'):
-        if (fml == 'DFJ_Lazy'):
-            tsp = _ipTSPGurobiLazyCuts(nodeIDs, tau, outputFlag, timeLimit, gapTolerance)
-        elif (fml == 'DFJ_Plainloop'):
-            tsp = _ipTSPGurobiPlainLoop(nodeIDs, tau, outputFlag, timeLimit, gapTolerance)
-        elif (fml == 'MTZ'):
-            tsp = _ipTSPGurobiMTZ(nodeIDs, tau, outputFlag, timeLimit, gapTolerance)
-        elif (fml == 'ShortestPath'):
-            tsp = _ipTSPGurobiShortestPath(nodeIDs, tau, outputFlag, timeLimit, gapTolerance)
-        elif (fml == 'MultiCommodityFlow'):
-            tsp = _ipTSPGurobiMultiCommodityFlow(nodeIDs, tau, outputFlag, timeLimit, gapTolerance)
-        elif (fml == 'QAP'):
-            tsp = _ipTSPGurobiQAP(nodeIDs, tau, outputFlag, timeLimit, gapTolerance)
-    elif (solver == 'COPT'):
-        if (fml == 'DFJ_Lazy'):
-            tsp = _ipTSPCOPTLazyCuts(nodeIDs, tau, outputFlag, timeLimit)
+    if (fml == 'DFJ_Lazy'):
+        tsp = _solveTSPIPLazyCuts(nodeIDs, tau, outputFlag, timeLimit, gapTolerance)
+    elif (fml == 'DFJ_Plainloop'):
+        tsp = _solveTSPIPPlainLoop(nodeIDs, tau, outputFlag, timeLimit, gapTolerance)
+    elif (fml == 'MTZ'):
+        tsp = _solveTSPIPMTZ(nodeIDs, tau, outputFlag, timeLimit, gapTolerance)
+    elif (fml == 'ShortestPath'):
+        tsp = _solveTSPIPShortestPath(nodeIDs, tau, outputFlag, timeLimit, gapTolerance)
+    elif (fml == 'MultiCommodityFlow'):
+        tsp = _solveTSPIPMultiCommodityFlow(nodeIDs, tau, outputFlag, timeLimit, gapTolerance)
+    elif (fml == 'QAP'):
+        tsp = _solveTSPIPQAP(nodeIDs, tau, outputFlag, timeLimit, gapTolerance)
     if (tsp == None):
         raise UnsupportedInputError("ERROR: Incorrect or not available TSP formulation option!")
-    
     return tsp
 
-def _ipTSPGurobiLazyCuts(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
+def _solveTSPIPLazyCuts(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
     try:
         import gurobipy as grb
     except:
@@ -516,13 +508,7 @@ def _ipTSPGurobiLazyCuts(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
         'upperBound': ub
     }
 
-def _ipTSPGurobiPlainLoop(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
-    try:
-        import gurobipy as grb
-    except(ImportError):
-        print("ERROR: Cannot find Gurobi")
-        return
-
+def _solveTSPIPPlainLoop(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
     # Initialize
     n = len(nodeIDs)
     TSP = grb.Model('TSP')
@@ -620,13 +606,7 @@ def _ipTSPGurobiPlainLoop(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
         'upperBound': ub,
     }
 
-def _ipTSPGurobiMTZ(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
-    try:
-        import gurobipy as grb
-    except(ImportError):
-        print("ERROR: Cannot find Gurobi")
-        return
-
+def _solveTSPIPMTZ(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
     # Initialize
     n = len(nodeIDs)
     TSP = grb.Model('TSP')
@@ -716,13 +696,7 @@ def _ipTSPGurobiMTZ(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
         'upperBound': ub
     }
 
-def _ipTSPGurobiShortestPath(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
-    try:
-        import gurobipy as grb
-    except(ImportError):
-        print("ERROR: Cannot find Gurobi")
-        return
-
+def _solveTSPIPShortestPath(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
     # Initialize
     n = len(nodeIDs)
     TSP = grb.Model('TSP')
@@ -807,13 +781,7 @@ def _ipTSPGurobiShortestPath(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
         'upperBound': ub,
     }
 
-def _ipTSPGurobiMultiCommodityFlow(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
-    try:
-        import gurobipy as grb
-    except(ImportError):
-        print("ERROR: Cannot find Gurobi")
-        return
-
+def _solveTSPIPMultiCommodityFlow(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
     # Initialize
     n = len(nodeIDs)
     TSP = grb.Model('TSP')
@@ -912,13 +880,7 @@ def _ipTSPGurobiMultiCommodityFlow(nodeIDs, tau, outputFlag, timeLimit, gapToler
         'upperBound': ub,
     }
 
-def _ipTSPGurobiQAP(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
-    try:
-        import gurobipy as grb
-    except(ImportError):
-        print("ERROR: Cannot find Gurobi")
-        return
-
+def _solveTSPIPQAP(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
     # Initialize
     n = len(nodeIDs)
     TSP = grb.Model('TSP')
@@ -1018,110 +980,7 @@ def _ipTSPGurobiQAP(nodeIDs, tau, outputFlag, timeLimit, gapTolerance):
         'upperBound': ub,
     }
 
-def _ipTSPCOPTLazyCuts(nodeIDs, tau, outputFlag, timeLimit):
-    try:
-        import coptpy as cp            
-    except(ImportError):
-        print("ERROR: Cannot find COPT")
-        return
-    
-    env = cp.Envr(envconfig)
-    TSP = env.createModel("TSP")
-
-    # Initialize
-    n = len(nodeIDs)
-    if (outputFlag != None):
-        TSP.setParam(cp.COPT.Param.Logging, outputFlag)
-        TSP.setParam(cp.COPT.Param.LogToConsole, outputFlag)
-    if (timeLimit != None):
-        TSP.setParam(cp.COPT.Param.TimeLimit, timeLimit)
-
-    # Decision variables ======================================================
-    x = {}
-    for i in nodeIDs:
-        for j in nodeIDs:
-            if (i != j):
-                x[i, j] = TSP.addVar(
-                    vtype = cp.COPT.BINARY, 
-                    obj = tau[i, j], 
-                    name = 'x_%s_%s' % (i, j))
-                
-    # TSP objective function ==================================================
-    TSP.ObjSense = cp.COPT.MINIMIZE
-
-    # Degree constraints ======================================================
-    for i in nodeIDs:
-        TSP.addConstr(cp.quicksum(x[i, j] for j in nodeIDs if i != j) == 1, name = 'leave_%s' % str(i))
-        TSP.addConstr(cp.quicksum(x[j, i] for j in nodeIDs if i != j) == 1, name = 'enter_%s' % str(i))
-
-    # Callback ================================================================
-    class CoptCallback(cp.CallbackBase):
-        def __init__(self):
-            super().__init__()
-        def callback(self):
-            if (self.where() == cp.COPT.CBCONTEXT_MIPSOL):
-                # print("Called me!")
-                x_sol = self.getSolution(x)
-                G = nx.Graph()
-                for (i, j) in x:
-                    if (x_sol[i, j] > 0.9):
-                        G.add_edge(i, j, weight = tau[i, j])
-                components = [list(c) for c in nx.connected_components(G)]
-                # print(components)
-                for component in components:
-                    if (len(component) < n):
-                        self.addLazyConstr(cp.quicksum(x[i, j] for i in component for j in component if i != j) <= len(component) - 1)
-    cb = CoptCallback()
-
-    # TSP with callback =======================================================
-    TSP.setCallback(cb, cp.COPT.CBCONTEXT_MIPSOL)
-    TSP.solve()
-
-    # Reconstruct solution ====================================================
-    ofv = None
-    seq = []
-    arcs = []
-    solType = None
-    gap = None
-    lb = None
-    ub = None
-    if (TSP.status == cp.COPT.OPTIMAL):
-        solType = 'IP_Optimal'
-        ofv = TSP.getObjective().getValue()
-        for i, j in x:
-            if (x[i, j].x > 0.5):
-                arcs.append([i, j])
-        currentNode = nodeIDs[0]
-        seq.append(currentNode)
-        # print(arcs)
-        while (len(arcs) > 0):
-            for i in range(len(arcs)):
-                if (arcs[i][0] == currentNode):
-                    currentNode = arcs[i][1]
-                    seq.append(currentNode)
-                    arcs.pop(i)
-                    break
-        gap = 0
-        lb = ofv
-        ub = ofv
-    elif (TSP.status == cp.COPT.TIMEOUT):
-        solType = 'IP_TimeLimit'
-        ofv = None
-        seq = []
-        gap = TSP.BestGap
-        lb = TSP.BestBnd
-        ub = TSP.BestObj
-
-    return {
-        'ofv': ofv,
-        'seq': seq,
-        'gap': gap,
-        'solType': solType,
-        'lowerBound': lb,
-        'upperBound': ub,
-    }
-
-def _consTSP(nodes, nodeObj, tau, depotID, nodeIDs, asymFlag, **kwargs) -> "Route":
+def _solvTSPHeuCons(nodes, nodeObj, tau, depotID, nodeIDs, asymFlag, **kwargs) -> "Route":
     # Construction heuristics =================================================
     # NOTE: Output of this phase should be a Route() object
     seqObj = Route(tau, asymFlag)
@@ -1160,29 +1019,29 @@ def _consTSP(nodes, nodeObj, tau, depotID, nodeIDs, asymFlag, **kwargs) -> "Rout
                         farthestID = n
                         farthestDist = tau[depotID, n]
             initSeq = [depotID, farthestID, depotID]
-            seqObj = _consTSPInsertion(nodeIDs, initSeq, nodeObj, tau, asymFlag, randomInsertionFlag)
+            seqObj = _solvTSPHeuConsInsertion(nodeIDs, initSeq, nodeObj, tau, asymFlag, randomInsertionFlag)
         else:
             notInNodeIDs = [v for v in kwargs['initSeq'] if v not in nodeIDs]
             if (len(notInNodeIDs) > 0):
                 raise OutOfRangeError("ERROR: The following nodes in 'initSeq' is not in `nodeIDs`: %s" % list2String(notInNodeIDs))
             else:
-                seqObj = _consTSPInsertion(nodeIDs, kwargs['initSeq'], tau, asymFlag, randomInsertionFlag)
+                seqObj = _solvTSPHeuConsInsertion(nodeIDs, kwargs['initSeq'], tau, asymFlag, randomInsertionFlag)
     
     # Neighborhood based heuristic, including nearest neighborhood, k-nearest neighborhood, and furthest neighborhood
     elif (cons == 'NearestNeighbor'):
         nnSeq = None
         if ('k' not in kwargs or kwargs['k'] == 1):
-            nnSeq = _consTSPkNearestNeighbor(depotID, nodeIDs, tau, 1)
+            nnSeq = _solvTSPHeuConskNearestNeighbor(depotID, nodeIDs, tau, 1)
         elif (kwargs['k'] == -1):
-            nnSeq = _consTSPFarthestNeighbor(depotID, nodeIDs, tau)
+            nnSeq = _solvTSPHeuConsFarthestNeighbor(depotID, nodeIDs, tau)
         elif (kwargs['k'] >= 1):
-            nnSeq = _consTSPkNearestNeighbor(depotID, nodeIDs, tau, kwargs['k'])
+            nnSeq = _solvTSPHeuConskNearestNeighbor(depotID, nodeIDs, tau, kwargs['k'])
         for i in nnSeq:
             seqObj.append(nodeObj[i])
 
     # Sweep heuristic
     elif (cons == 'Sweep'):
-        sweepSeq = _consTSPSweep(nodes, depotID, nodeIDs, ptFieldName)
+        sweepSeq = _solvTSPHeuConsSweep(nodes, depotID, nodeIDs, ptFieldName)
         for i in sweepSeq:
             seqObj.append(nodeObj[i])
         seqObj.rehead(depotID)
@@ -1190,7 +1049,7 @@ def _consTSP(nodes, nodeObj, tau, depotID, nodeIDs, asymFlag, **kwargs) -> "Rout
     # Christofides Algorithm, guaranteed <= 1.5 * optimal
     elif (cons == 'Christofides'):
         if (not asymFlag):
-            cfSeq = _consTSPChristofides(nodes, depotID, tau)
+            cfSeq = _solvTSPHeuConsChristofides(nodes, depotID, tau)
             for i in cfSeq:
                 seqObj.append(nodeObj[i])
         else:
@@ -1199,11 +1058,11 @@ def _consTSP(nodes, nodeObj, tau, depotID, nodeIDs, asymFlag, **kwargs) -> "Rout
    # Cycle Cover Algorithm, specially designed for Asymmetric TSP
     elif (cons == 'CycleCover'):
         raise VrpSolverNotAvailableError("ERROR: 'CycleCover' algorithm is not available yet, please stay tune")
-        seqObj = _consTSPCycleCover(depotID, nodeIDs, tau)
+        seqObj = _solvTSPHeuConsCycleCover(depotID, nodeIDs, tau)
 
     # Randomly create a sequence
     elif (cons == 'Random'):
-        rndSeq = _consTSPRandom(depotID, nodeIDs)
+        rndSeq = _solvTSPHeuConsRandom(depotID, nodeIDs)
         for i in rndSeq:
             seqObj.append(nodeObj[i])
         seqObj.rehead(depotID)
@@ -1215,17 +1074,17 @@ def _consTSP(nodes, nodeObj, tau, depotID, nodeIDs, asymFlag, **kwargs) -> "Rout
     seqObj.rehead(depotID)
     return seqObj
 
-def _popTSP(popSize, nodes, nodeObj, tau, depotID, nodeIDs, asymFlag, **kwargs) -> list["Route"]:
+def _solveTSPHeuPop(popSize, nodes, nodeObj, tau, depotID, nodeIDs, asymFlag, **kwargs) -> list["Route"]:
     pop = []
     if (kwargs['cons'] in ['Random', 'RandomInsertion']):    
         for i in range(popSize):
-            seqObj = _consTSP(nodes, nodeObj, tau, depotID, nodeIDs, asymFlag, **kwargs)
+            seqObj = _solvTSPHeuCons(nodes, nodeObj, tau, depotID, nodeIDs, asymFlag, **kwargs)
             pop.append(seqObj.clone())
     else:
         raise UnsupportedInputError("ERROR: Population based metaheuristic only supports 'Random' or 'RandomInsertion' as construction heuristic.")
     return pop
 
-def _impvTSP(seqObj, **kwargs):
+def _solveTSPHeuImpv(seqObj, **kwargs):
     # NOTE: For the local improvement, try every local search operator provided in a greedy way
     canImpvFlag = True
     while (canImpvFlag):
@@ -1243,9 +1102,9 @@ def _impvTSP(seqObj, **kwargs):
         'seq': seq
     }
 
-def _metaLocalSearchTSP(seqObj, **kwargs):
+def _solveMetaLocalSearch(seqObj, **kwargs):
     if (kwargs['meta'] == 'SimulatedAnnealing'):
-        seqObj = _metaTSPSimulatedAnnealing(
+        seqObj = _solveTSPMetaSimulatedAnnealing(
             seqObj = seqObj, 
             initTemp = kwargs['initTemp'], 
             lengTemp = kwargs['lengTemp'], 
@@ -1253,7 +1112,7 @@ def _metaLocalSearchTSP(seqObj, **kwargs):
             coolRate = kwargs['coolRate'], 
             stop = kwargs['stop'])
     elif (kwargs['meta'] == 'TabuSearch'):
-        seqObj = _metaTSPTabuSearch(
+        seqObj = _solveTSPMetaTabuSearch(
             seqObj = seqObj,
             maxTabuListLength = kwargs['maxTabuListLength'],
             neighRatio = kwargs['neighRatio'],
@@ -1270,9 +1129,9 @@ def _metaLocalSearchTSP(seqObj, **kwargs):
         'seq': seq
     }
 
-def _metaPopSearchTSP(popObj, nodeObj, depotID, tau, asymFlag, **kwargs):
+def _solveTSPMetaPopSearch(popObj, nodeObj, depotID, tau, asymFlag, **kwargs):
     if (kwargs['meta'] == 'GeneticAlgorithm'):
-        seqObj = _metaTSPGeneticAlgorithm(
+        seqObj = _solveTSPMetaGeneticAlgorithm(
             popObj = popObj, 
             nodeObj = nodeObj, 
             depotID = depotID, 
@@ -1291,7 +1150,7 @@ def _metaPopSearchTSP(popObj, nodeObj, depotID, tau, asymFlag, **kwargs):
         'seq': seq
     }
 
-def _consTSPkNearestNeighbor(depotID, nodeIDs, tau, k = 1):
+def _solvTSPHeuConskNearestNeighbor(depotID, nodeIDs, tau, k = 1):
     # Initialize ----------------------------------------------------------
     seq = [depotID]
     remain = [nodeIDs[i] for i in range(len(nodeIDs)) if nodeIDs[i] != depotID]
@@ -1317,7 +1176,7 @@ def _consTSPkNearestNeighbor(depotID, nodeIDs, tau, k = 1):
         remain.remove(nextNodeID)
     return seq
 
-def _consTSPFarthestNeighbor(depotID, nodeIDs, tau):
+def _solvTSPHeuConsFarthestNeighbor(depotID, nodeIDs, tau):
     # Initialize ----------------------------------------------------------
     seq = [depotID]
     remain = [nodeIDs[i] for i in range(len(nodeIDs)) if nodeIDs[i] != depotID]
@@ -1338,7 +1197,7 @@ def _consTSPFarthestNeighbor(depotID, nodeIDs, tau):
         remain.remove(nextID)
     return seq
 
-def _consTSPSweep(nodes, depotID, nodeIDs, ptFieldName):
+def _solvTSPHeuConsSweep(nodes, depotID, nodeIDs, ptFieldName):
     # Sweep seq -----------------------------------------------------------
     sweep = nodeSeqBySweeping(
         nodes = nodes, 
@@ -1346,13 +1205,13 @@ def _consTSPSweep(nodes, depotID, nodeIDs, ptFieldName):
         refPt = nodes[depotID][ptFieldName])
     return sweep
 
-def _consTSPRandom(depotID, nodeIDs):
+def _solvTSPHeuConsRandom(depotID, nodeIDs):
     # Get random seq ------------------------------------------------------
     seq = [i for i in nodeIDs]
     random.shuffle(seq)
     return seq
 
-def _consTSPInsertion(nodeIDs, initSeq, nodeObj, tau, asymFlag, randomInsertionFlag):
+def _solvTSPHeuConsInsertion(nodeIDs, initSeq, nodeObj, tau, asymFlag, randomInsertionFlag):
     # Initialize ----------------------------------------------------------
     route = Route(tau, asymFlag)
 
@@ -1368,7 +1227,7 @@ def _consTSPInsertion(nodeIDs, initSeq, nodeObj, tau, asymFlag, randomInsertionF
 
     return route
     
-def _consTSPChristofides(nodes, depotID, tau):
+def _solvTSPHeuConsChristofides(nodes, depotID, tau):
     G = nx.Graph()
     subG = nx.Graph()
     for (i, j) in tau:
@@ -1407,10 +1266,10 @@ def _consTSPChristofides(nodes, depotID, tau):
 
     return seq
 
-def _consTSPCycleCover(depotID, tau):
+def _solvTSPHeuConsCycleCover(depotID, tau):
     raise VrpSolverNotAvailableError("ERROR: vrpSolver has not implement this kwargs yet")
 
-def _metaTSPTabuSearch(seqObj, maxTabuListLength, neighRatio, neighNum, stop) -> dict:
+def _solveTSPMetaTabuSearch(seqObj, maxTabuListLength, neighRatio, neighNum, stop) -> dict:
 
     # Subroutines to generate neighborhoods ===================================
     # Swap i and i + 1
@@ -1555,7 +1414,7 @@ def _metaTSPTabuSearch(seqObj, maxTabuListLength, neighRatio, neighNum, stop) ->
 
     return seqObj
 
-def _metaTSPSimulatedAnnealing(seqObj, initTemp, lengTemp, neighRatio, coolRate, stop) -> dict:
+def _solveTSPMetaSimulatedAnnealing(seqObj, initTemp, lengTemp, neighRatio, coolRate, stop) -> dict:
 
     # Subroutines to generate neighborhoods ===================================
     # Swap i and i + 1
@@ -1731,7 +1590,7 @@ def _metaTSPSimulatedAnnealing(seqObj, initTemp, lengTemp, neighRatio, coolRate,
         T = coolRate * T
     return seqObj
 
-def _metaTSPGeneticAlgorithm(popObj, nodeObj, depotID, tau, asymFlag, neighRatio, stop) -> dict:
+def _solveTSPMetaGeneticAlgorithm(popObj, nodeObj, depotID, tau, asymFlag, neighRatio, stop) -> dict:
 
     # Subroutines to generate neighborhoods ===================================
     # Swap i and i + 1

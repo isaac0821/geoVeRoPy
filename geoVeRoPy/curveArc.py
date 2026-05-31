@@ -280,7 +280,7 @@ class CurveArc(object):
 
         return
 
-def _shapelyArc2CurveArc(curveArc, shapelyArc):
+def shapelyArc2CurveArc(curveArc, shapelyArc):
     if (shapelyArc.is_empty):
         # print(ls, cc)
         return None
@@ -382,7 +382,7 @@ def intCurveArc2Circle(curveArc: CurveArc, circle: dict) -> CurveArc:
     cc = shapely.Polygon(circleByCenterXY(center = circle['center'], radius = circle['radius'], lod = 60))
     shapelyArc = shapely.intersection(ls, cc)
 
-    curve = _shapelyArc2CurveArc(curveArc, shapelyArc)
+    curve = shapelyArc2CurveArc(curveArc, shapelyArc)
     return curve
 
 def minusCurveArc2Circle(curveArc: CurveArc, circle: dict) -> list[CurveArc]:
@@ -446,7 +446,7 @@ def minusCurveArc2Circle(curveArc: CurveArc, circle: dict) -> list[CurveArc]:
 
     curves = []
     for rw in rws:
-        cuv = _shapelyArc2CurveArc(curveArc, rw)
+        cuv = shapelyArc2CurveArc(curveArc, rw)
         if (cuv != None):
             curves.append(cuv)
 
