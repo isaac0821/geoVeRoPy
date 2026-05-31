@@ -482,6 +482,84 @@ def rndNodes(N: int|None = None, nodeIDs: list[int|str] = [], nodes: dict|None =
 
     return nodes
 
+def rndNodeFeature(nodes: dict, nodeIDs: list[int|str]|str = 'All', feature = 'Moving', seed = None, **kwargs) -> dict:
+
+    # Sanity check ============================================================
+    if (type(nodeIDs) is not list):
+        if (nodeIDs == 'All'):
+            nodeIDs = [i for i in nodes]
+        else:
+            for i in nodeIDs:
+                if (i not in nodes):
+                    raise OutOfRangeError("ERROR: Node %s is not in `nodes`." % i)
+    if (seed != None):
+        random.seed(seed)
+
+    # Field names =============================================================
+    ptFieldName = 'pt' if 'ptFieldName' not in kwargs else kwargs['ptFieldName']
+
+    # Add neighborhood by 'shape' =============================================
+    for n in nodeIDs:
+        if ('feature' not in nodes[n]):
+            nodes[n]['feature'] = feature
+        elif (type(nodes[n]['feature']) == list):
+            nodes[n]['feature'].append(feature)
+        else:
+            nodes[n]['feature'] = [nodes[n]['feature'], feature]
+
+    if (feature == 'Moving'):
+        if ('dirRange' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'dirRange'.")
+        dirRange = kwargs['dirRange']
+        if ('spdRange' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'spdRange'.")
+        spdRange = kwargs['spdRange']
+
+        for n in nodeIDs:
+            direction = random.uniform(dirRange[0], dirRange[1])
+            speed = random.uniform(spdRange[0], spdRange[1])
+            (vx, vy) = ptInDistXY(
+                pt = (0, 0),
+                direction = direction,
+                dist = speed)
+            nodes[n]['direction'] = direction
+            nodes[n]['speed'] = speed
+            nodes[n]['vx'] = vx
+            nodes[n]['vy'] = vy
+
+    elif (feature == 'Floating'):
+        if ('maxSpeed' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'maxSpeed'.")
+        if ('maxRadius' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'maxRadius'.")
+
+        for n in nodeIDs:
+            maxSpeed = random.uniform(0, kwargs['maxSpeed'])
+            maxRadius = random.uniform(0, kwargs['maxRadius'])
+            nodes[n]['maxSpeed'] = maxSpeed
+            nodes[n]['maxRadius'] = maxRadius
+
+    elif (feature == 'TimeWindow'):
+        if ('earliest' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'earliest'.")
+        earliest = kwargs['earliest']
+        if ('latest' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'latest'.")
+        latest = kwargs['latest']
+
+        for n in nodeIDs:
+            t1 = random.uniform(earliest, latest)
+            t2 = random.uniform(earliest, latest)
+            t1, t2 = min(t1, t2), max(t1, t2)
+
+            nodes[n]['timeWindow'] = [t1, t2]
+
+    else:
+        raise UnsupportedInputError("ERROR: Unsupported option for `feature`.")
+
+    return nodes
+    
+
 def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str = 'Circle', seed = None, **kwargs) -> dict:
 
     """Given a node dictionary, create neighborhood to selected nodes

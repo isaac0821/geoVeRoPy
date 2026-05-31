@@ -3351,14 +3351,14 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
     return W
 
 # Time seq related ============================================================
-def snapInTimedSeq(timedSeq: list[tuple[pt, float]], t: float) -> dict:
+def snapInTimedPt(timedPt: list[tuple[pt, float]], t: float) -> dict:
     """
-    Given a timedSeq, return the location, speed, and trajectory at time t
+    Given a timedPt, return the location, speed, and trajectory at time t
 
     Parameters
     ----------
 
-    timedSeq: timedSeq, required
+    timedPt: timedPt, required
         The timed sequence
     t: float, required
         The snapshot timestamp
@@ -3374,12 +3374,12 @@ def snapInTimedSeq(timedSeq: list[tuple[pt, float]], t: float) -> dict:
 
     """
 
-    for i in range(len(timedSeq) - 1):
-        if (timedSeq[i][1] > timedSeq[i + 1][1]):
-            raise UnsupportedInputError("ERROR: `timedSeq` should be a non-descending sequence.")
-        if (timedSeq[i][1] == timedSeq[i + 1][1] 
-            and (abs(timedSeq[i][0][0] - timedSeq[i + 1][0][0]) >= ERRTOL['distPt2Pt']
-                or abs(timedSeq[i][0][1] - timedSeq[i + 1][0][1]) >= ERRTOL['distPt2Pt'])):
+    for i in range(len(timedPt) - 1):
+        if (timedPt[i][1] > timedPt[i + 1][1]):
+            raise UnsupportedInputError("ERROR: `timedPt` should be a non-descending sequence.")
+        if (timedPt[i][1] == timedPt[i + 1][1] 
+            and (abs(timedPt[i][0][0] - timedPt[i + 1][0][0]) >= ERRTOL['distPt2Pt']
+                or abs(timedPt[i][0][1] - timedPt[i + 1][0][1]) >= ERRTOL['distPt2Pt'])):
             raise UnsupportedInputError("ERROR: an object cannot be two places at the same time.")
 
     curPtX = None
@@ -3387,33 +3387,33 @@ def snapInTimedSeq(timedSeq: list[tuple[pt, float]], t: float) -> dict:
     curSpeed = None
     curTrajectory = None
 
-    if (t <= timedSeq[0][1]):
+    if (t <= timedPt[0][1]):
         return {
-            'pt': timedSeq[0][0],
+            'pt': timedPt[0][0],
             'speed': 0,
             'trajectory': None
         }
-    if (t >= timedSeq[-1][1]):
+    if (t >= timedPt[-1][1]):
         return {
-            'pt': timedSeq[-1][0],
+            'pt': timedPt[-1][0],
             'speed': 0,
             'trajectory': None
         }
 
-    for i in range(len(timedSeq) - 1):
-        if (timedSeq[i][1] <= t < timedSeq[i + 1][1]):
-            dist = distEuclideanXY(timedSeq[i][0], timedSeq[i + 1][0])
+    for i in range(len(timedPt) - 1):
+        if (timedPt[i][1] <= t < timedPt[i + 1][1]):
+            dist = distEuclideanXY(timedPt[i][0], timedPt[i + 1][0])
             if (dist > 0):
-                dt = (t - timedSeq[i][1]) / (timedSeq[i + 1][1] - timedSeq[i][1])                
-                curPtX = timedSeq[i][0][0] + (timedSeq[i + 1][0][0] - timedSeq[i][0][0]) * dt
-                curPtY = timedSeq[i][0][1] + (timedSeq[i + 1][0][1] - timedSeq[i][0][1]) * dt
-                curSpeed = dist / (timedSeq[i + 1][1] - timedSeq[i][1])
-                trajX = (timedSeq[i + 1][0][0] - timedSeq[i][0][0]) / dist
-                trajY = (timedSeq[i + 1][0][1] - timedSeq[i][0][1]) / dist
+                dt = (t - timedPt[i][1]) / (timedPt[i + 1][1] - timedPt[i][1])                
+                curPtX = timedPt[i][0][0] + (timedPt[i + 1][0][0] - timedPt[i][0][0]) * dt
+                curPtY = timedPt[i][0][1] + (timedPt[i + 1][0][1] - timedPt[i][0][1]) * dt
+                curSpeed = dist / (timedPt[i + 1][1] - timedPt[i][1])
+                trajX = (timedPt[i + 1][0][0] - timedPt[i][0][0]) / dist
+                trajY = (timedPt[i + 1][0][1] - timedPt[i][0][1]) / dist
                 curTrajectory = [(curPtX, curPtY), (curPtX + trajX, curPtY + trajY)]
             else:
-                curPtX = timedSeq[i][0][0]
-                curPtY = timedSeq[i][0][1]
+                curPtX = timedPt[i][0][0]
+                curPtY = timedPt[i][0][1]
                 curSpeed = 0
                 curTrajectory = None
             break
@@ -3423,14 +3423,45 @@ def snapInTimedSeq(timedSeq: list[tuple[pt, float]], t: float) -> dict:
         'trajectory': curTrajectory
     }
 
-def traceInTimedSeq(timedSeq: list[tuple[pt, float]], ts: float, te: float) -> list[pt]:
+def snapInTimedPoly(timedPoly, t) -> list:
+    if (t <= timedPoly[0][1]):
+        return {
+            'poly': timedPoly[0][0],
+        }
+    if (t >= timedPoly[-1][1]):
+        return {
+            'poly': timedPoly[-1][0],
+        }
+
+    poly = []
+    for i in range(len(timedPoly) - 1):
+        if (timedPoly[i][1] <= t < timedPoly[i + 1][1]):
+            for k in range(len(timedPoly[i][0])):
+                pt = []
+                dist = distEuclideanXY(timedPoly[i][0][k], timedPoly[i + 1][0][k])
+                if (dist > 0):
+                    dt = (t - timedPoly[i][1]) / (timedPt[i + 1][1] - timedPoly[i][1])
+                    curPtX = timedPoly[i][0][k][0] + (timedPt[i + 1][0][k][0] - timedPoly[i][0][k][0]) * dt
+                    curPtY = timedPoly[i][0][k][1] + (timedPt[i + 1][0][k][1] - timedPoly[i][0][k][1]) * dt
+                    pt = [curPtX, curPtY]
+                else:
+                    curPtX = timedPoly[i][0][k][0]
+                    curPtY = timedPoly[i][0][k][1]
+                    pt = [curPtX, curPtY]
+                poly.append(pt)
+            break
+    return {
+        'poly': poly
+    }
+
+def traceInTimedPt(timedPt: list[tuple[pt, float]], ts: float, te: float) -> list[pt]:
     """
-    Given a timedSeq, a start time and an end time, returns the trace between start time and end time.
+    Given a timedPt, a start time and an end time, returns the trace between start time and end time.
 
     Parameters
     ----------
 
-    timedSeq: timedSeq, required
+    timedPt: timedPt, required
         The timed sequence
     ts: float, required
         The start time
@@ -3440,27 +3471,27 @@ def traceInTimedSeq(timedSeq: list[tuple[pt, float]], ts: float, te: float) -> l
     Return
     ------
     list
-        The line segment sequence between start time and end time in the timedSeq
+        The line segment sequence between start time and end time in the timedPt
 
     """
 
-    for i in range(len(timedSeq) - 1):
-        if (timedSeq[i][1] > timedSeq[i + 1][1]):
-            raise UnsupportedInputError("ERROR: `timedSeq` should be a non-descending sequence.")
-        if (timedSeq[i][1] == timedSeq[i + 1][1] 
-            and (abs(timedSeq[i][0][0] - timedSeq[i + 1][0][0]) >= ERRTOL['distPt2Pt']
-                or abs(timedSeq[i][0][1] - timedSeq[i + 1][0][1]) >= ERRTOL['distPt2Pt'])):
+    for i in range(len(timedPt) - 1):
+        if (timedPt[i][1] > timedPt[i + 1][1]):
+            raise UnsupportedInputError("ERROR: `timedPt` should be a non-descending sequence.")
+        if (timedPt[i][1] == timedPt[i + 1][1] 
+            and (abs(timedPt[i][0][0] - timedPt[i + 1][0][0]) >= ERRTOL['distPt2Pt']
+                or abs(timedPt[i][0][1] - timedPt[i + 1][0][1]) >= ERRTOL['distPt2Pt'])):
             raise UnsupportedInputError("ERROR: an object cannot be two places at the same time.")
     
     trace = []
 
     if (ts >= te):
         raise UnsupportedInputError("ERROR: `ts` should be earlier than `te`")
-    if (ts <= timedSeq[0][1] and te >= timedSeq[-1][1]):
-        return [timedSeq[i][0] for i in range(len(timedSeq))]
-    if (ts >= timedSeq[-1][1]):
+    if (ts <= timedPt[0][1] and te >= timedPt[-1][1]):
+        return [timedPt[i][0] for i in range(len(timedPt))]
+    if (ts >= timedPt[-1][1]):
         return []
-    if (te <= timedSeq[0][1]):
+    if (te <= timedPt[0][1]):
         return []
 
     tsIndex = -1
@@ -3468,55 +3499,55 @@ def traceInTimedSeq(timedSeq: list[tuple[pt, float]], ts: float, te: float) -> l
     tsPt = []
     tePt = []
 
-    if (ts <= timedSeq[0][1]):
+    if (ts <= timedPt[0][1]):
         tsIndex = 0
-        ts = timedSeq[0][1]
-        tsPt = timedSeq[0][0]
-    if (te >= timedSeq[-1][1]):
-        teIndex = len(timedSeq) - 1
-        te = timedSeq[-1][1]
-        tePt = timedSeq[-1][0]
+        ts = timedPt[0][1]
+        tsPt = timedPt[0][0]
+    if (te >= timedPt[-1][1]):
+        teIndex = len(timedPt) - 1
+        te = timedPt[-1][1]
+        tePt = timedPt[-1][0]
 
-    for i in range(len(timedSeq) - 1):
-        if (timedSeq[i][1] <= ts < timedSeq[i + 1][1]):
+    for i in range(len(timedPt) - 1):
+        if (timedPt[i][1] <= ts < timedPt[i + 1][1]):
             tsIndex = i
-            dTs = (ts - timedSeq[i][1]) / (timedSeq[i + 1][1] - timedSeq[i][1])
-            tsX = timedSeq[i][0][0] + (timedSeq[i + 1][0][0] - timedSeq[i][0][0]) * dTs
-            tsY = timedSeq[i][0][1] + (timedSeq[i + 1][0][1] - timedSeq[i][0][1]) * dTs
+            dTs = (ts - timedPt[i][1]) / (timedPt[i + 1][1] - timedPt[i][1])
+            tsX = timedPt[i][0][0] + (timedPt[i + 1][0][0] - timedPt[i][0][0]) * dTs
+            tsY = timedPt[i][0][1] + (timedPt[i + 1][0][1] - timedPt[i][0][1]) * dTs
             tsPt = [tsX, tsY]
-            for j in range(tsIndex, len(timedSeq) - 1):
-                if (timedSeq[j][1] <= te < timedSeq[j + 1][1]):
+            for j in range(tsIndex, len(timedPt) - 1):
+                if (timedPt[j][1] <= te < timedPt[j + 1][1]):
                     teIndex = j
-                    dTe = (te - timedSeq[j][1]) / (timedSeq[j + 1][1] - timedSeq[j][1])
-                    teX = timedSeq[j][0][0] + (timedSeq[j + 1][0][0] - timedSeq[j][0][0]) * dTe
-                    teY = timedSeq[j][0][1] + (timedSeq[j + 1][0][1] - timedSeq[j][0][1]) * dTe
+                    dTe = (te - timedPt[j][1]) / (timedPt[j + 1][1] - timedPt[j][1])
+                    teX = timedPt[j][0][0] + (timedPt[j + 1][0][0] - timedPt[j][0][0]) * dTe
+                    teY = timedPt[j][0][1] + (timedPt[j + 1][0][1] - timedPt[j][0][1]) * dTe
                     tePt = [teX, teY]
 
     if (tsIndex == teIndex):
         trace = [tsPt, tePt]
     elif (tsIndex + 1 == teIndex):
         trace.append(tsPt)
-        trace.append(timedSeq[tsIndex + 1][0])
+        trace.append(timedPt[tsIndex + 1][0])
         trace.append(tePt)
     else:
         trace.append(tsPt)
         for i in range(tsIndex + 1, teIndex + 1):
-            trace.append(timedSeq[i][0])
+            trace.append(timedPt[i][0])
         trace.append(tePt)
 
     return trace
 
-def seq2TimedSeq(seq: list[pt], vehSpeed: float, timeEachStop: float = 0, startTime: float = 0):
-    timedSeq = []
+def seq2TimedPt(seq: list[pt], vehSpeed: float, timeEachStop: float = 0, startTime: float = 0):
+    timedPt = []
     accTime = startTime
     for i in range(len(seq) - 1):
-        timedSeq.append((seq[i], accTime))
+        timedPt.append((seq[i], accTime))
         if (timeEachStop > 0):
             accTime += timeEachStop
-            timedSeq.append((seq[i], accTime))
+            timedPt.append((seq[i], accTime))
         accTime += (distEuclideanXY(seq[i], seq[i + 1])) / vehSpeed
-    timedSeq.append((seq[-1], accTime))
-    return timedSeq
+    timedPt.append((seq[-1], accTime))
+    return timedPt
 
 # Triangulation ===============================================================
 def polyTriangulation(poly: poly):

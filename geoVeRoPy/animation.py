@@ -11,7 +11,7 @@ from .common import *
 from .geometry import *
 from .gridSurface import *
 
-def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: dict|None = None, polygons: dict|None = None):
+def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: dict|None = None, polygons: dict|None = None, **kwargs):
     """Given nodes, vehicles, static polygons, and dynamic polygons, create animation
 
     Parameters
@@ -34,8 +34,7 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
         A dictionary of vehicle. 
             >>> vehicles[vID] = {
             ...     'vehicle': vehicleName,
-            ...     'seq': [], # A sequence of visiting locations
-            ...     'timeStamp': [], # A sequence of time stamps when visiting each location
+            ...     'timedPt': [], 
             ...     'note': [], # Note to show during each leg of sequence
             ...     'color': vehColor,
             ...     'pathColor': pathColor,
