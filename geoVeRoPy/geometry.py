@@ -40,6 +40,15 @@ def is2PtsSame(pt1: pt, pt2: pt) -> bool:
             return False
     return True
 
+def interpolatePt(pt1: pt, pt2: pt, ratio: float) -> pt:
+    """
+    Return the point at a given ratio from `pt1` to `pt2`.
+    """
+    if (len(pt1) != len(pt2)):
+        raise UnsupportedInputError("ERROR: Points should have the same dimension.")
+    ratio = max(0, min(1, ratio))
+    return tuple(pt1[k] + ratio * (pt2[k] - pt1[k]) for k in range(len(pt1)))
+
 def is3PtsClockWise(pt1: pt, pt2: pt, pt3: pt) -> bool | None:
     """
     Are three given pts in a clock-wise order, None as they are collinear

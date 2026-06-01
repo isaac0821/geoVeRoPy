@@ -1,6 +1,9 @@
-import requests
 import time
 import random
+try:
+    import requests
+except ImportError:
+    requests = None
 
 from .common import *
 from .geometry import *
@@ -157,6 +160,9 @@ def _matrixBaidu(nodes, nodeIDs, API, ptFieldName = 'pt'):
     return m
 
 def _matrixBaiduBlock(nodes: dict, oriIDs: list, desIDs: list, API, ptFieldName = 'pt'):
+    if (requests == None):
+        raise ImportError("ERROR: Cannot find requests")
+
     oriStr = ""
     for i in range(len(oriIDs)):
         oriStr += str(nodes[oriIDs[i]][ptFieldName][0]) + "," + str(nodes[oriIDs[i]][ptFieldName][1]) + "|"

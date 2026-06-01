@@ -558,7 +558,6 @@ def rndNodeFeature(nodes: dict, nodeIDs: list[int|str]|str = 'All', feature = 'M
         raise UnsupportedInputError("ERROR: Unsupported option for `feature`.")
 
     return nodes
-    
 
 def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str = 'Circle', seed = None, **kwargs) -> dict:
 

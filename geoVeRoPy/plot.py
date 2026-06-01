@@ -1467,7 +1467,7 @@ def plotTriGridSurface(trig: TriGridSurface, **kwargs):
     
     # Plot each triangle using the plotTriangle3D function
     for triangle3D in trig.tris:
-        if not isinstance(triangle3D, list) or len(triangle3D) != 3:
+        if (not isinstance(triangle3D, list) or len(triangle3D) != 3):
             continue  # Skip invalid triangles
             
         # Create a copy of kwargs and update with triangle-specific parameters

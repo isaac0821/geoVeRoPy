@@ -54,68 +54,106 @@ class TriGridSurface(object):
         return
 
     def buildFacets(self, timedPoly):
-        poly3D = []
-        for i in range(len(timedPoly)):
-            poly3D.append([(pt[0], pt[1], timedPoly[i][1]) for pt in timedPoly[i][0]])
+        for m in range(len(timedPoly) - 1):
+            lowerPoly = [list(pt) for pt in timedPoly[m][0]]
+            upperPoly = [list(pt) for pt in timedPoly[m + 1][0]]
+            if (len(lowerPoly) < 3 or len(upperPoly) < 3):
+                continue
 
-        # 先构造第一圈
-        self.addFacet(
-            key = (0, 0),
-            adjTo = [],
-            tri = [poly3D[0][0], poly3D[0][1], poly3D[1][0]])
-        self.addFacet(
-            key = (0, 1),
-            adjTo = [(0, 0)],
-            tri = [poly3D[1][0], poly3D[1][1], poly3D[0][1]])
+            lowerArea = 0
+            for i in range(len(lowerPoly)):
+                lowerArea += lowerPoly[i][0] * lowerPoly[(i + 1) % len(lowerPoly)][1] - lowerPoly[(i + 1) % len(lowerPoly)][0] * lowerPoly[i][1]
+            upperArea = 0
+            for i in range(len(upperPoly)):
+                upperArea += upperPoly[i][0] * upperPoly[(i + 1) % len(upperPoly)][1] - upperPoly[(i + 1) % len(upperPoly)][0] * upperPoly[i][1]
+            if (lowerArea * upperArea < 0):
+                upperPoly.reverse()
 
-        for k in range(1, len(poly3D[0]) - 1):
-            self.addFacet(
-                key = (0, 2 * k),
-                adjTo = [(0, 2 * k - 1)],
-                tri = [poly3D[0][k], poly3D[0][k + 1], poly3D[1][k]])
-            self.addFacet(
-                key = (0, 2 * k + 1),
-                adjTo = [(0, 2 * k)],
-                tri = [poly3D[1][k], poly3D[1][k + 1], poly3D[0][k + 1]])
+            nearestID = 0
+            nearestDist = float('inf')
+            for i in range(len(upperPoly)):
+                d = distEuclideanXY(lowerPoly[0], upperPoly[i])
+                if (d < nearestDist):
+                    nearestDist = d
+                    nearestID = i
+            upperPoly = [upperPoly[(nearestID + i) % len(upperPoly)] for i in range(len(upperPoly))]
 
-        self.addFacet(
-            key = (0, 2 * (len(poly3D[0]) - 1)),
-            adjTo = [(0, 2 * (len(poly3D[0]) - 1) - 1)],
-            tri = [poly3D[0][(len(poly3D[0]) - 1)], poly3D[0][0], poly3D[1][(len(poly3D[0]) - 1)]])
-        self.addFacet(
-            key = (0, 2 * len(poly3D[0]) - 1),
-            adjTo = [(0, 2 * (len(poly3D[0]) - 1)), (0, 0)],
-            tri = [poly3D[1][(len(poly3D[0]) - 1)], poly3D[1][0], poly3D[0][0]])
+            lowerParams = [0]
+            lowerPerim = 0
+            for i in range(len(lowerPoly)):
+                lowerPerim += distEuclideanXY(lowerPoly[i], lowerPoly[(i + 1) % len(lowerPoly)])
+            upperParams = [0]
+            upperPerim = 0
+            for i in range(len(upperPoly)):
+                upperPerim += distEuclideanXY(upperPoly[i], upperPoly[(i + 1) % len(upperPoly)])
+            if (lowerPerim <= ERRTOL['distPt2Pt'] or upperPerim <= ERRTOL['distPt2Pt']):
+                continue
 
-        # 从第二圈开始垒
-        for m in range(1, len(poly3D) - 1):
-            self.addFacet(
-                key = (m, 0),
-                adjTo = [(m - 1, 1)],
-                tri = [poly3D[m][0], poly3D[m][1], poly3D[m + 1][0]])
-            self.addFacet(
-                key = (m, 1),
-                adjTo = [(m, 0)],
-                tri = [poly3D[m + 1][0], poly3D[m + 1][1], poly3D[m][1]])
+            accDist = 0
+            for i in range(1, len(lowerPoly)):
+                accDist += distEuclideanXY(lowerPoly[i - 1], lowerPoly[i])
+                lowerParams.append(accDist / lowerPerim)
+            accDist = 0
+            for i in range(1, len(upperPoly)):
+                accDist += distEuclideanXY(upperPoly[i - 1], upperPoly[i])
+                upperParams.append(accDist / upperPerim)
 
-            for k in range(1, len(poly3D[m]) - 1):
-                self.addFacet(
-                    key = (m, 2 * k),
-                    adjTo = [(m, 2 * k - 1), (m - 1, 2 * k + 1)],
-                    tri = [poly3D[m][k], poly3D[m][k + 1], poly3D[m + 1][k]])
-                self.addFacet(
-                    key = (m, 2 * k + 1),
-                    adjTo = [(m, 2 * k)],
-                    tri = [poly3D[m + 1][k], poly3D[m + 1][k + 1], poly3D[m][k + 1]])
+            params = []
+            for tau in lowerParams + upperParams:
+                addFlag = True
+                for existTau in params:
+                    if (abs(tau - existTau) <= ERRTOL['vertical']):
+                        addFlag = False
+                        break
+                if (addFlag and tau < 1 - ERRTOL['vertical']):
+                    params.append(tau)
+            params = sorted(params)
+            if (len(params) < 3):
+                continue
 
-            self.addFacet(
-                key = (m, 2 * (len(poly3D[m]) - 1)),
-                adjTo = [(m, 2 * (len(poly3D[m]) - 1) - 1), (m - 1, 2 * (len(poly3D[m]) - 1) + 1)],
-                tri = [poly3D[m][(len(poly3D[m]) - 1)], poly3D[m][0], poly3D[m + 1][(len(poly3D[m]) - 1)]])
-            self.addFacet(
-                key = (m, 2 * len(poly3D[m]) - 1),
-                adjTo = [(m, 2 * (len(poly3D[m]) - 1)), (m, 0)],
-                tri = [poly3D[m + 1][(len(poly3D[m]) - 1)], poly3D[m + 1][0], poly3D[m][0]])
+            lowerSync = []
+            upperSync = []
+            for tau in params:
+                for poly, polyParams, sync in [(lowerPoly, lowerParams, lowerSync), (upperPoly, upperParams, upperSync)]:
+                    for i in range(len(poly)):
+                        tau0 = polyParams[i]
+                        tau1 = polyParams[i + 1] if i < len(poly) - 1 else 1
+                        if (tau0 - ERRTOL['vertical'] <= tau <= tau1 + ERRTOL['vertical']):
+                            ratio = 0 if abs(tau1 - tau0) <= ERRTOL['vertical'] else (tau - tau0) / (tau1 - tau0)
+                            sync.append([
+                                poly[i][0] + (poly[(i + 1) % len(poly)][0] - poly[i][0]) * ratio,
+                                poly[i][1] + (poly[(i + 1) % len(poly)][1] - poly[i][1]) * ratio])
+                            break
+
+            ringIDs = []
+            for i in range(len(params)):
+                j = (i + 1) % len(params)
+                triList = [
+                    [(lowerSync[i][0], lowerSync[i][1], timedPoly[m][1]), (lowerSync[j][0], lowerSync[j][1], timedPoly[m][1]), (upperSync[i][0], upperSync[i][1], timedPoly[m + 1][1])],
+                    [(upperSync[i][0], upperSync[i][1], timedPoly[m + 1][1]), (upperSync[j][0], upperSync[j][1], timedPoly[m + 1][1]), (lowerSync[j][0], lowerSync[j][1], timedPoly[m][1])]]
+                for tri in triList:
+                    if (is2PtsSame(tri[0], tri[1]) or is2PtsSame(tri[0], tri[2]) or is2PtsSame(tri[1], tri[2])):
+                        continue
+                    key = (m, len(ringIDs))
+                    adjTo = []
+                    if (len(ringIDs) > 0):
+                        adjTo.append(ringIDs[-1])
+                    if (i == len(params) - 1 and (m, 0) in self.triFacets):
+                        adjTo.append((m, 0))
+                    if (m > 0):
+                        for prevID in [k for k in self.triFacets if k[0] == m - 1]:
+                            sameCnt = 0
+                            for a in self.triFacets[prevID]:
+                                for b in tri:
+                                    if (is2PtsSame(a, b)):
+                                        sameCnt += 1
+                            if (sameCnt == 1 or sameCnt == 2):
+                                adjTo.append(prevID)
+                    self.addFacet(
+                        key = key,
+                        adjTo = adjTo,
+                        tri = tri)
+                    ringIDs.append(key)
 
         return
 
@@ -152,6 +190,342 @@ class TriGridSurface(object):
 
             self.surfaceGraph.add_edge(nei, key)
 
+    def truncateByTime(self, t):
+        # Truncate from time t.
+        if (t < self.timedPoly[0][1] - ERRTOL['vertical'] or t > self.timedPoly[-1][1] + ERRTOL['vertical']):
+            raise OutOfRangeError("ERROR: t is out of range")
+
+        oldTimedPoly = self.timedPoly
+        newTimedPoly = []
+        cutLayerID = None
+        cutInBtwFlag = False
+        for i in range(len(self.timedPoly)):
+            if (self.timedPoly[i][1] < t - ERRTOL['vertical']):
+                newTimedPoly.append(self.timedPoly[i])
+            elif (abs(self.timedPoly[i][1] - t) <= ERRTOL['vertical']):
+                newTimedPoly.append(self.timedPoly[i])
+                cutLayerID = i
+                break
+            else:
+                newTimedPoly.append([self.buildZProfile(t), t])
+                cutLayerID = i - 1
+                cutInBtwFlag = True
+                break
+
+        removeFacetIDs = []
+        for facetID in self.triFacets:
+            zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
+            if (zMax > t + ERRTOL['vertical']):
+                removeFacetIDs.append(facetID)
+
+        for facetID in removeFacetIDs:
+            tri = self.triFacets[facetID]
+            if (facetID in self.triFacets):
+                del self.triFacets[facetID]
+            if (facetID in self.triCenters):
+                del self.triCenters[facetID]
+            if (self.surfaceGraph.has_node(facetID)):
+                self.surfaceGraph.remove_node(facetID)
+            self.tris = [i for i in self.tris if i != tri]
+
+        self.tris = [i for i in self.tris if max([j[2] for j in i]) <= t + ERRTOL['vertical']]
+        self.timedPoly = newTimedPoly
+        self.endTime = t
+
+        if (cutInBtwFlag and cutLayerID != None):
+            m = cutLayerID
+            rebuildTimedPoly = []
+            for i in range(m):
+                rebuildTimedPoly.append([[], oldTimedPoly[0][1]])
+            rebuildTimedPoly.append(oldTimedPoly[cutLayerID])
+            rebuildTimedPoly.append(newTimedPoly[-1])
+            self.buildFacets(rebuildTimedPoly)
+
+            for facetID in self.triFacets:
+                if (facetID[0] == m):
+                    self.tris.append(self.triFacets[facetID])
+
+            self.extendNeighbor()
+        self.topPoly = newTimedPoly[-1][0]
+        if (t > self.startTime + ERRTOL['vertical']):
+            self.tris = [i for i in self.tris if min([j[2] for j in i]) < t - ERRTOL['vertical'] or max([j[2] for j in i]) > t + ERRTOL['vertical']]
+        top = polyTriangulation(self.topPoly)
+        for tri in top:
+            self.tris.append([
+                (tri[0][0], tri[0][1], t),
+                (tri[1][0], tri[1][1], t),
+                (tri[2][0], tri[2][1], t)])
+
+        self.unionProj = self.buildUnionProfile()
+        self.coreProj = self.buildCoreProfile()
+        return
+
+    def appendByTimedPoly(self, t, timedPoly):
+        self.truncateByTime(t)
+
+        if (t < timedPoly[0][1] - ERRTOL['vertical'] or t > timedPoly[-1][1] + ERRTOL['vertical']):
+            raise OutOfRangeError("ERROR: t is out of range")
+
+        appendedTimedPoly = []
+        appendStartFound = False
+        for i in range(len(timedPoly)):
+            if (abs(timedPoly[i][1] - t) <= ERRTOL['vertical']):
+                appendedTimedPoly.append(timedPoly[i])
+                appendStartFound = True
+            elif (timedPoly[i][1] > t + ERRTOL['vertical']):
+                if (not appendStartFound):
+                    oldTimedPoly = self.timedPoly
+                    self.timedPoly = timedPoly
+                    appendedTimedPoly.append([self.buildZProfile(t), t])
+                    self.timedPoly = oldTimedPoly
+                    appendStartFound = True
+                appendedTimedPoly.append(timedPoly[i])
+
+        if (len(appendedTimedPoly) == 0):
+            return
+
+        self.timedPoly[-1] = appendedTimedPoly[0]
+        for i in range(1, len(appendedTimedPoly)):
+            m = len(self.timedPoly) - 1
+            rebuildTimedPoly = []
+            for j in range(m):
+                rebuildTimedPoly.append([[], self.timedPoly[0][1]])
+            rebuildTimedPoly.append(self.timedPoly[-1])
+            rebuildTimedPoly.append(appendedTimedPoly[i])
+            self.buildFacets(rebuildTimedPoly)
+
+            for facetID in self.triFacets:
+                if (facetID[0] == m):
+                    self.tris.append(self.triFacets[facetID])
+
+            self.timedPoly.append(appendedTimedPoly[i])
+        self.extendNeighbor()
+        self.endTime = self.timedPoly[-1][1]
+        self.topPoly = self.timedPoly[-1][0]
+        if (t > self.startTime + ERRTOL['vertical']):
+            self.tris = [i for i in self.tris if min([j[2] for j in i]) < t - ERRTOL['vertical'] or max([j[2] for j in i]) > t + ERRTOL['vertical']]
+        top = polyTriangulation(self.topPoly)
+        for tri in top:
+            self.tris.append([
+                (tri[0][0], tri[0][1], self.endTime),
+                (tri[1][0], tri[1][1], self.endTime),
+                (tri[2][0], tri[2][1], self.endTime)])
+        self.unionProj = self.buildUnionProfile()
+        self.coreProj = self.buildCoreProfile()
+        return
+
+    def removeUnreachableFromPt(self, pt, z, speed):
+        removeFacetIDs = []
+        for facetID in self.triFacets:
+            zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
+            if (zMax < z - ERRTOL['vertical']):
+                removeFacetIDs.append(facetID)
+            else:
+                pt2F = self.pt2Facet(pt, z, speed, facetID)
+                if (pt2F['reachable'] == "NotReachable"):
+                    removeFacetIDs.append(facetID)
+
+        for facetID in removeFacetIDs:
+            tri = self.triFacets[facetID]
+            if (facetID in self.triFacets):
+                del self.triFacets[facetID]
+            if (facetID in self.triCenters):
+                del self.triCenters[facetID]
+            if (self.surfaceGraph.has_node(facetID)):
+                self.surfaceGraph.remove_node(facetID)
+            self.tris = [i for i in self.tris if i != tri]
+
+        updateLayerIDs = []
+        for i in range(len(self.timedPoly)):
+            layerTime = self.timedPoly[i][1]
+            layerPoly = self.timedPoly[i][0]
+            reachRadius = (layerTime - z) * speed
+            allReachableFlag = reachRadius >= 0
+            if (allReachableFlag):
+                for polyPt in layerPoly:
+                    if (distEuclideanXY(pt, polyPt) > reachRadius + ERRTOL['distPt2Pt']):
+                        allReachableFlag = False
+                        break
+
+            if (not allReachableFlag):
+                updateLayerIDs.append(i)
+                self.tris = [tri for tri in self.tris if not all([abs(v[2] - layerTime) <= ERRTOL['vertical'] for v in tri])]
+
+                clippedPolys = []
+                if (reachRadius >= 0 and len(layerPoly) >= 3):
+                    circlePoly = []
+                    for k in range(30):
+                        theta = 2 * math.pi * k / 30
+                        circlePoly.append([
+                            pt[0] + reachRadius * math.cos(theta),
+                            pt[1] + reachRadius * math.sin(theta)])
+                    try:
+                        clippedPolys = polysIntersect(polys = [layerPoly, circlePoly])
+                        clippedPolys = [i for i in clippedPolys if len(i) >= 3]
+                    except:
+                        clippedPolys = []
+
+                self.timedPoly[i][0] = clippedPolys[0] if len(clippedPolys) > 0 else []
+
+                for clippedPoly in clippedPolys:
+                    if (len(clippedPoly) >= 3):
+                        for tri in polyTriangulation(clippedPoly):
+                            self.tris.append([
+                                (tri[0][0], tri[0][1], layerTime),
+                                (tri[1][0], tri[1][1], layerTime),
+                                (tri[2][0], tri[2][1], layerTime)])
+
+        updateFacetLayerIDs = []
+        for layerID in updateLayerIDs:
+            if (layerID - 1 >= 0 and layerID - 1 not in updateFacetLayerIDs):
+                updateFacetLayerIDs.append(layerID - 1)
+            if (layerID < len(self.timedPoly) - 1 and layerID not in updateFacetLayerIDs):
+                updateFacetLayerIDs.append(layerID)
+        updateFacetLayerIDs = sorted(updateFacetLayerIDs)
+
+        removeFacetIDs = []
+        for facetID in self.triFacets:
+            if (facetID[0] in updateFacetLayerIDs):
+                removeFacetIDs.append(facetID)
+
+        for facetID in removeFacetIDs:
+            tri = self.triFacets[facetID]
+            if (facetID in self.triFacets):
+                del self.triFacets[facetID]
+            if (facetID in self.triCenters):
+                del self.triCenters[facetID]
+            if (self.surfaceGraph.has_node(facetID)):
+                self.surfaceGraph.remove_node(facetID)
+            self.tris = [i for i in self.tris if i != tri]
+
+        for m in updateFacetLayerIDs:
+            if (len(self.timedPoly[m][0]) < 3 or len(self.timedPoly[m + 1][0]) < 3):
+                continue
+
+            rebuildTimedPoly = []
+            for j in range(m):
+                rebuildTimedPoly.append([[], self.timedPoly[0][1]])
+            rebuildTimedPoly.append(self.timedPoly[m])
+            rebuildTimedPoly.append(self.timedPoly[m + 1])
+            self.buildFacets(rebuildTimedPoly)
+
+            for facetID in self.triFacets:
+                if (facetID[0] == m):
+                    self.tris.append(self.triFacets[facetID])
+        self.bottomPoly = self.timedPoly[0][0]
+        self.topPoly = self.timedPoly[-1][0]
+        self.extendNeighbor()
+        nonEmptyPolys = [i[0] for i in self.timedPoly if len(i[0]) >= 3]
+        self.unionProj = polysUnion(polys = nonEmptyPolys)[0] if len(nonEmptyPolys) > 0 else None
+        self.coreProj = self.buildCoreProfile() if len(nonEmptyPolys) == len(self.timedPoly) else None
+        return
+
+    def removeUnreachableToPt(self, pt, z, speed):
+        removeFacetIDs = []
+        for facetID in self.triFacets:
+            zMin = min([self.triFacets[facetID][k][2] for k in range(3)])
+            if (zMin > z + ERRTOL['vertical']):
+                removeFacetIDs.append(facetID)
+            else:
+                dist = distEuclideanXY(self.triCenters[facetID][0], pt)
+                if (self.triCenters[facetID][1] + dist / speed > z + ERRTOL['vertical']):
+                    removeFacetIDs.append(facetID)
+
+        for facetID in removeFacetIDs:
+            tri = self.triFacets[facetID]
+            if (facetID in self.triFacets):
+                del self.triFacets[facetID]
+            if (facetID in self.triCenters):
+                del self.triCenters[facetID]
+            if (self.surfaceGraph.has_node(facetID)):
+                self.surfaceGraph.remove_node(facetID)
+            self.tris = [i for i in self.tris if i != tri]
+
+        updateLayerIDs = []
+        for i in range(len(self.timedPoly)):
+            layerTime = self.timedPoly[i][1]
+            layerPoly = self.timedPoly[i][0]
+            reachRadius = (z - layerTime) * speed
+            allReachableFlag = reachRadius >= 0
+            if (allReachableFlag):
+                for polyPt in layerPoly:
+                    if (distEuclideanXY(polyPt, pt) > reachRadius + ERRTOL['distPt2Pt']):
+                        allReachableFlag = False
+                        break
+
+            if (not allReachableFlag):
+                updateLayerIDs.append(i)
+                self.tris = [tri for tri in self.tris if not all([abs(v[2] - layerTime) <= ERRTOL['vertical'] for v in tri])]
+
+                clippedPolys = []
+                if (reachRadius >= 0 and len(layerPoly) >= 3):
+                    circlePoly = []
+                    for k in range(30):
+                        theta = 2 * math.pi * k / 30
+                        circlePoly.append([
+                            pt[0] + reachRadius * math.cos(theta),
+                            pt[1] + reachRadius * math.sin(theta)])
+                    try:
+                        clippedPolys = polysIntersect(polys = [layerPoly, circlePoly])
+                        clippedPolys = [i for i in clippedPolys if len(i) >= 3]
+                    except:
+                        clippedPolys = []
+
+                self.timedPoly[i][0] = clippedPolys[0] if len(clippedPolys) > 0 else []
+
+                for clippedPoly in clippedPolys:
+                    if (len(clippedPoly) >= 3):
+                        for tri in polyTriangulation(clippedPoly):
+                            self.tris.append([
+                                (tri[0][0], tri[0][1], layerTime),
+                                (tri[1][0], tri[1][1], layerTime),
+                                (tri[2][0], tri[2][1], layerTime)])
+
+        updateFacetLayerIDs = []
+        for layerID in updateLayerIDs:
+            if (layerID - 1 >= 0 and layerID - 1 not in updateFacetLayerIDs):
+                updateFacetLayerIDs.append(layerID - 1)
+            if (layerID < len(self.timedPoly) - 1 and layerID not in updateFacetLayerIDs):
+                updateFacetLayerIDs.append(layerID)
+        updateFacetLayerIDs = sorted(updateFacetLayerIDs)
+
+        removeFacetIDs = []
+        for facetID in self.triFacets:
+            if (facetID[0] in updateFacetLayerIDs):
+                removeFacetIDs.append(facetID)
+
+        for facetID in removeFacetIDs:
+            tri = self.triFacets[facetID]
+            if (facetID in self.triFacets):
+                del self.triFacets[facetID]
+            if (facetID in self.triCenters):
+                del self.triCenters[facetID]
+            if (self.surfaceGraph.has_node(facetID)):
+                self.surfaceGraph.remove_node(facetID)
+            self.tris = [i for i in self.tris if i != tri]
+
+        for m in updateFacetLayerIDs:
+            if (len(self.timedPoly[m][0]) < 3 or len(self.timedPoly[m + 1][0]) < 3):
+                continue
+
+            rebuildTimedPoly = []
+            for j in range(m):
+                rebuildTimedPoly.append([[], self.timedPoly[0][1]])
+            rebuildTimedPoly.append(self.timedPoly[m])
+            rebuildTimedPoly.append(self.timedPoly[m + 1])
+            self.buildFacets(rebuildTimedPoly)
+
+            for facetID in self.triFacets:
+                if (facetID[0] == m):
+                    self.tris.append(self.triFacets[facetID])
+        self.bottomPoly = self.timedPoly[0][0]
+        self.topPoly = self.timedPoly[-1][0]
+        self.extendNeighbor()
+        nonEmptyPolys = [i[0] for i in self.timedPoly if len(i[0]) >= 3]
+        self.unionProj = polysUnion(polys = nonEmptyPolys)[0] if len(nonEmptyPolys) > 0 else None
+        self.coreProj = self.buildCoreProfile() if len(nonEmptyPolys) == len(self.timedPoly) else None
+        return
+
     def extendNeighbor(self):
         # 先记录每个facetID当前的neighbor集合
         neiIDs = {}
@@ -168,31 +542,93 @@ class TriGridSurface(object):
         return
 
     def buildZProfile(self, z):
-        segs = []
-        poly = []
         t0 = None
         t1 = None
-        # 找到z的位置上下两层poly
         for i in range(len(self.timedPoly) - 1):
             t0 = self.timedPoly[i][1]
             t1 = self.timedPoly[i + 1][1]
             if (abs(t0 - z) <= ERRTOL['vertical']):
                 return self.timedPoly[i][0]
             elif (t0 <= z < t1):
-                segs.append([self.timedPoly[i][0][0], self.timedPoly[i + 1][0][0]])
-                for k in range(1, len(self.timedPoly[i][0])):
-                    segs.append([self.timedPoly[i][0][k], self.timedPoly[i + 1][0][k]])
-                    segs.append([self.timedPoly[i][0][k], self.timedPoly[i + 1][0][k - 1]])
-                segs.append([self.timedPoly[i][0][0], self.timedPoly[i + 1][0][-1]])
-        
+                lowerPoly = [list(pt) for pt in self.timedPoly[i][0]]
+                upperPoly = [list(pt) for pt in self.timedPoly[i + 1][0]]
+                if (len(lowerPoly) < 3 or len(upperPoly) < 3):
+                    return []
+
+                lowerArea = 0
+                for k in range(len(lowerPoly)):
+                    lowerArea += lowerPoly[k][0] * lowerPoly[(k + 1) % len(lowerPoly)][1] - lowerPoly[(k + 1) % len(lowerPoly)][0] * lowerPoly[k][1]
+                upperArea = 0
+                for k in range(len(upperPoly)):
+                    upperArea += upperPoly[k][0] * upperPoly[(k + 1) % len(upperPoly)][1] - upperPoly[(k + 1) % len(upperPoly)][0] * upperPoly[k][1]
+                if (lowerArea * upperArea < 0):
+                    upperPoly.reverse()
+
+                nearestID = 0
+                nearestDist = float('inf')
+                for k in range(len(upperPoly)):
+                    d = distEuclideanXY(lowerPoly[0], upperPoly[k])
+                    if (d < nearestDist):
+                        nearestDist = d
+                        nearestID = k
+                upperPoly = [upperPoly[(nearestID + k) % len(upperPoly)] for k in range(len(upperPoly))]
+
+                lowerParams = [0]
+                lowerPerim = 0
+                for k in range(len(lowerPoly)):
+                    lowerPerim += distEuclideanXY(lowerPoly[k], lowerPoly[(k + 1) % len(lowerPoly)])
+                upperParams = [0]
+                upperPerim = 0
+                for k in range(len(upperPoly)):
+                    upperPerim += distEuclideanXY(upperPoly[k], upperPoly[(k + 1) % len(upperPoly)])
+                if (lowerPerim <= ERRTOL['distPt2Pt'] or upperPerim <= ERRTOL['distPt2Pt']):
+                    return []
+
+                accDist = 0
+                for k in range(1, len(lowerPoly)):
+                    accDist += distEuclideanXY(lowerPoly[k - 1], lowerPoly[k])
+                    lowerParams.append(accDist / lowerPerim)
+                accDist = 0
+                for k in range(1, len(upperPoly)):
+                    accDist += distEuclideanXY(upperPoly[k - 1], upperPoly[k])
+                    upperParams.append(accDist / upperPerim)
+
+                params = []
+                for tau in lowerParams + upperParams:
+                    addFlag = True
+                    for existTau in params:
+                        if (abs(tau - existTau) <= ERRTOL['vertical']):
+                            addFlag = False
+                            break
+                    if (addFlag and tau < 1 - ERRTOL['vertical']):
+                        params.append(tau)
+                params = sorted(params)
+
+                lowerSync = []
+                upperSync = []
+                for tau in params:
+                    for poly, polyParams, sync in [(lowerPoly, lowerParams, lowerSync), (upperPoly, upperParams, upperSync)]:
+                        for k in range(len(poly)):
+                            tau0 = polyParams[k]
+                            tau1 = polyParams[k + 1] if k < len(poly) - 1 else 1
+                            if (tau0 - ERRTOL['vertical'] <= tau <= tau1 + ERRTOL['vertical']):
+                                ratio = 0 if abs(tau1 - tau0) <= ERRTOL['vertical'] else (tau - tau0) / (tau1 - tau0)
+                                sync.append([
+                                    poly[k][0] + (poly[(k + 1) % len(poly)][0] - poly[k][0]) * ratio,
+                                    poly[k][1] + (poly[(k + 1) % len(poly)][1] - poly[k][1]) * ratio])
+                                break
+
                 sc = (z - t0) / (t1 - t0)
-                for s in segs:
-                    poly.append([s[0][0] + (s[1][0] - s[0][0]) * sc, s[0][1] + (s[1][1] - s[0][1]) * sc])
-                break
+                poly = []
+                for k in range(len(params)):
+                    poly.append([
+                        lowerSync[k][0] + (upperSync[k][0] - lowerSync[k][0]) * sc,
+                        lowerSync[k][1] + (upperSync[k][1] - lowerSync[k][1]) * sc])
+                return poly
+
         if (t0 == None or t1 == None):
             raise OutOfRangeError("ERROR: z is out of range")
-        return poly
-
+        return self.timedPoly[-1][0]
     def buildUnionProfile(self):
         poly = polysUnion(polys = [self.timedPoly[i][0] for i in range(len(self.timedPoly))])[0]
         return poly
@@ -218,48 +654,133 @@ class TriGridSurface(object):
         return polysIntersect(polys = [timedPoly[i][0] for i in range(z1, z2)])[0]        
 
     def pt2Facet(self, pt, z, vehSpeed, facetID):
-        # Step 1: 计算水平方向距离
-        dist = distEuclideanXY(pt, self.triCenters[facetID][0])
-        
-        # Step 2: 计算按照最快速度需要的时间
-        time = dist / vehSpeed
-        speed = vehSpeed
+        tri = self.triFacets[facetID]
+        zMin = min([tri[k][2] for k in range(3)])
+        zMax = max([tri[k][2] for k in range(3)])
+        if (vehSpeed <= 0):
+            raise UnsupportedInputError("ERROR: vehSpeed must be positive")
 
-        # Step 3: 计算facet对应的最早和最晚的z
-        zMin = min([self.triFacets[facetID][k][2] for k in range(3)])
-        zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
-        
-        # Step 4: 计算近似在facet上的点
-        zVeh = z + time
-        
-        # Step 5: 判断到达需要的速度
-        reachable = None        
-        if (zVeh < zMin):
-            # Case 1: zVeh < zMin，说明到达facet不需要按照最快速度
-            reachable = "CanGoFaster"
-            zVeh = zMin
-            speed = dist / (zMin - z)
-            time = dist / speed
+        zLow = max(z, zMin)
+        bestPt = self.triCenters[facetID][0]
+        bestDist = distEuclideanXY(pt, bestPt)
 
-        elif (zMin <= zVeh <= zMax):
-            # Case 2: zMin <= zVeh <= zMax，说明到达facet正好需要按照最快速度到达
-            reachable = "ArrMaxSpeed"
+        tau = zMax
+        crossPts = []
+        for i in range(3):
+            p0 = tri[i]
+            p1 = tri[(i + 1) % 3]
+            if (abs(p0[2] - tau) <= ERRTOL['vertical']):
+                crossPts.append([p0[0], p0[1]])
+            if ((p0[2] - tau) * (p1[2] - tau) < -ERRTOL['vertical'] ** 2):
+                ratio = (tau - p0[2]) / (p1[2] - p0[2])
+                crossPts.append([p0[0] + (p1[0] - p0[0]) * ratio, p0[1] + (p1[1] - p0[1]) * ratio])
+        uniqPts = []
+        for p in crossPts:
+            if (not any(distEuclideanXY(p, q) <= ERRTOL['distPt2Pt'] for q in uniqPts)):
+                uniqPts.append(p)
+        if (len(uniqPts) == 1):
+            bestPt = uniqPts[0]
+            bestDist = distEuclideanXY(pt, bestPt)
+        elif (len(uniqPts) >= 2):
+            seg = [uniqPts[0], uniqPts[1]]
+            maxDist = distEuclideanXY(uniqPts[0], uniqPts[1])
+            for i in range(len(uniqPts)):
+                for j in range(i + 1, len(uniqPts)):
+                    d = distEuclideanXY(uniqPts[i], uniqPts[j])
+                    if (d > maxDist):
+                        maxDist = d
+                        seg = [uniqPts[i], uniqPts[j]]
+            res = distPt2Seg(pt, seg, detailFlag = True)
+            bestPt = res['proj']
+            bestDist = res['dist']
 
-        elif (zMax < zVeh):
-            # Case 3: zMax < zVeh，说明最大速度也到达不了
-            reachable = "NotReachable"
-            zVeh = zMax
-            if (zMax > z):
-                speed = dist / (zMax - z)
-                time = dist / speed
+        if (zMax < z - ERRTOL['vertical'] or bestDist > (zMax - z) * vehSpeed + ERRTOL['distPt2Pt']):
+            speed = bestDist / (zMax - z) if zMax > z else float('inf')
+            return {
+                'dist': bestDist,
+                'time': float('inf'),
+                'pt': bestPt,
+                'speed': speed,
+                'facetID': facetID,
+                'zVeh': zMax,
+                'reachable': "NotReachable"
+            }
+
+        low = zLow
+        high = zMax
+        for _ in range(40):
+            tau = (low + high) / 2
+            crossPts = []
+            for i in range(3):
+                p0 = tri[i]
+                p1 = tri[(i + 1) % 3]
+                if (abs(p0[2] - tau) <= ERRTOL['vertical']):
+                    crossPts.append([p0[0], p0[1]])
+                if ((p0[2] - tau) * (p1[2] - tau) < -ERRTOL['vertical'] ** 2):
+                    ratio = (tau - p0[2]) / (p1[2] - p0[2])
+                    crossPts.append([p0[0] + (p1[0] - p0[0]) * ratio, p0[1] + (p1[1] - p0[1]) * ratio])
+            uniqPts = []
+            for p in crossPts:
+                if (not any(distEuclideanXY(p, q) <= ERRTOL['distPt2Pt'] for q in uniqPts)):
+                    uniqPts.append(p)
+            curDist = float('inf')
+            if (len(uniqPts) == 1):
+                curDist = distEuclideanXY(pt, uniqPts[0])
+            elif (len(uniqPts) >= 2):
+                seg = [uniqPts[0], uniqPts[1]]
+                maxDist = distEuclideanXY(uniqPts[0], uniqPts[1])
+                for i in range(len(uniqPts)):
+                    for j in range(i + 1, len(uniqPts)):
+                        d = distEuclideanXY(uniqPts[i], uniqPts[j])
+                        if (d > maxDist):
+                            maxDist = d
+                            seg = [uniqPts[i], uniqPts[j]]
+                curDist = distPt2Seg(pt, seg)
+            if (curDist <= (tau - z) * vehSpeed + ERRTOL['distPt2Pt']):
+                high = tau
             else:
-                speed = float('inf')
-                time = float('inf')
+                low = tau
 
+        zVeh = high
+        crossPts = []
+        for i in range(3):
+            p0 = tri[i]
+            p1 = tri[(i + 1) % 3]
+            if (abs(p0[2] - zVeh) <= ERRTOL['vertical']):
+                crossPts.append([p0[0], p0[1]])
+            if ((p0[2] - zVeh) * (p1[2] - zVeh) < -ERRTOL['vertical'] ** 2):
+                ratio = (zVeh - p0[2]) / (p1[2] - p0[2])
+                crossPts.append([p0[0] + (p1[0] - p0[0]) * ratio, p0[1] + (p1[1] - p0[1]) * ratio])
+        uniqPts = []
+        for p in crossPts:
+            if (not any(distEuclideanXY(p, q) <= ERRTOL['distPt2Pt'] for q in uniqPts)):
+                uniqPts.append(p)
+        if (len(uniqPts) == 1):
+            bestPt = uniqPts[0]
+            dist = distEuclideanXY(pt, bestPt)
+        elif (len(uniqPts) >= 2):
+            seg = [uniqPts[0], uniqPts[1]]
+            maxDist = distEuclideanXY(uniqPts[0], uniqPts[1])
+            for i in range(len(uniqPts)):
+                for j in range(i + 1, len(uniqPts)):
+                    d = distEuclideanXY(uniqPts[i], uniqPts[j])
+                    if (d > maxDist):
+                        maxDist = d
+                        seg = [uniqPts[i], uniqPts[j]]
+            res = distPt2Seg(pt, seg, detailFlag = True)
+            bestPt = res['proj']
+            dist = res['dist']
+        else:
+            bestPt = self.triCenters[facetID][0]
+            dist = distEuclideanXY(pt, bestPt)
+
+        time = zVeh - z
+        speed = 0 if (time <= ERRTOL['vertical'] and dist <= ERRTOL['distPt2Pt']) else dist / time
+        reachable = "CanGoFaster" if (speed < vehSpeed - ERRTOL['distPt2Pt']) else "ArrMaxSpeed"
         return {
             'dist': dist,
             'time': time,
-            'pt': self.triCenters[facetID][0],
+            'pt': bestPt,
             'speed': speed,
             'facetID': facetID,
             'zVeh': zVeh,
@@ -267,340 +788,229 @@ class TriGridSurface(object):
         }
 
     def pt2Facet2Pt(self, pt1, z1, pt2, vehSpeed, facetID):
-        # NOTE: 其实和pt2Facet一样，只是多了一段
+        tri = self.triFacets[facetID]
+        zMin = min([tri[k][2] for k in range(3)])
+        zMax = max([tri[k][2] for k in range(3)])
+        if (vehSpeed <= 0):
+            raise UnsupportedInputError("ERROR: vehSpeed must be positive")
 
-        # Step 1: 计算水平方向距离，这两段距离都不会变化
-        dist1 = distEuclideanXY(pt1, self.triCenters[facetID][0])
-        dist2 = distEuclideanXY(pt2, self.triCenters[facetID][0])
-        dist = dist1 + dist2
-        
-        # Step 2: 计算按照最快速度需要的时间
-        time1 = dist1 / vehSpeed
-        time2 = dist2 / vehSpeed
-        time = time1 + time2
+        zLow = max(z1, zMin)
+        best = None
+        if (zLow <= zMax + ERRTOL['vertical']):
+            for s in range(81):
+                tau = zLow + (zMax - zLow) * s / 80
+                crossPts = []
+                for i in range(3):
+                    p0 = tri[i]
+                    p1 = tri[(i + 1) % 3]
+                    if (abs(p0[2] - tau) <= ERRTOL['vertical']):
+                        crossPts.append([p0[0], p0[1]])
+                    if ((p0[2] - tau) * (p1[2] - tau) < -ERRTOL['vertical'] ** 2):
+                        ratio = (tau - p0[2]) / (p1[2] - p0[2])
+                        crossPts.append([p0[0] + (p1[0] - p0[0]) * ratio, p0[1] + (p1[1] - p0[1]) * ratio])
+                uniqPts = []
+                for p in crossPts:
+                    if (not any(distEuclideanXY(p, q) <= ERRTOL['distPt2Pt'] for q in uniqPts)):
+                        uniqPts.append(p)
+                if (len(uniqPts) == 0):
+                    continue
+                seg = None
+                if (len(uniqPts) >= 2):
+                    seg = [uniqPts[0], uniqPts[1]]
+                    maxDist = distEuclideanXY(uniqPts[0], uniqPts[1])
+                    for i in range(len(uniqPts)):
+                        for j in range(i + 1, len(uniqPts)):
+                            d = distEuclideanXY(uniqPts[i], uniqPts[j])
+                            if (d > maxDist):
+                                maxDist = d
+                                seg = [uniqPts[i], uniqPts[j]]
+                candidates = []
+                if (seg == None):
+                    candidates.append(uniqPts[0])
+                else:
+                    candidates.extend(seg)
+                    res = distPt2Seg(pt2, seg, detailFlag = True)
+                    candidates.append(res['proj'])
+                    dx = seg[1][0] - seg[0][0]
+                    dy = seg[1][1] - seg[0][1]
+                    fx = seg[0][0] - pt1[0]
+                    fy = seg[0][1] - pt1[1]
+                    a = dx ** 2 + dy ** 2
+                    b = 2 * (fx * dx + fy * dy)
+                    c = fx ** 2 + fy ** 2 - ((tau - z1) * vehSpeed) ** 2
+                    disc = b ** 2 - 4 * a * c
+                    if (a > ERRTOL['distPt2Pt'] and disc >= 0):
+                        for root in [(-b - math.sqrt(disc)) / (2 * a), (-b + math.sqrt(disc)) / (2 * a)]:
+                            if (-ERRTOL['vertical'] <= root <= 1 + ERRTOL['vertical']):
+                                root = min(1, max(0, root))
+                                candidates.append([seg[0][0] + dx * root, seg[0][1] + dy * root])
+                for cand in candidates:
+                    dist1 = distEuclideanXY(pt1, cand)
+                    if (dist1 > (tau - z1) * vehSpeed + ERRTOL['distPt2Pt']):
+                        continue
+                    dist2 = distEuclideanXY(pt2, cand)
+                    time1 = tau - z1
+                    time2 = dist2 / vehSpeed
+                    totalTime = time1 + time2
+                    speed1 = 0 if (time1 <= ERRTOL['vertical'] and dist1 <= ERRTOL['distPt2Pt']) else dist1 / time1
+                    if (best == None or totalTime < best['time']):
+                        best = {
+                            'dist': dist1 + dist2,
+                            'time': totalTime,
+                            'pt': cand,
+                            'speed1': speed1,
+                            'facetID': facetID,
+                            'zVeh1': tau,
+                            'zVeh2': tau + time2,
+                            'reachable': "CanGoFaster" if (speed1 < vehSpeed - ERRTOL['distPt2Pt']) else "ArrMaxSpeed"
+                        }
 
-        speed1 = vehSpeed
-        speed2 = vehSpeed # 注意，speed2 永远不需要改变，但zVeh2可能会变
+        if (best == None):
+            bestPt = self.triCenters[facetID][0]
+            dist1 = distEuclideanXY(pt1, bestPt)
+            dist2 = distEuclideanXY(pt2, bestPt)
+            speed1 = dist1 / (zMax - z1) if zMax > z1 else float('inf')
+            return {
+                'dist': dist1 + dist2,
+                'time': float('inf'),
+                'pt': bestPt,
+                'speed1': speed1,
+                'facetID': facetID,
+                'zVeh1': zMax,
+                'zVeh2': zMax + dist2 / vehSpeed,
+                'reachable': "NotReachable"
+            }
 
-        # Step 3: 计算facet对应的最早和最晚的z
-        zMin = min([self.triFacets[facetID][k][2] for k in range(3)])
-        zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
-        
-        # Step 4: 计算近似在facet上的点是zVeh1
-        zVeh1 = z1 + time1
-        zVeh2 = zVeh1 + time2
-        
-        # Step 5: 判断到达需要的速度
-        reachable = None
-
-        if (zVeh1 < zMin):
-            # Case 1: zVeh < zMin，说明到达facet不需要按照最快速度，第一段变慢了，第二段还是最快速度
-            reachable = "CanGoFaster"
-            
-            speed1 = dist1 / (zMin - z1)
-            time1 = dist1 / speed1
-            time = time1 + time2
-
-            zVeh1 = zMin
-            zVeh2 = zVeh1 + time2
-
-        elif (zMin <= zVeh1 <= zMax):
-            # Case 2: zMin <= zVeh <= zMax，说明到达facet正好需要按照最快速度到达
-            reachable = "ArrMaxSpeed"
-
-        elif (zMax < zVeh1):
-            # Case 3: zMax < zVeh，说明最大速度也到达不了
-            reachable = "NotReachable"
-            zVeh1 = zMax
-            zVeh2 = zVeh1 + time2
-            if (zMax > z1):
-                speed1 = dist1 / (zMax - z1)
-                time1 = dist1 / speed1
-                time = time1 + time2
-            else:
-                speed1 = float('inf')
-                time = float('inf')
-
-        return {
-            'dist': dist,
-            'time': time,
-            'pt': self.triCenters[facetID][0],
-            'speed1': speed1,
-            'facetID': facetID,
-            'zVeh1': zVeh1,
-            'zVeh2': zVeh2,
-            'reachable': reachable
-        }
+        return best
 
     def fastestPt2Facet(self, pt, z, vehSpeed):
-        tabuFacetIDs = []
-
-        # Find initial facet ==================================================
-        # 先找到一个可行的点，假如存在的话，至少找到一个好的开始点
-        # NOTE: 先找到位于这个平面上的最近的facet，此时需要的速度是无限大
-        # NOTE: 从(0, z对应的layer)搜起
-        # FIXME: 应该从更近的点开始搜索，这里图了个省事儿
-        # FIXME: 接下来应该预估在哪里碰到
-        idx = None
-        for i in range(len(self.timedPoly) - 1):
-            t0 = self.timedPoly[i][1]
-            t1 = self.timedPoly[i + 1][1]
-            if (abs(t0 - z) <= ERRTOL['vertical'] or t0 <= z < t1):
-                idx = i
-                break
-
         trace = []
-        
-        # Start greedy search =================================================
-        curFacetID = (idx, 0)
-        cur2F = self.pt2Facet(pt, z, vehSpeed, curFacetID)
-        tabuFacetIDs.append(curFacetID)
-        trace.append(cur2F)
-
-        # Initialize search tree ==============================================
-        searchTree = Tree()
-        searchTree.insert(TreeNode(key = curFacetID, value = cur2F, openFlag = True))
-        curTreeNode = searchTree.root
-
-        bestFacetID = None
+        visitedFacetIDs = set()
+        bestPt2F = None
         bestTime = float('inf')
 
-        # Rough search ========================================================
-        # 然后在表面上进行搜索，粗搜索，按照facet的中间点确定距离
-        # FIXME: 找第一个局部最优解...
-        canImproveFlag = True
-        while (canImproveFlag):
-            canImproveFlag = False
+        candidateFacetIDs = []
+        for facetID in self.triFacets:
+            zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
+            if (zMax >= z - ERRTOL['vertical']):
+                candidateFacetIDs.append(facetID)
 
-            # 找到curFacetID所有相邻的facetID
-            adjFacetIDs = [i for i in self.surfaceGraph.neighbors(curTreeNode.value['facetID'])]
-            lstNei2F = []
-            # 对于每个adjFacet，得比当前好且没有被覆盖到过才有必要写入，对于有必要写入的，加入子节点
-            for k in adjFacetIDs:
-                # 首先得是没搜索过的，搜索过的在searchTree上以及有了
-                if (k not in tabuFacetIDs and self.triCenters[k][1] >= z):
-                    pt2F = self.pt2Facet(pt, z, vehSpeed, k)
+        candidateFacetIDs = sorted(
+            candidateFacetIDs,
+            key = lambda facetID: (
+                abs(self.triCenters[facetID][1] - z),
+                distEuclideanXY(pt, self.triCenters[facetID][0])))
 
-                    # 接下来判断是不是比当前的好
-                    keepFlag = True
-                    
-                    # # Case 1: 当前的不可行，邻居也不可行，保存距离短的，距离一样的，保存z更大的
-                    # if (cur2F['reachable'] == "NotReachable" and pt2F["reachable"] == "NotReachable"):
-                    #     if (cur2F['dist'] > pt2F['dist']):
-                    #         keepFlag = True
-                    #     elif (cur2F['zVeh'] < pt2F['zVeh']):
-                    #         keepFlag = True
+        for startFacetID in candidateFacetIDs:
+            if (startFacetID in visitedFacetIDs or startFacetID not in self.triFacets):
+                continue
 
-                    # # Case 2: 当前的不可行，邻居可行，保存
-                    # elif (cur2F['reachable'] == "NotReachable" and pt2F["reachable"] != "NotReachable"):
-                    #     keepFlag = True
-                    
-                    # # Case 3: 当前的速度慢但可达，邻居也可达，保存速度快的
-                    # elif (cur2F['reachable'] == "CanGoFaster" and pt2F["reachable"] == "ArrMaxSpeed"):
-                    #     keepFlag = True
-                    # elif (cur2F['reachable'] == "CanGoFaster" and pt2F["reachable"] == "CanGoFaster"):
-                    #     if (cur2F['speed'] < pt2F['speed']):
-                    #         keepFlag = True
-                    # elif (cur2F['reachable'] == "ArrMaxSpeed" and pt2F["reachable"] == "ArrMaxSpeed"):
-                    #     if (cur2F['dist'] > pt2F['dist']):
-                    #         keepFlag = True
+            openFacetIDs = [startFacetID]
+            while (len(openFacetIDs) > 0):
+                curFacetID = openFacetIDs.pop(0)
+                if (curFacetID in visitedFacetIDs or curFacetID not in self.triFacets):
+                    continue
 
-                    # 如果比当前这个好，那么加入，在searchTree上作为当前的子节点
-                    if (keepFlag):
-                        tabuFacetIDs.append(k)
-                        lstNei2F.append(pt2F)                                               
+                visitedFacetIDs.add(curFacetID)
+                curZMax = max([self.triFacets[curFacetID][k][2] for k in range(3)])
+                if (curZMax < z - ERRTOL['vertical']):
+                    continue
 
-            # 把所有的可能的邻居排序，按照时间
-            if (len(lstNei2F) > 0):
-                # 排序的顺序：先按照ArrMaxSpeed => CanGoFast => NotReachable排
-                arr = [i for i in lstNei2F if i['reachable'] == 'ArrMaxSpeed']
-                cgf = [i for i in lstNei2F if i['reachable'] == 'CanGoFaster']
-                nrb = [i for i in lstNei2F if i['reachable'] == 'NotReachable']
+                cur2F = self.pt2Facet(pt, z, vehSpeed, curFacetID)
+                trace.append(cur2F)
+                if (cur2F['reachable'] != "NotReachable" and cur2F['time'] < bestTime):
+                    bestTime = cur2F['time']
+                    bestPt2F = cur2F
 
-                arr = sorted(arr, key = lambda d: d['time'])                   # ArrMaxSpeed按照时间排列，因为都已经是最快速度了
-                cgf = sorted(cgf, key = lambda d: d['speed'], reverse = True)  # CanGoFaster按照速度排列，速度快的更好
-                nrb = sorted(nrb, key = lambda d: d['zVeh'], reverse = True)                   # NotReachable按照dist排列，离得越近越好
+                adjFacetIDs = []
+                if (self.surfaceGraph.has_node(curFacetID)):
+                    adjFacetIDs = [i for i in self.surfaceGraph.neighbors(curFacetID)]
+                adjFacetIDs = [i for i in adjFacetIDs if i not in visitedFacetIDs and i in self.triFacets]
+                adjFacetIDs = sorted(
+                    adjFacetIDs,
+                    key = lambda facetID: (
+                        abs(self.triCenters[facetID][1] - z),
+                        distEuclideanXY(pt, self.triCenters[facetID][0])))
+                for facetID in adjFacetIDs:
+                    zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
+                    if (zMax >= z - ERRTOL['vertical'] and facetID not in openFacetIDs):
+                        openFacetIDs.append(facetID)
 
-                lstNei2F = [i for i in arr]
-                lstNei2F.extend([i for i in cgf])
-                lstNei2F.extend([i for i in nrb])
+        if (bestPt2F == None):
+            raise NotAvailableError("ERROR: no reachable facet can be found")
 
-                for n in lstNei2F:
-                    # print("New Child: ", n)
-                    neiTreeNode = TreeNode(key = n['facetID'], value = n, openFlag = True)
-                    searchTree.insert(neiTreeNode, curTreeNode)
-                    if (n['reachable'] != "NotReachable" and n['time'] <= bestTime):
-                        bestTime = n['time']
-                        bestFacetID = n['facetID']
-
-            # 如果curTreeNode有open的子节点，按深度优先尝试第一个open的子节点
-            hasOpenChildFlag = False
-            if (len(curTreeNode.treeNodes) > 0):
-                for child in curTreeNode.treeNodes:
-                    if (not child.isNil and child.openFlag == True):
-                        trace.append(child.value.copy())
-                        curTreeNode = child
-                        # print(curTreeNode.value['time'], curTreeNode.value['speed'], curTreeNode.value['dist'])
-                        # print("Go Deeper: ", curTreeNode.value['facetID'])
-                        cur2F = curTreeNode.value
-                        hasOpenChildFlag = True
-                        canImproveFlag = True
-                        break
-
-            if (not hasOpenChildFlag):
-                curTreeNode.openFlag = False
-                if (curTreeNode.parent.isNil):
-                    canImproveFlag = False
-                else:
-                    curTreeNode = curTreeNode.parent
-                    # print(curTreeNode.value['time'], curTreeNode.value['speed'], curTreeNode.value['dist'])
-                    # print("Backtrack: ", curTreeNode.value['facetID'])
-                    cur2F = curTreeNode.value
-
-        bestNode = searchTree.query(bestFacetID)
-        
         return {
-            'facetID': bestNode.value['facetID'],
-            'pt': bestNode.value['pt'],
-            'zVeh': bestNode.value['zVeh'],
-            'speed': bestNode.value['speed'],
-            'time': bestNode.value['time'],
+            'facetID': bestPt2F['facetID'],
+            'pt': bestPt2F['pt'],
+            'zVeh': bestPt2F['zVeh'],
+            'speed': bestPt2F['speed'],
+            'time': bestPt2F['time'],
             'trace': trace
         }
 
     def fastestPt2Facet2Pt(self, pt1, z1, pt2, vehSpeed):
-        tabuFacetIDs = []
-
-        # Find initial facet ==================================================
-        # 先找到一个可行的点，假如存在的话，至少找到一个好的开始点
-        # NOTE: 先找到位于这个平面上的最近的facet，此时需要的速度是无限大
-        # NOTE: 从(0, z对应的layer)搜起
-        # FIXME: 应该从更近的点开始搜索，这里图了个省事儿
-        # FIXME: 接下来应该预估在哪里碰到
-        idx = None
-        for i in range(len(self.timedPoly) - 1):
-            t0 = self.timedPoly[i][1]
-            t1 = self.timedPoly[i + 1][1]
-            if (abs(t0 - z1) <= ERRTOL['vertical'] or t0 <= z1 < t1):
-                idx = i
-                break
-
         trace = []
-        
-        # Start greedy search =================================================
-        curFacetID = (idx, 0)
-        cur2F = self.pt2Facet2Pt(pt1, z1, pt2, vehSpeed, curFacetID)
-        tabuFacetIDs.append(curFacetID)
-        trace.append(cur2F)
-
-        # Initialize search tree ==============================================
-        searchTree = Tree()
-        searchTree.insert(TreeNode(key = curFacetID, value = cur2F, openFlag = True))
-        curTreeNode = searchTree.root
-
-        bestFacetID = None
+        visitedFacetIDs = set()
+        bestPt2F = None
         bestTime = float('inf')
 
-        # Rough search ========================================================
-        # 然后在表面上进行搜索，粗搜索，按照facet的中间点确定距离
-        # FIXME: 找第一个局部最优解...
-        canImproveFlag = True
-        while (canImproveFlag):
-            canImproveFlag = False
+        candidateFacetIDs = []
+        for facetID in self.triFacets:
+            zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
+            if (zMax >= z1 - ERRTOL['vertical']):
+                candidateFacetIDs.append(facetID)
 
-            # 找到curFacetID所有相邻的facetID
-            adjFacetIDs = [i for i in self.surfaceGraph.neighbors(curTreeNode.value['facetID'])]
-            lstNei2F = []
-            # 对于每个adjFacet，得比当前好且没有被覆盖到过才有必要写入，对于有必要写入的，加入子节点
-            for k in adjFacetIDs:
-                # 首先得是没搜索过的，搜索过的在searchTree上以及有了
-                if (k not in tabuFacetIDs and self.triCenters[k][1] >= z1):
-                    pt2F = self.pt2Facet2Pt(pt1, z1, pt2, vehSpeed, k)
+        candidateFacetIDs = sorted(
+            candidateFacetIDs,
+            key = lambda facetID: (
+                abs(self.triCenters[facetID][1] - z1),
+                distEuclideanXY(pt1, self.triCenters[facetID][0]) + distEuclideanXY(pt2, self.triCenters[facetID][0])))
 
-                    # 接下来判断是不是比当前的好
-                    keepFlag = True
-                    
-                    # # Case 1: 当前的不可行，邻居也不可行，保存距离短的，距离一样的，保存z更大的
-                    # if (cur2F['reachable'] == "NotReachable" and pt2F["reachable"] == "NotReachable"):
-                    #     if (cur2F['dist'] > pt2F['dist']):
-                    #         keepFlag = True
-                    #     elif (cur2F['zVeh2'] < pt2F['zVeh2']):
-                    #         keepFlag = True
+        for startFacetID in candidateFacetIDs:
+            if (startFacetID in visitedFacetIDs or startFacetID not in self.triFacets):
+                continue
 
-                    # # Case 2: 当前的不可行，邻居可行，保存
-                    # elif (cur2F['reachable'] == "NotReachable" and pt2F["reachable"] != "NotReachable"):
-                    #     keepFlag = True
-                    
-                    # # Case 3: 当前的速度慢但可达，邻居也可达，保存速度快的
-                    # elif (cur2F['reachable'] == "CanGoFaster" and pt2F["reachable"] == "ArrMaxSpeed"):
-                    #     keepFlag = True
-                    # elif (cur2F['reachable'] == "CanGoFaster" and pt2F["reachable"] == "CanGoFaster"):
-                    #     if (cur2F['speed1'] < pt2F['speed1']):
-                    #         keepFlag = True
-                    # elif (cur2F['reachable'] == "ArrMaxSpeed" and pt2F["reachable"] == "ArrMaxSpeed"):
-                    #     if (cur2F['dist'] > pt2F['dist']):
-                    #         keepFlag = True
+            openFacetIDs = [startFacetID]
+            while (len(openFacetIDs) > 0):
+                curFacetID = openFacetIDs.pop(0)
+                if (curFacetID in visitedFacetIDs or curFacetID not in self.triFacets):
+                    continue
 
-                    # 如果比当前这个好，那么加入，在searchTree上作为当前的子节点
-                    if (keepFlag):
-                        tabuFacetIDs.append(k)
-                        lstNei2F.append(pt2F)                                               
+                visitedFacetIDs.add(curFacetID)
+                curZMax = max([self.triFacets[curFacetID][k][2] for k in range(3)])
+                if (curZMax < z1 - ERRTOL['vertical']):
+                    continue
 
-            # 把所有的可能的邻居排序，按照时间
-            if (len(lstNei2F) > 0):
-                # 排序的顺序：先按照ArrMaxSpeed => CanGoFast => NotReachable排
-                arr = [i for i in lstNei2F if i['reachable'] == 'ArrMaxSpeed']
-                cgf = [i for i in lstNei2F if i['reachable'] == 'CanGoFaster']
-                nrb = [i for i in lstNei2F if i['reachable'] == 'NotReachable']
+                cur2F = self.pt2Facet2Pt(pt1, z1, pt2, vehSpeed, curFacetID)
+                trace.append(cur2F)
+                if (cur2F['reachable'] != "NotReachable" and cur2F['time'] < bestTime):
+                    bestTime = cur2F['time']
+                    bestPt2F = cur2F
 
-                arr = sorted(arr, key = lambda d: d['time'])                   # ArrMaxSpeed按照时间排列，因为都已经是最快速度了
-                cgf = sorted(cgf, key = lambda d: d['speed1'], reverse = True)  # CanGoFaster按照速度排列，速度快的更好
-                nrb = sorted(nrb, key = lambda d: d['zVeh1'], reverse = True)                   # NotReachable按照dist排列，离得越近越好
+                adjFacetIDs = []
+                if (self.surfaceGraph.has_node(curFacetID)):
+                    adjFacetIDs = [i for i in self.surfaceGraph.neighbors(curFacetID)]
+                adjFacetIDs = [i for i in adjFacetIDs if i not in visitedFacetIDs and i in self.triFacets]
+                adjFacetIDs = sorted(
+                    adjFacetIDs,
+                    key = lambda facetID: (
+                        abs(self.triCenters[facetID][1] - z1),
+                        distEuclideanXY(pt1, self.triCenters[facetID][0]) + distEuclideanXY(pt2, self.triCenters[facetID][0])))
+                for facetID in adjFacetIDs:
+                    zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
+                    if (zMax >= z1 - ERRTOL['vertical'] and facetID not in openFacetIDs):
+                        openFacetIDs.append(facetID)
 
-                lstNei2F = [i for i in arr]
-                lstNei2F.extend([i for i in cgf])
-                lstNei2F.extend([i for i in nrb])
+        if (bestPt2F == None):
+            raise NotAvailableError("ERROR: no reachable facet can be found")
 
-                for n in lstNei2F:
-                    neiTreeNode = TreeNode(key = n['facetID'], value = n, openFlag = True)
-                    searchTree.insert(neiTreeNode, curTreeNode)
-                    if (n['reachable'] != "NotReachable" and n['time'] <= bestTime):
-                        bestTime = n['time']
-                        bestFacetID = n['facetID']
-
-            # 如果curTreeNode有open的子节点，按深度优先尝试第一个open的子节点
-            hasOpenChildFlag = False
-            if (len(curTreeNode.treeNodes) > 0):
-                for child in curTreeNode.treeNodes:
-                    if (not child.isNil and child.openFlag == True):
-                        trace.append(child.value.copy())
-                        curTreeNode = child
-                        # print(curTreeNode.value['time'], curTreeNode.value['speed1'], curTreeNode.value['dist'])
-                        # print("Go Deeper: ", curTreeNode.value['facetID'])
-                        cur2F = curTreeNode.value
-                        hasOpenChildFlag = True
-                        canImproveFlag = True
-                        break
-
-            if (not hasOpenChildFlag):
-                curTreeNode.openFlag = False
-                if (curTreeNode.parent.isNil):
-                    canImproveFlag = False
-                else:
-                    curTreeNode = curTreeNode.parent
-                    # print(curTreeNode.value['time'], curTreeNode.value['speed1'], curTreeNode.value['dist'])
-                    # print("Backtrack: ", curTreeNode.value['facetID'])
-                    cur2F = curTreeNode.value
-
-        bestNode = searchTree.query(bestFacetID)
-        
         return {
-            'facetID': bestNode.value['facetID'],
-            'pt': bestNode.value['pt'],
-            'zVeh1': bestNode.value['zVeh1'],
-            'zVeh2': bestNode.value['zVeh2'],
-            'speed1': bestNode.value['speed1'],
-            'time': bestNode.value['time'],
+            'facetID': bestPt2F['facetID'],
+            'pt': bestPt2F['pt'],
+            'zVeh1': bestPt2F['zVeh1'],
+            'zVeh2': bestPt2F['zVeh2'],
+            'speed1': bestPt2F['speed1'],
+            'time': bestPt2F['time'],
             'trace': trace
         }
 

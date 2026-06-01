@@ -25,6 +25,7 @@ from .ils import *
 from .instance import *
 from .otp import *
 from .tsp import *
+from .dtsp import *
 from .op import *
 from .cetsp import *
 

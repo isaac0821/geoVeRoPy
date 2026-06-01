@@ -1,4 +1,7 @@
-import requests
+try:
+    import requests
+except ImportError:
+    requests = None
 
 from .common import *
 
@@ -108,6 +111,8 @@ def findPolysChina(
         except:
             pass
     if (not foundInLocal):
+        if (requests == None):
+            raise ImportError("ERROR: Cannot find requests")
         # 注意，回来的是lon, lat的形式
         url = "https://geo.datav.aliyun.com/areas_v3/bound/%s.json" % adcode
         response = requests.get(url=url)

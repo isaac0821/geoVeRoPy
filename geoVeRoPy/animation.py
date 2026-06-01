@@ -103,7 +103,7 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
     boundingBox = (None, None, None, None) if 'boundingBox' not in kwargs else kwargs['boundingBox']
     showProgressFlag = True if 'showProgressFlag' not in kwargs else kwargs['showProgressFlag']
     aniSavePath = None if 'aniSavePath' not in kwargs else kwargs['aniSavePath']
-    aniSaveDPI = 30 if 'aniSaveDPI' not in kwargs else kwargs['aniSaveDPI']
+    aniSaveDPI = 300 if 'aniSaveDPI' not in kwargs else kwargs['aniSaveDPI']
 
     # Check for required fields ===============================================
     if (nodes == None and vehicles == None and polygons == None):
