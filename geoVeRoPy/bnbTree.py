@@ -154,8 +154,8 @@ class BnBTree(Tree):
 
             # Step 1: 选择一个unsolved node，如果找不到unsolved，结束
             curNode = self.choose()
-            if (self.gapTol != None and self.upperBound != 0 and not math.isinf(self.upperBound) and abs(self.upperBound - self.lowerBound) / abs(self.upperBound) <= self.gapTol):
-                printLog(f"Iteration ends by gap: {abs(self.upperBound - self.lowerBound) * 100 / self.upperBound}%")
+            if (self.gapTol != None and abs(self.upperBound) > ERRTOL['vertical'] and not math.isinf(self.upperBound) and abs(self.upperBound - self.lowerBound) / abs(self.upperBound) <= self.gapTol):
+                printLog(f"Iteration ends by gap: {abs(self.upperBound - self.lowerBound) * 100 / abs(self.upperBound)}%")
                 break
             if (curNode == None):
                 if (not math.isinf(self.upperBound)):

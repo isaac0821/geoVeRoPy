@@ -541,7 +541,7 @@ class TriGridSurface(object):
                                     poly[k][1] + (poly[(k + 1) % len(poly)][1] - poly[k][1]) * ratio])
                                 break
 
-                sc = (z - t0) / (t1 - t0)
+                sc = 0 if abs(t1 - t0) <= ERRTOL['vertical'] else (z - t0) / (t1 - t0)
                 poly = []
                 for k in range(len(params)):
                     poly.append([
@@ -696,7 +696,10 @@ class TriGridSurface(object):
         dist = finalEval['dist']
         bestPt = finalEval['pt']
         time = zVeh - z
-        speed = 0 if (time <= ERRTOL['vertical'] and dist <= ERRTOL['distPt2Pt']) else dist / time
+        if (time <= ERRTOL['vertical']):
+            speed = 0 if (dist <= ERRTOL['distPt2Pt']) else float('inf')
+        else:
+            speed = dist / time
         reachable = "CanGoFaster" if (speed < vehSpeed - ERRTOL['distPt2Pt']) else "ArrMaxSpeed"
         return {
             'dist': dist,
@@ -710,11 +713,12 @@ class TriGridSurface(object):
 
     # @tellRuntime('gridSurface.py.pt2Facet2Pt', indentLevel = 1)
     def pt2Facet2Pt(self, pt1, z1, pt2, vehSpeed, facetID):
+        if (vehSpeed <= 0):
+            raise UnsupportedInputError("ERROR: vehSpeed must be positive")
+
         tri = self.triFacets[facetID]
         zMin = min([tri[k][2] for k in range(3)])
         zMax = max([tri[k][2] for k in range(3)])
-        if (vehSpeed <= 0):
-            raise UnsupportedInputError("ERROR: vehSpeed must be positive")
 
         zLow = max(z1, zMin)
         best = None
@@ -817,7 +821,10 @@ class TriGridSurface(object):
             time1 = tau - z1
             time2 = dist2 / vehSpeed
             totalTime = time1 + time2
-            speed1 = 0 if (time1 <= ERRTOL['vertical'] and dist1 <= ERRTOL['distPt2Pt']) else dist1 / time1
+            if (time1 <= ERRTOL['vertical']):
+                speed1 = 0 if (dist1 <= ERRTOL['distPt2Pt']) else float('inf')
+            else:
+                speed1 = dist1 / time1
             return {
                 'dist': dist1 + dist2,
                 'time': totalTime,
@@ -889,7 +896,7 @@ class TriGridSurface(object):
             bestPt = self.triCenters[facetID][0]
             dist1 = distEuclideanXY(pt1, bestPt)
             dist2 = distEuclideanXY(pt2, bestPt)
-            speed1 = dist1 / (zMax - z1) if zMax > z1 else float('inf')
+            speed1 = dist1 / (zMax - z1) if zMax > z1 + ERRTOL['vertical'] else float('inf')
             return {
                 'dist': dist1 + dist2,
                 'time': float('inf'),
@@ -905,6 +912,9 @@ class TriGridSurface(object):
 
     # @tellRuntime('gridSurface.py.fastestPt2Facet', indentLevel = 1)
     def fastestPt2Facet(self, pt, z, vehSpeed):
+        if (vehSpeed <= 0):
+            raise UnsupportedInputError("ERROR: vehSpeed must be positive")
+
         trace = []
         visitedFacetIDs = set()
         bestPt2F = None
@@ -986,6 +996,9 @@ class TriGridSurface(object):
 
     # @tellRuntime('gridSurface.py.fastestPt2Facet2Pt', indentLevel = 1)
     def fastestPt2Facet2Pt(self, pt1, z1, pt2, vehSpeed):
+        if (vehSpeed <= 0):
+            raise UnsupportedInputError("ERROR: vehSpeed must be positive")
+
         trace = []
         visitedFacetIDs = set()
         bestPt2F = None
@@ -1110,13 +1123,28 @@ class TriGridSurface(object):
 
         possTWs = []
         for s in possOverlap:
-            ts = z1 + (z2 - z1) * ((s[0][0] - pt1[0]) / (pt2[0] - pt1[0]))
-            te = z1 + (z2 - z1) * ((s[1][0] - pt1[0]) / (pt2[0] - pt1[0]))
+            dx = pt2[0] - pt1[0]
+            dy = pt2[1] - pt1[1]
+            segLen2 = dx ** 2 + dy ** 2
+            if (segLen2 <= ERRTOL['distPt2Pt'] ** 2):
+                ts = z1
+                te = z1
+            elif (abs(dx) >= abs(dy) and abs(dx) > ERRTOL['distPt2Pt']):
+                ts = z1 + (z2 - z1) * ((s[0][0] - pt1[0]) / dx)
+                te = z1 + (z2 - z1) * ((s[1][0] - pt1[0]) / dx)
+            elif (abs(dy) > ERRTOL['distPt2Pt']):
+                ts = z1 + (z2 - z1) * ((s[0][1] - pt1[1]) / dy)
+                te = z1 + (z2 - z1) * ((s[1][1] - pt1[1]) / dy)
+            else:
+                ts = z1
+                te = z1
             possTWs.append([ts, te])
 
         # 如果可能相交，相交只可能发生在投影与unionProj相交的区域，计算与时间切面的相交点
         # @tellRuntime('gridSurface.py.getPt', indentLevel = 2)
         def getPt(z):
+            if (abs(z2 - z1) <= ERRTOL['vertical']):
+                return (pt1[0], pt1[1])
             ptX = pt1[0] + (pt2[0] - pt1[0]) * ((z - z1) / (z2 - z1))
             ptY = pt1[1] + (pt2[1] - pt1[1]) * ((z - z1) / (z2 - z1))
             return (ptX, ptY)
