@@ -1,9 +1,11 @@
 import math
+import heapq
 import networkx as nx
 from .common import *
 from .geometry import *
 
 class TriGridSurface(object):
+    # @tellRuntime('gridSurface.py.__init__', indentLevel = 1)
     def __init__(self, timedPoly, startTime=None, endTime=None):
         # 初始化
         self.triFacets = {}
@@ -53,6 +55,7 @@ class TriGridSurface(object):
              
         return
 
+    # @tellRuntime('gridSurface.py.buildFacets', indentLevel = 1)
     def buildFacets(self, timedPoly):
         for m in range(len(timedPoly) - 1):
             lowerPoly = [list(pt) for pt in timedPoly[m][0]]
@@ -157,6 +160,7 @@ class TriGridSurface(object):
 
         return
 
+    # @tellRuntime('gridSurface.py.addFacet', indentLevel = 1)
     def addFacet(self, key, adjTo, tri):
         self.surfaceGraph.add_node(key)
         self.triFacets[key] = tri
@@ -190,6 +194,7 @@ class TriGridSurface(object):
 
             self.surfaceGraph.add_edge(nei, key)
 
+    # @tellRuntime('gridSurface.py.truncateByTime', indentLevel = 1)
     def truncateByTime(self, t):
         # Truncate from time t.
         if (t < self.timedPoly[0][1] - ERRTOL['vertical'] or t > self.timedPoly[-1][1] + ERRTOL['vertical']):
@@ -260,6 +265,7 @@ class TriGridSurface(object):
         self.coreProj = self.buildCoreProfile()
         return
 
+    # @tellRuntime('gridSurface.py.appendByTimedPoly', indentLevel = 1)
     def appendByTimedPoly(self, t, timedPoly):
         self.truncateByTime(t)
 
@@ -314,7 +320,11 @@ class TriGridSurface(object):
         self.coreProj = self.buildCoreProfile()
         return
 
+    # @tellRuntime('gridSurface.py.removeUnreachableFromPt', indentLevel = 1)
     def removeUnreachableFromPt(self, pt, z, speed):
+        if (speed <= 0):
+            raise UnsupportedInputError("ERROR: speed must be positive")
+
         removeFacetIDs = []
         for facetID in self.triFacets:
             zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
@@ -335,163 +345,76 @@ class TriGridSurface(object):
                 self.surfaceGraph.remove_node(facetID)
             self.tris = [i for i in self.tris if i != tri]
 
-        updateLayerIDs = []
-        for i in range(len(self.timedPoly)):
-            layerTime = self.timedPoly[i][1]
-            layerPoly = self.timedPoly[i][0]
-            reachRadius = (layerTime - z) * speed
-            allReachableFlag = reachRadius >= 0
-            if (allReachableFlag):
-                for polyPt in layerPoly:
-                    if (distEuclideanXY(pt, polyPt) > reachRadius + ERRTOL['distPt2Pt']):
-                        allReachableFlag = False
-                        break
-
-            if (not allReachableFlag):
-                updateLayerIDs.append(i)
-                self.tris = [tri for tri in self.tris if not all([abs(v[2] - layerTime) <= ERRTOL['vertical'] for v in tri])]
-
-                clippedPolys = []
-                if (reachRadius >= 0 and len(layerPoly) >= 3):
-                    circlePoly = []
-                    for k in range(30):
-                        theta = 2 * math.pi * k / 30
-                        circlePoly.append([
-                            pt[0] + reachRadius * math.cos(theta),
-                            pt[1] + reachRadius * math.sin(theta)])
-                    try:
-                        clippedPolys = polysIntersect(polys = [layerPoly, circlePoly])
-                        clippedPolys = [i for i in clippedPolys if len(i) >= 3]
-                    except:
-                        clippedPolys = []
-
-                self.timedPoly[i][0] = clippedPolys[0] if len(clippedPolys) > 0 else []
-
-                for clippedPoly in clippedPolys:
-                    if (len(clippedPoly) >= 3):
-                        for tri in polyTriangulation(clippedPoly):
-                            self.tris.append([
-                                (tri[0][0], tri[0][1], layerTime),
-                                (tri[1][0], tri[1][1], layerTime),
-                                (tri[2][0], tri[2][1], layerTime)])
-
-        updateFacetLayerIDs = []
-        for layerID in updateLayerIDs:
-            if (layerID - 1 >= 0 and layerID - 1 not in updateFacetLayerIDs):
-                updateFacetLayerIDs.append(layerID - 1)
-            if (layerID < len(self.timedPoly) - 1 and layerID not in updateFacetLayerIDs):
-                updateFacetLayerIDs.append(layerID)
-        updateFacetLayerIDs = sorted(updateFacetLayerIDs)
-
-        removeFacetIDs = []
-        for facetID in self.triFacets:
-            if (facetID[0] in updateFacetLayerIDs):
-                removeFacetIDs.append(facetID)
-
-        for facetID in removeFacetIDs:
-            tri = self.triFacets[facetID]
-            if (facetID in self.triFacets):
-                del self.triFacets[facetID]
-            if (facetID in self.triCenters):
-                del self.triCenters[facetID]
-            if (self.surfaceGraph.has_node(facetID)):
-                self.surfaceGraph.remove_node(facetID)
-            self.tris = [i for i in self.tris if i != tri]
-
-        for m in updateFacetLayerIDs:
-            if (len(self.timedPoly[m][0]) < 3 or len(self.timedPoly[m + 1][0]) < 3):
-                continue
-
-            rebuildTimedPoly = []
-            for j in range(m):
-                rebuildTimedPoly.append([[], self.timedPoly[0][1]])
-            rebuildTimedPoly.append(self.timedPoly[m])
-            rebuildTimedPoly.append(self.timedPoly[m + 1])
-            self.buildFacets(rebuildTimedPoly)
-
-            for facetID in self.triFacets:
-                if (facetID[0] == m):
-                    self.tris.append(self.triFacets[facetID])
-        self.bottomPoly = self.timedPoly[0][0]
-        self.topPoly = self.timedPoly[-1][0]
-        self.extendNeighbor()
-        nonEmptyPolys = [i[0] for i in self.timedPoly if len(i[0]) >= 3]
-        self.unionProj = polysUnion(polys = nonEmptyPolys)[0] if len(nonEmptyPolys) > 0 else None
-        self.coreProj = self.buildCoreProfile() if len(nonEmptyPolys) == len(self.timedPoly) else None
+        filteredTris = []
+        for tri in self.tris:
+            horizontalFlag = all([abs(tri[k][2] - tri[0][2]) <= ERRTOL['vertical'] for k in range(3)])
+            boundaryFlag = horizontalFlag and (abs(tri[0][2] - self.startTime) <= ERRTOL['vertical'] or abs(tri[0][2] - self.endTime) <= ERRTOL['vertical'])
+            if (not boundaryFlag):
+                filteredTris.append(tri)
+            else:
+                tau = tri[0][2]
+                reachRadius = (tau - z) * speed
+                keepFlag = reachRadius >= 0
+                if (keepFlag):
+                    for vertex in tri:
+                        if (distEuclideanXY(pt, [vertex[0], vertex[1]]) > reachRadius + ERRTOL['distPt2Pt']):
+                            keepFlag = False
+                            break
+                if (keepFlag):
+                    filteredTris.append(tri)
+        self.tris = filteredTris
         return
 
+    # @tellRuntime('gridSurface.py.removeUnreachableToPt', indentLevel = 1)
     def removeUnreachableToPt(self, pt, z, speed):
+        if (speed <= 0):
+            raise UnsupportedInputError("ERROR: speed must be positive")
+
         removeFacetIDs = []
         for facetID in self.triFacets:
-            zMin = min([self.triFacets[facetID][k][2] for k in range(3)])
+            tri = self.triFacets[facetID]
+            zMin = min([tri[k][2] for k in range(3)])
+            zMax = max([tri[k][2] for k in range(3)])
             if (zMin > z + ERRTOL['vertical']):
                 removeFacetIDs.append(facetID)
-            else:
-                dist = distEuclideanXY(self.triCenters[facetID][0], pt)
-                if (self.triCenters[facetID][1] + dist / speed > z + ERRTOL['vertical']):
-                    removeFacetIDs.append(facetID)
+                continue
 
-        for facetID in removeFacetIDs:
-            tri = self.triFacets[facetID]
-            if (facetID in self.triFacets):
-                del self.triFacets[facetID]
-            if (facetID in self.triCenters):
-                del self.triCenters[facetID]
-            if (self.surfaceGraph.has_node(facetID)):
-                self.surfaceGraph.remove_node(facetID)
-            self.tris = [i for i in self.tris if i != tri]
-
-        updateLayerIDs = []
-        for i in range(len(self.timedPoly)):
-            layerTime = self.timedPoly[i][1]
-            layerPoly = self.timedPoly[i][0]
-            reachRadius = (z - layerTime) * speed
-            allReachableFlag = reachRadius >= 0
-            if (allReachableFlag):
-                for polyPt in layerPoly:
-                    if (distEuclideanXY(polyPt, pt) > reachRadius + ERRTOL['distPt2Pt']):
-                        allReachableFlag = False
+            keepFacetFlag = False
+            zLow = zMin
+            zHigh = min(zMax, z)
+            if (zLow <= zHigh + ERRTOL['vertical']):
+                for s in range(81):
+                    tau = zLow + (zHigh - zLow) * s / 80
+                    crossPts = []
+                    for i in range(3):
+                        p0 = tri[i]
+                        p1 = tri[(i + 1) % 3]
+                        if (abs(p0[2] - tau) <= ERRTOL['vertical']):
+                            crossPts.append([p0[0], p0[1]])
+                        if ((p0[2] - tau) * (p1[2] - tau) < -ERRTOL['vertical'] ** 2):
+                            ratio = (tau - p0[2]) / (p1[2] - p0[2])
+                            crossPts.append([p0[0] + (p1[0] - p0[0]) * ratio, p0[1] + (p1[1] - p0[1]) * ratio])
+                    uniqPts = []
+                    for p in crossPts:
+                        if (not any(distEuclideanXY(p, q) <= ERRTOL['distPt2Pt'] for q in uniqPts)):
+                            uniqPts.append(p)
+                    curDist = float('inf')
+                    if (len(uniqPts) == 1):
+                        curDist = distEuclideanXY(pt, uniqPts[0])
+                    elif (len(uniqPts) >= 2):
+                        seg = [uniqPts[0], uniqPts[1]]
+                        maxDist = distEuclideanXY(uniqPts[0], uniqPts[1])
+                        for i in range(len(uniqPts)):
+                            for j in range(i + 1, len(uniqPts)):
+                                d = distEuclideanXY(uniqPts[i], uniqPts[j])
+                                if (d > maxDist):
+                                    maxDist = d
+                                    seg = [uniqPts[i], uniqPts[j]]
+                        curDist = distPt2Seg(pt, seg)
+                    if (curDist <= (z - tau) * speed + ERRTOL['distPt2Pt']):
+                        keepFacetFlag = True
                         break
-
-            if (not allReachableFlag):
-                updateLayerIDs.append(i)
-                self.tris = [tri for tri in self.tris if not all([abs(v[2] - layerTime) <= ERRTOL['vertical'] for v in tri])]
-
-                clippedPolys = []
-                if (reachRadius >= 0 and len(layerPoly) >= 3):
-                    circlePoly = []
-                    for k in range(30):
-                        theta = 2 * math.pi * k / 30
-                        circlePoly.append([
-                            pt[0] + reachRadius * math.cos(theta),
-                            pt[1] + reachRadius * math.sin(theta)])
-                    try:
-                        clippedPolys = polysIntersect(polys = [layerPoly, circlePoly])
-                        clippedPolys = [i for i in clippedPolys if len(i) >= 3]
-                    except:
-                        clippedPolys = []
-
-                self.timedPoly[i][0] = clippedPolys[0] if len(clippedPolys) > 0 else []
-
-                for clippedPoly in clippedPolys:
-                    if (len(clippedPoly) >= 3):
-                        for tri in polyTriangulation(clippedPoly):
-                            self.tris.append([
-                                (tri[0][0], tri[0][1], layerTime),
-                                (tri[1][0], tri[1][1], layerTime),
-                                (tri[2][0], tri[2][1], layerTime)])
-
-        updateFacetLayerIDs = []
-        for layerID in updateLayerIDs:
-            if (layerID - 1 >= 0 and layerID - 1 not in updateFacetLayerIDs):
-                updateFacetLayerIDs.append(layerID - 1)
-            if (layerID < len(self.timedPoly) - 1 and layerID not in updateFacetLayerIDs):
-                updateFacetLayerIDs.append(layerID)
-        updateFacetLayerIDs = sorted(updateFacetLayerIDs)
-
-        removeFacetIDs = []
-        for facetID in self.triFacets:
-            if (facetID[0] in updateFacetLayerIDs):
+            if (not keepFacetFlag):
                 removeFacetIDs.append(facetID)
 
         for facetID in removeFacetIDs:
@@ -504,28 +427,27 @@ class TriGridSurface(object):
                 self.surfaceGraph.remove_node(facetID)
             self.tris = [i for i in self.tris if i != tri]
 
-        for m in updateFacetLayerIDs:
-            if (len(self.timedPoly[m][0]) < 3 or len(self.timedPoly[m + 1][0]) < 3):
-                continue
-
-            rebuildTimedPoly = []
-            for j in range(m):
-                rebuildTimedPoly.append([[], self.timedPoly[0][1]])
-            rebuildTimedPoly.append(self.timedPoly[m])
-            rebuildTimedPoly.append(self.timedPoly[m + 1])
-            self.buildFacets(rebuildTimedPoly)
-
-            for facetID in self.triFacets:
-                if (facetID[0] == m):
-                    self.tris.append(self.triFacets[facetID])
-        self.bottomPoly = self.timedPoly[0][0]
-        self.topPoly = self.timedPoly[-1][0]
-        self.extendNeighbor()
-        nonEmptyPolys = [i[0] for i in self.timedPoly if len(i[0]) >= 3]
-        self.unionProj = polysUnion(polys = nonEmptyPolys)[0] if len(nonEmptyPolys) > 0 else None
-        self.coreProj = self.buildCoreProfile() if len(nonEmptyPolys) == len(self.timedPoly) else None
+        filteredTris = []
+        for tri in self.tris:
+            horizontalFlag = all([abs(tri[k][2] - tri[0][2]) <= ERRTOL['vertical'] for k in range(3)])
+            boundaryFlag = horizontalFlag and (abs(tri[0][2] - self.startTime) <= ERRTOL['vertical'] or abs(tri[0][2] - self.endTime) <= ERRTOL['vertical'])
+            if (not boundaryFlag):
+                filteredTris.append(tri)
+            else:
+                tau = tri[0][2]
+                reachRadius = (z - tau) * speed
+                keepFlag = reachRadius >= 0
+                if (keepFlag):
+                    for vertex in tri:
+                        if (distEuclideanXY([vertex[0], vertex[1]], pt) > reachRadius + ERRTOL['distPt2Pt']):
+                            keepFlag = False
+                            break
+                if (keepFlag):
+                    filteredTris.append(tri)
+        self.tris = filteredTris
         return
-
+    
+    # @tellRuntime('gridSurface.py.extendNeighbor', indentLevel = 1)
     def extendNeighbor(self):
         # 先记录每个facetID当前的neighbor集合
         neiIDs = {}
@@ -541,6 +463,7 @@ class TriGridSurface(object):
 
         return
 
+    # @tellRuntime('gridSurface.py.buildZProfile', indentLevel = 1)
     def buildZProfile(self, z):
         t0 = None
         t1 = None
@@ -629,10 +552,13 @@ class TriGridSurface(object):
         if (t0 == None or t1 == None):
             raise OutOfRangeError("ERROR: z is out of range")
         return self.timedPoly[-1][0]
+    
+    # @tellRuntime('gridSurface.py.buildUnionProfile', indentLevel = 1)
     def buildUnionProfile(self):
         poly = polysUnion(polys = [self.timedPoly[i][0] for i in range(len(self.timedPoly))])[0]
         return poly
 
+    # @tellRuntime('gridSurface.py.buildCoreProfile', indentLevel = 1)
     def buildCoreProfile(self):
         try:
             poly = polysIntersect(polys = [self.timedPoly[i][0] for i in range(len(self.timedPoly))])[0]
@@ -640,6 +566,7 @@ class TriGridSurface(object):
         except:
             return None
 
+    # @tellRuntime('gridSurface.py.buildBtwCoreProfile', indentLevel = 1)
     def buildBtwCoreProfile(self, t1, t2):
         z1 = None
         z2 = None
@@ -653,6 +580,7 @@ class TriGridSurface(object):
                 break
         return polysIntersect(polys = [timedPoly[i][0] for i in range(z1, z2)])[0]        
 
+    # @tellRuntime('gridSurface.py.pt2Facet', indentLevel = 1)
     def pt2Facet(self, pt, z, vehSpeed, facetID):
         tri = self.triFacets[facetID]
         zMin = min([tri[k][2] for k in range(3)])
@@ -661,40 +589,75 @@ class TriGridSurface(object):
             raise UnsupportedInputError("ERROR: vehSpeed must be positive")
 
         zLow = max(z, zMin)
-        bestPt = self.triCenters[facetID][0]
-        bestDist = distEuclideanXY(pt, bestPt)
 
-        tau = zMax
-        crossPts = []
-        for i in range(3):
-            p0 = tri[i]
-            p1 = tri[(i + 1) % 3]
-            if (abs(p0[2] - tau) <= ERRTOL['vertical']):
-                crossPts.append([p0[0], p0[1]])
-            if ((p0[2] - tau) * (p1[2] - tau) < -ERRTOL['vertical'] ** 2):
-                ratio = (tau - p0[2]) / (p1[2] - p0[2])
-                crossPts.append([p0[0] + (p1[0] - p0[0]) * ratio, p0[1] + (p1[1] - p0[1]) * ratio])
-        uniqPts = []
-        for p in crossPts:
-            if (not any(distEuclideanXY(p, q) <= ERRTOL['distPt2Pt'] for q in uniqPts)):
-                uniqPts.append(p)
-        if (len(uniqPts) == 1):
-            bestPt = uniqPts[0]
-            bestDist = distEuclideanXY(pt, bestPt)
-        elif (len(uniqPts) >= 2):
-            seg = [uniqPts[0], uniqPts[1]]
-            maxDist = distEuclideanXY(uniqPts[0], uniqPts[1])
-            for i in range(len(uniqPts)):
-                for j in range(i + 1, len(uniqPts)):
-                    d = distEuclideanXY(uniqPts[i], uniqPts[j])
+        # @tellRuntime('gridSurface.py.uniquePts', indentLevel = 2)
+        def uniquePts(pts):
+            uniq = []
+            for p in pts:
+                if (not any(distEuclideanXY(p, q) <= ERRTOL['distPt2Pt'] for q in uniq)):
+                    uniq.append(p)
+            return uniq
+
+        # @tellRuntime('gridSurface.py.sliceFacet', indentLevel = 2)
+        def sliceFacet(tau):
+            crossPts = []
+            for i in range(3):
+                p0 = tri[i]
+                p1 = tri[(i + 1) % 3]
+                if (abs(p0[2] - tau) <= ERRTOL['vertical']):
+                    crossPts.append([p0[0], p0[1]])
+                if ((p0[2] - tau) * (p1[2] - tau) < -ERRTOL['vertical'] ** 2):
+                    ratio = (tau - p0[2]) / (p1[2] - p0[2])
+                    crossPts.append([p0[0] + (p1[0] - p0[0]) * ratio, p0[1] + (p1[1] - p0[1]) * ratio])
+
+            uniq = uniquePts(crossPts)
+            if (len(uniq) == 0):
+                return None
+            if (len(uniq) == 1):
+                return [uniq[0], uniq[0]]
+
+            seg = [uniq[0], uniq[1]]
+            maxDist = distEuclideanXY(uniq[0], uniq[1])
+            for i in range(len(uniq)):
+                for j in range(i + 1, len(uniq)):
+                    d = distEuclideanXY(uniq[i], uniq[j])
                     if (d > maxDist):
                         maxDist = d
-                        seg = [uniqPts[i], uniqPts[j]]
-            res = distPt2Seg(pt, seg, detailFlag = True)
-            bestPt = res['proj']
-            bestDist = res['dist']
+                        seg = [uniq[i], uniq[j]]
+            return seg
 
-        if (zMax < z - ERRTOL['vertical'] or bestDist > (zMax - z) * vehSpeed + ERRTOL['distPt2Pt']):
+        # @tellRuntime('gridSurface.py.closestPtOnSlice', indentLevel = 2)
+        def closestPtOnSlice(tau):
+            seg = sliceFacet(tau)
+            if (seg == None):
+                return None
+            if (distEuclideanXY(seg[0], seg[1]) <= ERRTOL['distPt2Pt']):
+                return {
+                    'pt': seg[0],
+                    'dist': distEuclideanXY(pt, seg[0])
+                }
+            res = distPt2Seg(pt, seg, detailFlag = True)
+            return {
+                'pt': res['proj'],
+                'dist': res['dist']
+            }
+
+        # @tellRuntime('gridSurface.py.evalTau', indentLevel = 2)
+        def evalTau(tau):
+            close = closestPtOnSlice(tau)
+            if (close == None):
+                return None
+            reachable = close['dist'] <= (tau - z) * vehSpeed + ERRTOL['distPt2Pt']
+            return {
+                'pt': close['pt'],
+                'dist': close['dist'],
+                'reachable': reachable
+            }
+
+        fallback = evalTau(zMax)
+        if (zMax < z - ERRTOL['vertical'] or fallback == None or fallback['reachable'] == False):
+            bestPt = self.triCenters[facetID][0] if fallback == None else fallback['pt']
+            bestDist = distEuclideanXY(pt, bestPt) if fallback == None else fallback['dist']
             speed = bestDist / (zMax - z) if zMax > z else float('inf')
             return {
                 'dist': bestDist,
@@ -708,72 +671,30 @@ class TriGridSurface(object):
 
         low = zLow
         high = zMax
-        for _ in range(40):
-            tau = (low + high) / 2
-            crossPts = []
-            for i in range(3):
-                p0 = tri[i]
-                p1 = tri[(i + 1) % 3]
-                if (abs(p0[2] - tau) <= ERRTOL['vertical']):
-                    crossPts.append([p0[0], p0[1]])
-                if ((p0[2] - tau) * (p1[2] - tau) < -ERRTOL['vertical'] ** 2):
-                    ratio = (tau - p0[2]) / (p1[2] - p0[2])
-                    crossPts.append([p0[0] + (p1[0] - p0[0]) * ratio, p0[1] + (p1[1] - p0[1]) * ratio])
-            uniqPts = []
-            for p in crossPts:
-                if (not any(distEuclideanXY(p, q) <= ERRTOL['distPt2Pt'] for q in uniqPts)):
-                    uniqPts.append(p)
-            curDist = float('inf')
-            if (len(uniqPts) == 1):
-                curDist = distEuclideanXY(pt, uniqPts[0])
-            elif (len(uniqPts) >= 2):
-                seg = [uniqPts[0], uniqPts[1]]
-                maxDist = distEuclideanXY(uniqPts[0], uniqPts[1])
-                for i in range(len(uniqPts)):
-                    for j in range(i + 1, len(uniqPts)):
-                        d = distEuclideanXY(uniqPts[i], uniqPts[j])
-                        if (d > maxDist):
-                            maxDist = d
-                            seg = [uniqPts[i], uniqPts[j]]
-                curDist = distPt2Seg(pt, seg)
-            if (curDist <= (tau - z) * vehSpeed + ERRTOL['distPt2Pt']):
-                high = tau
-            else:
-                low = tau
+        lowEval = evalTau(low)
+        if (lowEval != None and lowEval['reachable'] == True):
+            high = low
+            finalEval = lowEval
+        else:
+            finalEval = fallback
+            iterNum = 0
+            while (high - low > ERRTOL['vertical'] and iterNum < 50):
+                tau = (low + high) / 2
+                cur = evalTau(tau)
+                if (cur != None and cur['reachable'] == True):
+                    high = tau
+                    finalEval = cur
+                else:
+                    low = tau
+                iterNum += 1
+
+            finalEval = evalTau(high)
+            if (finalEval == None):
+                finalEval = fallback
 
         zVeh = high
-        crossPts = []
-        for i in range(3):
-            p0 = tri[i]
-            p1 = tri[(i + 1) % 3]
-            if (abs(p0[2] - zVeh) <= ERRTOL['vertical']):
-                crossPts.append([p0[0], p0[1]])
-            if ((p0[2] - zVeh) * (p1[2] - zVeh) < -ERRTOL['vertical'] ** 2):
-                ratio = (zVeh - p0[2]) / (p1[2] - p0[2])
-                crossPts.append([p0[0] + (p1[0] - p0[0]) * ratio, p0[1] + (p1[1] - p0[1]) * ratio])
-        uniqPts = []
-        for p in crossPts:
-            if (not any(distEuclideanXY(p, q) <= ERRTOL['distPt2Pt'] for q in uniqPts)):
-                uniqPts.append(p)
-        if (len(uniqPts) == 1):
-            bestPt = uniqPts[0]
-            dist = distEuclideanXY(pt, bestPt)
-        elif (len(uniqPts) >= 2):
-            seg = [uniqPts[0], uniqPts[1]]
-            maxDist = distEuclideanXY(uniqPts[0], uniqPts[1])
-            for i in range(len(uniqPts)):
-                for j in range(i + 1, len(uniqPts)):
-                    d = distEuclideanXY(uniqPts[i], uniqPts[j])
-                    if (d > maxDist):
-                        maxDist = d
-                        seg = [uniqPts[i], uniqPts[j]]
-            res = distPt2Seg(pt, seg, detailFlag = True)
-            bestPt = res['proj']
-            dist = res['dist']
-        else:
-            bestPt = self.triCenters[facetID][0]
-            dist = distEuclideanXY(pt, bestPt)
-
+        dist = finalEval['dist']
+        bestPt = finalEval['pt']
         time = zVeh - z
         speed = 0 if (time <= ERRTOL['vertical'] and dist <= ERRTOL['distPt2Pt']) else dist / time
         reachable = "CanGoFaster" if (speed < vehSpeed - ERRTOL['distPt2Pt']) else "ArrMaxSpeed"
@@ -787,6 +708,7 @@ class TriGridSurface(object):
             'reachable': reachable
         }
 
+    # @tellRuntime('gridSurface.py.pt2Facet2Pt', indentLevel = 1)
     def pt2Facet2Pt(self, pt1, z1, pt2, vehSpeed, facetID):
         tri = self.triFacets[facetID]
         zMin = min([tri[k][2] for k in range(3)])
@@ -796,74 +718,172 @@ class TriGridSurface(object):
 
         zLow = max(z1, zMin)
         best = None
-        if (zLow <= zMax + ERRTOL['vertical']):
-            for s in range(81):
-                tau = zLow + (zMax - zLow) * s / 80
-                crossPts = []
-                for i in range(3):
-                    p0 = tri[i]
-                    p1 = tri[(i + 1) % 3]
-                    if (abs(p0[2] - tau) <= ERRTOL['vertical']):
-                        crossPts.append([p0[0], p0[1]])
-                    if ((p0[2] - tau) * (p1[2] - tau) < -ERRTOL['vertical'] ** 2):
-                        ratio = (tau - p0[2]) / (p1[2] - p0[2])
-                        crossPts.append([p0[0] + (p1[0] - p0[0]) * ratio, p0[1] + (p1[1] - p0[1]) * ratio])
-                uniqPts = []
-                for p in crossPts:
-                    if (not any(distEuclideanXY(p, q) <= ERRTOL['distPt2Pt'] for q in uniqPts)):
-                        uniqPts.append(p)
-                if (len(uniqPts) == 0):
-                    continue
-                seg = None
-                if (len(uniqPts) >= 2):
-                    seg = [uniqPts[0], uniqPts[1]]
-                    maxDist = distEuclideanXY(uniqPts[0], uniqPts[1])
-                    for i in range(len(uniqPts)):
-                        for j in range(i + 1, len(uniqPts)):
-                            d = distEuclideanXY(uniqPts[i], uniqPts[j])
-                            if (d > maxDist):
-                                maxDist = d
-                                seg = [uniqPts[i], uniqPts[j]]
-                candidates = []
-                if (seg == None):
-                    candidates.append(uniqPts[0])
+
+        # @tellRuntime('gridSurface.py.updateBest', indentLevel = 2)
+        def updateBest(cur):
+            nonlocal best
+            if (cur != None and (best == None or cur['time'] < best['time'])):
+                best = cur
+            return
+
+        # @tellRuntime('gridSurface.py.uniquePts', indentLevel = 2)
+        def uniquePts(pts):
+            uniq = []
+            for p in pts:
+                if (not any(distEuclideanXY(p, q) <= ERRTOL['distPt2Pt'] for q in uniq)):
+                    uniq.append(p)
+            return uniq
+
+        # @tellRuntime('gridSurface.py.sliceFacet', indentLevel = 2)
+        def sliceFacet(tau):
+            crossPts = []
+            for i in range(3):
+                p0 = tri[i]
+                p1 = tri[(i + 1) % 3]
+                if (abs(p0[2] - tau) <= ERRTOL['vertical']):
+                    crossPts.append([p0[0], p0[1]])
+                if ((p0[2] - tau) * (p1[2] - tau) < -ERRTOL['vertical'] ** 2):
+                    ratio = (tau - p0[2]) / (p1[2] - p0[2])
+                    crossPts.append([p0[0] + (p1[0] - p0[0]) * ratio, p0[1] + (p1[1] - p0[1]) * ratio])
+
+            uniq = uniquePts(crossPts)
+            if (len(uniq) == 0):
+                return None
+            if (len(uniq) == 1):
+                return [uniq[0], uniq[0]]
+
+            seg = [uniq[0], uniq[1]]
+            maxDist = distEuclideanXY(uniq[0], uniq[1])
+            for i in range(len(uniq)):
+                for j in range(i + 1, len(uniq)):
+                    d = distEuclideanXY(uniq[i], uniq[j])
+                    if (d > maxDist):
+                        maxDist = d
+                        seg = [uniq[i], uniq[j]]
+            return seg
+
+        # @tellRuntime('gridSurface.py.closestReachablePtOnSlice', indentLevel = 2)
+        def closestReachablePtOnSlice(seg, tau):
+            radius = max(0, (tau - z1) * vehSpeed)
+            dx = seg[1][0] - seg[0][0]
+            dy = seg[1][1] - seg[0][1]
+            a = dx ** 2 + dy ** 2
+
+            if (a <= ERRTOL['distPt2Pt'] ** 2):
+                if (distEuclideanXY(pt1, seg[0]) <= radius + ERRTOL['distPt2Pt']):
+                    return seg[0]
+                return None
+
+            fx = seg[0][0] - pt1[0]
+            fy = seg[0][1] - pt1[1]
+            b = 2 * (fx * dx + fy * dy)
+            c = fx ** 2 + fy ** 2 - radius ** 2
+            disc = b ** 2 - 4 * a * c
+
+            if (disc < -ERRTOL['distPt2Pt']):
+                if (c <= ERRTOL['distPt2Pt']):
+                    tLow = 0
+                    tHigh = 1
                 else:
-                    candidates.extend(seg)
-                    res = distPt2Seg(pt2, seg, detailFlag = True)
-                    candidates.append(res['proj'])
-                    dx = seg[1][0] - seg[0][0]
-                    dy = seg[1][1] - seg[0][1]
-                    fx = seg[0][0] - pt1[0]
-                    fy = seg[0][1] - pt1[1]
-                    a = dx ** 2 + dy ** 2
-                    b = 2 * (fx * dx + fy * dy)
-                    c = fx ** 2 + fy ** 2 - ((tau - z1) * vehSpeed) ** 2
-                    disc = b ** 2 - 4 * a * c
-                    if (a > ERRTOL['distPt2Pt'] and disc >= 0):
-                        for root in [(-b - math.sqrt(disc)) / (2 * a), (-b + math.sqrt(disc)) / (2 * a)]:
-                            if (-ERRTOL['vertical'] <= root <= 1 + ERRTOL['vertical']):
-                                root = min(1, max(0, root))
-                                candidates.append([seg[0][0] + dx * root, seg[0][1] + dy * root])
-                for cand in candidates:
-                    dist1 = distEuclideanXY(pt1, cand)
-                    if (dist1 > (tau - z1) * vehSpeed + ERRTOL['distPt2Pt']):
-                        continue
-                    dist2 = distEuclideanXY(pt2, cand)
-                    time1 = tau - z1
-                    time2 = dist2 / vehSpeed
-                    totalTime = time1 + time2
-                    speed1 = 0 if (time1 <= ERRTOL['vertical'] and dist1 <= ERRTOL['distPt2Pt']) else dist1 / time1
-                    if (best == None or totalTime < best['time']):
-                        best = {
-                            'dist': dist1 + dist2,
-                            'time': totalTime,
-                            'pt': cand,
-                            'speed1': speed1,
-                            'facetID': facetID,
-                            'zVeh1': tau,
-                            'zVeh2': tau + time2,
-                            'reachable': "CanGoFaster" if (speed1 < vehSpeed - ERRTOL['distPt2Pt']) else "ArrMaxSpeed"
-                        }
+                    return None
+            else:
+                disc = max(0, disc)
+                root1 = (-b - math.sqrt(disc)) / (2 * a)
+                root2 = (-b + math.sqrt(disc)) / (2 * a)
+                tLow = max(0, min(root1, root2))
+                tHigh = min(1, max(root1, root2))
+                if (tLow > tHigh + ERRTOL['vertical']):
+                    return None
+
+            tProj = ((pt2[0] - seg[0][0]) * dx + (pt2[1] - seg[0][1]) * dy) / a
+            t = min(tHigh, max(tLow, tProj))
+            return [seg[0][0] + dx * t, seg[0][1] + dy * t]
+
+        # @tellRuntime('gridSurface.py.evalTau', indentLevel = 2)
+        def evalTau(tau):
+            if (tau < zLow - ERRTOL['vertical'] or tau > zMax + ERRTOL['vertical']):
+                return None
+
+            seg = sliceFacet(tau)
+            if (seg == None):
+                return None
+
+            cand = closestReachablePtOnSlice(seg, tau)
+            if (cand == None):
+                return None
+
+            dist1 = distEuclideanXY(pt1, cand)
+            dist2 = distEuclideanXY(pt2, cand)
+            time1 = tau - z1
+            time2 = dist2 / vehSpeed
+            totalTime = time1 + time2
+            speed1 = 0 if (time1 <= ERRTOL['vertical'] and dist1 <= ERRTOL['distPt2Pt']) else dist1 / time1
+            return {
+                'dist': dist1 + dist2,
+                'time': totalTime,
+                'pt': cand,
+                'speed1': speed1,
+                'facetID': facetID,
+                'zVeh1': tau,
+                'zVeh2': tau + time2,
+                'reachable': "CanGoFaster" if (speed1 < vehSpeed - ERRTOL['distPt2Pt']) else "ArrMaxSpeed"
+            }
+
+        if (zLow <= zMax + ERRTOL['vertical']):
+            coarseNum = 11
+            if (abs(zMax - zLow) <= ERRTOL['vertical']):
+                updateBest(evalTau(zLow))
+            else:
+                samples = []
+                for s in range(coarseNum):
+                    tau = zLow + (zMax - zLow) * s / (coarseNum - 1)
+                    cur = evalTau(tau)
+                    updateBest(cur)
+                    samples.append({
+                        'tau': tau,
+                        'time': cur['time'] if cur != None else float('inf')
+                    })
+
+                phi = (1 + math.sqrt(5)) / 2
+                refineIntervals = []
+                for i in range(len(samples)):
+                    preTime = samples[i - 1]['time'] if i > 0 else float('inf')
+                    curTime = samples[i]['time']
+                    sucTime = samples[i + 1]['time'] if i < len(samples) - 1 else float('inf')
+                    if (curTime < float('inf') and curTime <= preTime and curTime <= sucTime):
+                        lo = samples[max(0, i - 1)]['tau']
+                        hi = samples[min(len(samples) - 1, i + 1)]['tau']
+                        if (hi > lo + ERRTOL['vertical']):
+                            refineIntervals.append([lo, hi])
+
+                for interval in refineIntervals:
+                    lo = interval[0]
+                    hi = interval[1]
+                    m1 = hi - (hi - lo) / phi
+                    m2 = lo + (hi - lo) / phi
+                    f1 = evalTau(m1)
+                    f2 = evalTau(m2)
+                    updateBest(f1)
+                    updateBest(f2)
+                    iterNum = 0
+                    while (hi - lo > ERRTOL['vertical'] and iterNum < 50):
+                        c1 = f1['time'] if f1 != None else float('inf')
+                        c2 = f2['time'] if f2 != None else float('inf')
+                        if (c1 <= c2):
+                            hi = m2
+                            m2 = m1
+                            f2 = f1
+                            m1 = hi - (hi - lo) / phi
+                            f1 = evalTau(m1)
+                            updateBest(f1)
+                        else:
+                            lo = m1
+                            m1 = m2
+                            f1 = f2
+                            m2 = lo + (hi - lo) / phi
+                            f2 = evalTau(m2)
+                            updateBest(f2)
+                        iterNum += 1
 
         if (best == None):
             bestPt = self.triCenters[facetID][0]
@@ -883,63 +903,79 @@ class TriGridSurface(object):
 
         return best
 
+    # @tellRuntime('gridSurface.py.fastestPt2Facet', indentLevel = 1)
     def fastestPt2Facet(self, pt, z, vehSpeed):
         trace = []
         visitedFacetIDs = set()
         bestPt2F = None
         bestTime = float('inf')
 
-        candidateFacetIDs = []
-        for facetID in self.triFacets:
-            zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
-            if (zMax >= z - ERRTOL['vertical']):
-                candidateFacetIDs.append(facetID)
+        # @tellRuntime('gridSurface.py.facetLowerBound', indentLevel = 2)
+        def facetLowerBound(facetID):
+            tri = self.triFacets[facetID]
+            zMin = min([tri[k][2] for k in range(3)])
+            zMax = max([tri[k][2] for k in range(3)])
+            if (zMax < z - ERRTOL['vertical']):
+                return float('inf')
+            poly = [[tri[k][0], tri[k][1]] for k in range(3)]
+            spaceLB = distPt2Poly(pt = pt, poly = poly) / vehSpeed
+            timeLB = max(0, zMin - z)
+            return max(spaceLB, timeLB)
 
-        candidateFacetIDs = sorted(
-            candidateFacetIDs,
+        seedLimit = 16
+        seedFacetIDs = heapq.nsmallest(
+            min(seedLimit, len(self.triFacets)),
+            [facetID for facetID in self.triFacets],
             key = lambda facetID: (
+                facetLowerBound(facetID),
                 abs(self.triCenters[facetID][1] - z),
                 distEuclideanXY(pt, self.triCenters[facetID][0])))
 
-        for startFacetID in candidateFacetIDs:
-            if (startFacetID in visitedFacetIDs or startFacetID not in self.triFacets):
+        openFacetIDs = []
+        openSet = set()
+        for facetID in seedFacetIDs:
+            lb = facetLowerBound(facetID)
+            if (lb < float('inf')):
+                heapq.heappush(openFacetIDs, (lb, facetID))
+                openSet.add(facetID)
+
+        while (len(openFacetIDs) > 0):
+            lb, curFacetID = heapq.heappop(openFacetIDs)
+            openSet.discard(curFacetID)
+            if (curFacetID in visitedFacetIDs or curFacetID not in self.triFacets):
                 continue
+            if (bestPt2F != None and lb >= bestTime - ERRTOL['vertical']):
+                break
 
-            openFacetIDs = [startFacetID]
-            while (len(openFacetIDs) > 0):
-                curFacetID = openFacetIDs.pop(0)
-                if (curFacetID in visitedFacetIDs or curFacetID not in self.triFacets):
-                    continue
+            visitedFacetIDs.add(curFacetID)
+            cur2F = self.pt2Facet(pt, z, vehSpeed, curFacetID)
+            trace.append(cur2F)
+            if (cur2F['reachable'] != "NotReachable" and cur2F['time'] < bestTime):
+                bestTime = cur2F['time']
+                bestPt2F = cur2F
 
-                visitedFacetIDs.add(curFacetID)
-                curZMax = max([self.triFacets[curFacetID][k][2] for k in range(3)])
-                if (curZMax < z - ERRTOL['vertical']):
-                    continue
-
-                cur2F = self.pt2Facet(pt, z, vehSpeed, curFacetID)
-                trace.append(cur2F)
-                if (cur2F['reachable'] != "NotReachable" and cur2F['time'] < bestTime):
-                    bestTime = cur2F['time']
-                    bestPt2F = cur2F
-
-                adjFacetIDs = []
-                if (self.surfaceGraph.has_node(curFacetID)):
-                    adjFacetIDs = [i for i in self.surfaceGraph.neighbors(curFacetID)]
-                adjFacetIDs = [i for i in adjFacetIDs if i not in visitedFacetIDs and i in self.triFacets]
-                adjFacetIDs = sorted(
-                    adjFacetIDs,
-                    key = lambda facetID: (
-                        abs(self.triCenters[facetID][1] - z),
-                        distEuclideanXY(pt, self.triCenters[facetID][0])))
-                for facetID in adjFacetIDs:
-                    zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
-                    if (zMax >= z - ERRTOL['vertical'] and facetID not in openFacetIDs):
-                        openFacetIDs.append(facetID)
+            if (self.surfaceGraph.has_node(curFacetID)):
+                for facetID in self.surfaceGraph.neighbors(curFacetID):
+                    if (facetID in visitedFacetIDs or facetID in openSet or facetID not in self.triFacets):
+                        continue
+                    lb = facetLowerBound(facetID)
+                    if (lb < float('inf') and (bestPt2F == None or lb < bestTime - ERRTOL['vertical'])):
+                        heapq.heappush(openFacetIDs, (lb, facetID))
+                        openSet.add(facetID)
 
         if (bestPt2F == None):
-            raise NotAvailableError("ERROR: no reachable facet can be found")
+            return {
+                'reachable': False,
+                'facetID': None,
+                'pt': None,
+                'zVeh': None,
+                'speed': None,
+                'time': None,
+                'trace': trace
+            }
 
         return {
+            'reachable': True,
             'facetID': bestPt2F['facetID'],
             'pt': bestPt2F['pt'],
             'zVeh': bestPt2F['zVeh'],
@@ -948,63 +984,81 @@ class TriGridSurface(object):
             'trace': trace
         }
 
+    @tellRuntime('gridSurface.py.fastestPt2Facet2Pt', indentLevel = 1)
     def fastestPt2Facet2Pt(self, pt1, z1, pt2, vehSpeed):
         trace = []
         visitedFacetIDs = set()
         bestPt2F = None
         bestTime = float('inf')
 
-        candidateFacetIDs = []
-        for facetID in self.triFacets:
-            zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
-            if (zMax >= z1 - ERRTOL['vertical']):
-                candidateFacetIDs.append(facetID)
+        # @tellRuntime('gridSurface.py.facetLowerBound', indentLevel = 2)
+        def facetLowerBound(facetID):
+            tri = self.triFacets[facetID]
+            zMin = min([tri[k][2] for k in range(3)])
+            zMax = max([tri[k][2] for k in range(3)])
+            if (zMax < z1 - ERRTOL['vertical']):
+                return float('inf')
+            poly = [[tri[k][0], tri[k][1]] for k in range(3)]
+            space1LB = distPt2Poly(pt = pt1, poly = poly) / vehSpeed
+            space2LB = distPt2Poly(pt = pt2, poly = poly) / vehSpeed
+            timeLB = max(0, zMin - z1)
+            return max(space1LB, timeLB) + space2LB
 
-        candidateFacetIDs = sorted(
-            candidateFacetIDs,
+        seedLimit = 16
+        seedFacetIDs = heapq.nsmallest(
+            min(seedLimit, len(self.triFacets)),
+            [facetID for facetID in self.triFacets],
             key = lambda facetID: (
+                facetLowerBound(facetID),
                 abs(self.triCenters[facetID][1] - z1),
                 distEuclideanXY(pt1, self.triCenters[facetID][0]) + distEuclideanXY(pt2, self.triCenters[facetID][0])))
 
-        for startFacetID in candidateFacetIDs:
-            if (startFacetID in visitedFacetIDs or startFacetID not in self.triFacets):
+        openFacetIDs = []
+        openSet = set()
+        for facetID in seedFacetIDs:
+            lb = facetLowerBound(facetID)
+            if (lb < float('inf')):
+                heapq.heappush(openFacetIDs, (lb, facetID))
+                openSet.add(facetID)
+
+        while (len(openFacetIDs) > 0):
+            lb, curFacetID = heapq.heappop(openFacetIDs)
+            openSet.discard(curFacetID)
+            if (curFacetID in visitedFacetIDs or curFacetID not in self.triFacets):
                 continue
+            if (bestPt2F != None and lb >= bestTime - ERRTOL['vertical']):
+                break
 
-            openFacetIDs = [startFacetID]
-            while (len(openFacetIDs) > 0):
-                curFacetID = openFacetIDs.pop(0)
-                if (curFacetID in visitedFacetIDs or curFacetID not in self.triFacets):
-                    continue
+            visitedFacetIDs.add(curFacetID)
+            cur2F = self.pt2Facet2Pt(pt1, z1, pt2, vehSpeed, curFacetID)
+            trace.append(cur2F)
+            if (cur2F['reachable'] != "NotReachable" and cur2F['time'] < bestTime):
+                bestTime = cur2F['time']
+                bestPt2F = cur2F
 
-                visitedFacetIDs.add(curFacetID)
-                curZMax = max([self.triFacets[curFacetID][k][2] for k in range(3)])
-                if (curZMax < z1 - ERRTOL['vertical']):
-                    continue
-
-                cur2F = self.pt2Facet2Pt(pt1, z1, pt2, vehSpeed, curFacetID)
-                trace.append(cur2F)
-                if (cur2F['reachable'] != "NotReachable" and cur2F['time'] < bestTime):
-                    bestTime = cur2F['time']
-                    bestPt2F = cur2F
-
-                adjFacetIDs = []
-                if (self.surfaceGraph.has_node(curFacetID)):
-                    adjFacetIDs = [i for i in self.surfaceGraph.neighbors(curFacetID)]
-                adjFacetIDs = [i for i in adjFacetIDs if i not in visitedFacetIDs and i in self.triFacets]
-                adjFacetIDs = sorted(
-                    adjFacetIDs,
-                    key = lambda facetID: (
-                        abs(self.triCenters[facetID][1] - z1),
-                        distEuclideanXY(pt1, self.triCenters[facetID][0]) + distEuclideanXY(pt2, self.triCenters[facetID][0])))
-                for facetID in adjFacetIDs:
-                    zMax = max([self.triFacets[facetID][k][2] for k in range(3)])
-                    if (zMax >= z1 - ERRTOL['vertical'] and facetID not in openFacetIDs):
-                        openFacetIDs.append(facetID)
+            if (self.surfaceGraph.has_node(curFacetID)):
+                for facetID in self.surfaceGraph.neighbors(curFacetID):
+                    if (facetID in visitedFacetIDs or facetID in openSet or facetID not in self.triFacets):
+                        continue
+                    lb = facetLowerBound(facetID)
+                    if (lb < float('inf') and (bestPt2F == None or lb < bestTime - ERRTOL['vertical'])):
+                        heapq.heappush(openFacetIDs, (lb, facetID))
+                        openSet.add(facetID)
 
         if (bestPt2F == None):
-            raise NotAvailableError("ERROR: no reachable facet can be found")
+            return {
+                'reachable': False,
+                'facetID': None,
+                'pt': None,
+                'zVeh1': None,
+                'zVeh2': None,
+                'speed1': None,
+                'time': None,
+                'trace': None
+            }
 
         return {
+            'reachable': True,
             'facetID': bestPt2F['facetID'],
             'pt': bestPt2F['pt'],
             'zVeh1': bestPt2F['zVeh1'],
@@ -1014,10 +1068,12 @@ class TriGridSurface(object):
             'trace': trace
         }
 
+    # @tellRuntime('gridSurface.py.isPtInside', indentLevel = 1)
     def isPtInside(self, pt, z):
         zProj = self.buildZProfile(z)
         return isPtInPoly(pt, zProj)
 
+    @tellRuntime('gridSurface.py.dist2Seg', indentLevel = 1)
     def dist2Seg(self, pt1, z1, pt2, z2):
         # Case 1: coreProfile存在，且[pt1, pt2]的投影穿过了coreProfile，一定相交
         if (self.coreProj != None and isSegIntPoly(seg = [pt1, pt2], poly = self.coreProj)):
@@ -1059,6 +1115,7 @@ class TriGridSurface(object):
             possTWs.append([ts, te])
 
         # 如果可能相交，相交只可能发生在投影与unionProj相交的区域，计算与时间切面的相交点
+        # @tellRuntime('gridSurface.py.getPt', indentLevel = 2)
         def getPt(z):
             ptX = pt1[0] + (pt2[0] - pt1[0]) * ((z - z1) / (z2 - z1))
             ptY = pt1[1] + (pt2[1] - pt1[1]) * ((z - z1) / (z2 - z1))

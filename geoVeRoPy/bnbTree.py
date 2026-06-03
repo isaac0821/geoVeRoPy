@@ -7,6 +7,7 @@ from .common import *
 class BnBTreeNode(TreeNode):
     # NOTE: rep - 解的输入格式
     # NOTE: 如果有gurobi的对象，传入**kwargs
+    # @tellRuntime('bnbTree.py.__init__', indentLevel = 1)
     def __init__(self, key, rep, funcSolve, funcBranch, funcFeasible=None, funcUBEstimate=None, bnbUB=float('inf'), **kwargs):
         # BnB树初始化的时候只有key和表达式rep是已知的
         self.key = key
@@ -36,6 +37,7 @@ class BnBTreeNode(TreeNode):
         self.lowerBound = -float('inf') # 当前node的子树的下界
         return
 
+    # @tellRuntime('bnbTree.py.addSelfToNode', indentLevel = 1)
     def addSelfToNode(self, p):
         if (p.treeNodes[0].isNil):
             p.treeNodes = []
@@ -45,6 +47,7 @@ class BnBTreeNode(TreeNode):
         self.lowerBound = p.lowerBound
 
     # 判断是不是feasib
+    # @tellRuntime('bnbTree.py.checkFeasible', indentLevel = 1)
     def checkFeasible(self):
         if (self.funcFeasible != None):
             self.feasibleFlag = self.checkFeasible(self)
@@ -52,6 +55,7 @@ class BnBTreeNode(TreeNode):
 
     # 求解函数
     # NOTE: 真值
+    # @tellRuntime('bnbTree.py.solve', indentLevel = 1)
     def solve(self):
         self.funcSolve(self)
         self.solvedFlag = True
@@ -59,11 +63,13 @@ class BnBTreeNode(TreeNode):
             self.prunFlag = True
         return
 
+    # @tellRuntime('bnbTree.py.ubEstimate', indentLevel = 1)
     def ubEstimate(self):
         self.funcUBEstimate(self)
         return
 
     # 检查是否因为bounding把自己prun掉
+    # @tellRuntime('bnbTree.py.bounding', indentLevel = 1)
     def bounding(self):
         if self.prunFlag:
             return
@@ -87,14 +93,17 @@ class BnBTreeNode(TreeNode):
         return
         
     @property
+    # @tellRuntime('bnbTree.py.isNil', indentLevel = 1)
     def isNil(self):
         return False
 
 class BnBTreeNilNode(BnBTreeNode):
+    # @tellRuntime('bnbTree.py.__init__', indentLevel = 1)
     def __init__(self):
         return
 
     @property
+    # @tellRuntime('bnbTree.py.isNil', indentLevel = 1)
     def isNil(self):
         return True
 
@@ -109,24 +118,31 @@ class BnBTree(Tree):
     #                   如果结算结果是incumbent，则更新upperBound
     # 4. 剪枝 pruning: 当一个新的lb/ub出现，搜索整个树，进行剪枝操作
     # 构造函数，初始化时需要传入一个根节点的问题
-    def __init__(self, root, **kwargs):
+    # @tellRuntime('bnbTree.py.__init__', indentLevel = 1)
+    def __init__(self, root, funcChoose, timeLimit = None, gapTol = None, **kwargs):
         self.nil = BnBTreeNilNode()
         self.root = self.nil
         self.__dict__.update(kwargs)
+
+        self.timeLimit = timeLimit
+        self.gapTol = gapTol
+
+        self.funcChoose = funcChoose
 
         self.insert(root)
 
         # BB树的上下界，实际上就是root的上下界
         self.upperBound = float('inf')
         self.lowerBound = -float('inf')
-
         self.convergence = []
         self.best = None
-
         self.tabu = {}
 
+        return
+
     # 分支定界法主函数
-    def bnb(self, timeLimit=None, gapTol=0.01):
+    # @tellRuntime('bnbTree.py.bnb', indentLevel = 1)
+    def bnb(self):
         # 算法框架（以最小化为例）
         startTime = datetime.datetime.now()
 
@@ -138,19 +154,22 @@ class BnBTree(Tree):
 
             # Step 1: 选择一个unsolved node，如果找不到unsolved，结束
             curNode = self.choose()
-            if (self.upperBound != 0 and not math.isinf(self.upperBound) and abs(self.upperBound - self.lowerBound) / abs(self.upperBound) <= self.gapTol):
-                printLog(f"Iteration ends by gap: {abs(self.lowerBound - self.upperBound) * 100 / self.upperBound}%")
+            if (self.gapTol != None and self.upperBound != 0 and not math.isinf(self.upperBound) and abs(self.upperBound - self.lowerBound) / abs(self.upperBound) <= self.gapTol):
+                printLog(f"Iteration ends by gap: {abs(self.upperBound - self.lowerBound) * 100 / self.upperBound}%")
                 break
             if (curNode == None):
+                if (not math.isinf(self.upperBound)):
+                    self.lowerBound = self.upperBound
                 printLog("Iteration ends by enumeration.")
                 break
-            if (timeLimit != None and (datetime.datetime.now() - startTime).total_seconds() > timeLimit):
+            if (self.timeLimit != None and (datetime.datetime.now() - startTime).total_seconds() > self.timeLimit):
                 printLog(f"Reach time limit: {(datetime.datetime.now() - startTime).total_seconds()} seconds")
                 break
 
             printLog("Select: ", curNode.rep)
 
             # Step 2: 求解
+            curNode.bnbUB = self.upperBound
             curNode.solve()
 
             # Step 2.1: 如果没有上界，启发式的给一个上界，注意，必须保证该上界至少大于一个incumbent
@@ -184,38 +203,41 @@ class BnBTree(Tree):
             if (not curNode.prunFlag):
                 self.branch(curNode)
 
+        if (self.best == None):
+            self.ofv = None
+            self.soln = None
+            self.runtime = (datetime.datetime.now() - startTime).total_seconds()
+            return
+
         self.ofv = self.best.ofv
         self.soln = self.best.soln
         self.runtime = (datetime.datetime.now() - startTime).total_seconds()
         return
 
     # 返回一个node，该node具有最低的可能的lower bound，并对该node求解
+    # @tellRuntime('bnbTree.py.choose', indentLevel = 1)
     def choose(self):
         # ret = chooseByNode(self.root)
         # FIXME: Test
         children = self.traverseChildren()
         children = [i for i in children if i.solvedFlag == False]
 
-        lowestLB = float('inf')
-        lowestIdx = None
-
-        for i in range(len(children)):
-            if (children[i].lowerBound < lowestLB):
-                lowestLB = children[i].lowerBound
-                lowestIdx = i
-
         printLog("Candidate #: ", len(children))
         if (len(children) == 0):
             return None
+        else:
+            for child in children:
+                child.bnbUB = self.upperBound
+            return self.funcChoose(children)
 
-        return children[lowestIdx]
-
+    # @tellRuntime('bnbTree.py.updateBounds', indentLevel = 1)
     def updateBounds(self):
         # traverse整棵树，返回树的最低的下界和上界
         self.updateBoundsByNode(self.root)
         self.lowerBound = self.root.lowerBound
         return
 
+    # @tellRuntime('bnbTree.py.updateBoundsByNode', indentLevel = 1)
     def updateBoundsByNode(self, n):
         # 如果该node为Nil，或者该node已经被prun，或者还没算过，不更新lb
         if (n.isNil or n.prunFlag):
@@ -250,14 +272,16 @@ class BnBTree(Tree):
 
     # 剪枝
     # NOTE: 给定一个父节点p，和一个子节点n，把n放入
+    # @tellRuntime('bnbTree.py.pruning', indentLevel = 1)
     def pruning(self, ub):
         self.pruningByNode(self.root, ub)
         return
         
+    # @tellRuntime('bnbTree.py.pruningByNode', indentLevel = 1)
     def pruningByNode(self, n, ub):
         # 只有该node没有被prun才有必要
         if (n.prunFlag == False):
-            # 如果n的lb比ub还要高，说明n没必要算下去了，prun掉吧
+            # 如果n的lb比ub还要高，说明n没必要算下去了，prune掉吧
             if (n.lowerBound > ub):
                 n.prunFlag = True
                 printLog("Prune: ", n.rep)
@@ -268,13 +292,10 @@ class BnBTree(Tree):
                         self.pruningByNode(child, ub)
         return
 
+    # @tellRuntime('bnbTree.py.branch', indentLevel = 1)
     def branch(self, n):
         children = n.funcBranch(n)
         for child in children:
-            # if (self.query(child.key)):
-            #     printLog("Exists! - ", child.key)
-            # else:
-            #     child.addSelfToNode(n)
             if (tuple(child.key) not in self.tabu):
                 child.addSelfToNode(n)
                 self.tabu[tuple(child.key)] = True
@@ -282,6 +303,7 @@ class BnBTree(Tree):
                 printLog("Prune by repetition - ", child.key)
         return
 
+    # @tellRuntime('bnbTree.py.traverseChildren', indentLevel = 1)
     def traverseChildren(self):
         if (self.root.isNil):
             return []
@@ -291,6 +313,7 @@ class BnBTree(Tree):
         children = self._traverseChildren(self.root)
         return children
 
+    # @tellRuntime('bnbTree.py._traverseChildren', indentLevel = 1)
     def _traverseChildren(self, n):
         tra = []
         if (n.prunFlag == False):

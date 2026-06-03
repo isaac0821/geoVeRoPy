@@ -682,3 +682,108 @@ def solveCTP(startPt: pt, endPt: pt, circles: list[dict], algo: str = 'SOCP', **
         'path': res['path'],
         'dist': res['dist']
     }
+
+# Moving-target Touring Problem
+def solveMTTP(startPt: pt, endPt: pt, nodes: dict, seq: list, speed: float, startTime: float = 0.0, outputFlag = False) -> dict: 
+    # Create Gurobi model
+    model = grb.Model("MTTP")
+    model.setParam('OutputFlag', 0 if outputFlag == False else 1)
+
+    # NOTE: nodes不一定全部都包括，只有seq里出现的才会有
+    # Build node list according to seq
+    nds = []
+    for i in seq:
+        nds.append(nodes[i])
+
+    # Decision variables ======================================================
+    u = {}
+    v = {}
+    w = {}
+    for k in range(len(nds)):
+        u[k] = model.addVar(vtype=grb.GRB.CONTINUOUS, lb=-grb.GRB.INFINITY, name=f"u_{k}")
+        v[k] = model.addVar(vtype=grb.GRB.CONTINUOUS, lb=-grb.GRB.INFINITY, name=f"v_{k}")
+        w[k] = model.addVar(vtype=grb.GRB.CONTINUOUS, lb=-grb.GRB.INFINITY, name=f"w_{k}")
+        
+    # aux var between two visits
+    dx = {}
+    dy = {}
+    dt = {}
+    for k in range(len(nds) + 1):
+        dx[k] = model.addVar(vtype=grb.GRB.CONTINUOUS, lb=-grb.GRB.INFINITY, name=f"dx_{k}")
+        dy[k] = model.addVar(vtype=grb.GRB.CONTINUOUS, lb=-grb.GRB.INFINITY, name=f"dy_{k}")
+        dt[k] = model.addVar(vtype=grb.GRB.CONTINUOUS, name=f"dt_{k}")
+
+    wEnd = model.addVar(lb=-grb.GRB.INFINITY, name="wEnd")
+
+    # Constraints =============================================================
+    # Close enough constraints
+    for k in range(len(seq)):
+        model.addConstr(u[k] == (nodes[seq[k]]['pt'][0] + nodes[seq[k]]['vx'] * w[k]))
+        model.addConstr(v[k] == (nodes[seq[k]]['pt'][1] + nodes[seq[k]]['vy'] * w[k]))
+
+    # Speed constraints (second‑order cone, using quadratic form for compatibility)
+    if (len(nds) > 0):
+        # Start -> first customer
+        model.addConstr(dx[0] == u[0] - startPt[0])
+        model.addConstr(dy[0] == v[0] - startPt[1])
+        model.addConstr(dt[0] == w[0] - startTime)
+        model.addQConstr(dx[0] ** 2 + dy[0] ** 2 <= (speed * dt[0]) ** 2, name="speed_start_to_0")
+
+        # Between consecutive customers
+        for k in range(1, len(nds)):
+            model.addConstr(dx[k] == u[k] - u[k-1])
+            model.addConstr(dy[k] == v[k] - v[k-1])
+            model.addConstr(dt[k] == w[k] - w[k-1])
+            model.addQConstr(dx[k] ** 2 + dy[k] ** 2 <= (speed * dt[k]) ** 2, name=f"speed_{k-1}_to_{k}")
+
+        # Last customer -> end
+        model.addConstr(dx[len(nds)] == endPt[0] - u[len(nds) - 1])
+        model.addConstr(dy[len(nds)] == endPt[1] - v[len(nds) - 1])
+        model.addConstr(dt[len(nds)] == wEnd - w[len(nds) - 1])
+        model.addQConstr(dx[len(nds)] ** 2 + dy[len(nds)] ** 2 <= (speed * dt[len(nds)]) ** 2, name="speed_last_to_end")
+
+    else:
+        # No customers: direct start to end
+        model.addConstr(dx[0] == endPt[0] - startPt[0])
+        model.addConstr(dy[0] == endPt[1] - startPt[1])
+        model.addConstr(dt[0] == wEnd - startTime)
+        model.addQConstr(dx[0] ** 2 + dy[0] ** 2 <= (speed * dt[0]) ** 2, name="speed_start_to_end")
+
+    # Objective: minimize arrival time at end point
+    model.setObjective(wEnd, grb.GRB.MINIMIZE)
+
+    # Solve
+    model.optimize()
+    dist = 0
+    time = 0
+    path3D = []
+    repPt = {}
+    if (model.status == grb.GRB.status.OPTIMAL or model.status == grb.GRB.status.TIME_LIMIT):
+        # Build 3D path
+        path3D = [[startPt[0], startPt[1], startTime]]
+        for k in range(len(nds)):
+            path3D.append([u[k].x, v[k].x, w[k].x])
+            repPt[seq[k]] = [u[k].x, v[k].x, w[k].x]
+        path3D.append([endPt[0], endPt[1], wEnd.x])
+
+        # Compute total Euclidean distance
+        dist = 0.0
+        if (len(nds) > 0):
+            dist += distEuclideanXY((u[0].x, v[0].x), startPt)
+            for k in range(1, len(nds)):
+                dist += distEuclideanXY((u[k].x, v[k].x), (u[k - 1].x, v[k - 1].x))
+            dist += distEuclideanXY((u[len(nds) - 1].x, v[len(nds) - 1].x), endPt)
+        else:
+            dist += distEuclideanXY(startPt, endPt)
+        time = wEnd.x - startTime
+    else:
+        raise ValueError("ERROR: TGSTP cannot be solved by gurobi")
+
+    return {
+        'dist': dist,
+        'time': time,
+        'path3D': path3D,
+        'solType': model.status,
+        'repPt': repPt
+    }
+
