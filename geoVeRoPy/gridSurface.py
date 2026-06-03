@@ -984,7 +984,7 @@ class TriGridSurface(object):
             'trace': trace
         }
 
-    @tellRuntime('gridSurface.py.fastestPt2Facet2Pt', indentLevel = 1)
+    # @tellRuntime('gridSurface.py.fastestPt2Facet2Pt', indentLevel = 1)
     def fastestPt2Facet2Pt(self, pt1, z1, pt2, vehSpeed):
         trace = []
         visitedFacetIDs = set()
@@ -1073,7 +1073,7 @@ class TriGridSurface(object):
         zProj = self.buildZProfile(z)
         return isPtInPoly(pt, zProj)
 
-    @tellRuntime('gridSurface.py.dist2Seg', indentLevel = 1)
+    # @tellRuntime('gridSurface.py.dist2Seg', indentLevel = 1)
     def dist2Seg(self, pt1, z1, pt2, z2):
         # Case 1: coreProfile存在，且[pt1, pt2]的投影穿过了coreProfile，一定相交
         if (self.coreProj != None and isSegIntPoly(seg = [pt1, pt2], poly = self.coreProj)):
