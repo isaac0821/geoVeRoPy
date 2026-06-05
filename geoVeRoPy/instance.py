@@ -1447,7 +1447,7 @@ def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape
         for n in nodeIDs:
             timedPoly = []
 
-            numT = (int)(dur / interval) + 1
+            numT = (int)(duration / interval) + 1
             for k in range(numT):
                 newNeighborPoly = circleByCenterXY(
                     center = nodes[n][ptFieldName],
