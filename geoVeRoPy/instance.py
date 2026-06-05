@@ -1433,6 +1433,33 @@ def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape
             nodes[n]['startTime'] = startTime
             nodes[n]['endTime'] = startTime + dur
 
+    elif (shape == 'FloatingTarget'):
+        if ('maxSpeed' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'maxSpeed'.")
+        maxSpeed = kwargs['maxSpeed']
+        if ('duration' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'duration'.")
+        duration = kwargs['duration']
+        if ('interval' not in kwargs):
+            raise MissingParameterError("ERROR: Missing required arg 'interval'.")
+        interval = kwargs['interval']
+
+        for n in nodeIDs:
+            timedPoly = []
+
+            numT = (int)(dur / interval) + 1
+            for k in range(numT):
+                newNeighborPoly = circleByCenterXY(
+                    center = nodes[n][ptFieldName],
+                    radius = k * interval * maxSpeed)
+                timedPoly.append([newNeighborPoly, k * interval])
+
+            nodes[n]['timedPoly'] = timedPoly
+            nodes[n][neighborFieldName] = TriGridSurface(timedPoly)
+            nodes[n]['duration'] = duration
+            nodes[n]['interval'] = interval
+            nodes[n]['maxSpeed'] = maxSpeed
+
     else:
         raise UnsupportedInputError("ERROR: Unsupported option for `shape`.")
 
