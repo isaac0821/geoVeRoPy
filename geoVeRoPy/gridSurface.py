@@ -1088,8 +1088,30 @@ class TriGridSurface(object):
 
     # @tellRuntime('gridSurface.py.dist2Seg', indentLevel = 1)
     def dist2Seg(self, pt1, z1, pt2, z2):
-        # Case 1: coreProfile存在，且[pt1, pt2]的投影穿过了coreProfile，一定相交
-        if (self.coreProj != None and isSegIntPoly(seg = [pt1, pt2], poly = self.coreProj)):
+        overlapStart = max(min(z1, z2), self.startTime)
+        overlapEnd = min(max(z1, z2), self.endTime)
+        if (overlapStart > overlapEnd + ERRTOL['vertical']):
+            return {
+                'trespass': False,
+                'trespassSemi': False,
+                'dist': distPoly2Seq(seq = [pt1, pt2], poly = self.unionProj)
+            }
+
+        if (abs(z2 - z1) <= ERRTOL['vertical']):
+            overlapSeg = [pt1, pt2]
+        else:
+            startRatio = (overlapStart - z1) / (z2 - z1)
+            endRatio = (overlapEnd - z1) / (z2 - z1)
+            overlapSeg = [
+                [
+                    pt1[0] + (pt2[0] - pt1[0]) * startRatio,
+                    pt1[1] + (pt2[1] - pt1[1]) * startRatio],
+                [
+                    pt1[0] + (pt2[0] - pt1[0]) * endRatio,
+                    pt1[1] + (pt2[1] - pt1[1]) * endRatio]]
+
+        # Case 1: coreProfile存在，且有效时间范围内的路径穿过coreProfile，一定相交
+        if (self.coreProj != None and isSegIntPoly(seg = overlapSeg, poly = self.coreProj)):
             return {
                 'trespass': True,
                 'trespassSemi': True,

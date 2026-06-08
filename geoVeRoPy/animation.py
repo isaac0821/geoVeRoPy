@@ -46,6 +46,7 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
             >>> polygons[pID] = {
             ...     'anchor': [x, y], # The anchor of the polygon
             ...     'poly': [pt1, pt2], # A sequence of extreme points, coordinates are relative to 'anchor'
+            ...     'timedPoly': [[poly1, t1], [poly2, t2]], # Optional dynamic polygon
             ...     'direction': direction, # Moving direction
             ...     'speed': speed, # Moving speed,
             ...     'timeRange': [ts, te], # Time range of the movement
@@ -84,9 +85,8 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
     vehShowNoteFlag = True if 'vehShowNoteFlag' not in kwargs else kwargs['vehShowNoteFlag']
 
     # Polygons ----------------------------------------------------------------
-    polyAnchorFieldName = None if 'polyAnchorFieldName' not in kwargs else kwargs['polyAnchorFieldName']
-    polyTimedPtFieldName = None if 'polyTimedPtFieldName' not in kwargs else kwargs['polyTimedPtFieldName']
-    polyTimeWindowFieldName = None if 'polyTimeWindowFieldName' not in kwargs else kwargs['polyTimeWindowFieldName']
+    polyTimedPolyFieldName = 'timedPoly' if 'polyTimedPolyFieldName' not in kwargs else kwargs['polyTimedPolyFieldName']
+    polyTimeWindowFieldName = None if 'timeWindow' not in kwargs else kwargs['polyTimeWindowFieldName']
     polyFieldName = 'poly' if 'polyFieldName' not in kwargs else kwargs['polyFieldName']
     polyEdgeColor = 'black' if 'polyEdgeColor' not in kwargs else kwargs['polyEdgeColor']
     polyEdgeWidth = 1 if 'polyEdgeWidth' not in kwargs else kwargs['polyEdgeWidth']
@@ -274,59 +274,30 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
         if (polygons != None):
             # Plot each polygon -----------------------------------------------
             for pID in polygons:
-                # 判定此时刻是否需要绘制poly
-                plotPolyFlag = False
-                if (polyTimeWindowFieldName not in polygons[pID] or polygons[pID][polyTimeWindowFieldName][0] <= clock <= polygons[pID][polyTimeWindowFieldName][1]):
-                    plotPolyFlag = True
-
                 # 每个Poly的坐标轮廓
                 pX = []
                 pY = []
-                if (plotPolyFlag):
-                    if (type(polygons[pID][polyFieldName]) == TriGridSurface):
-                        poly = polygons[pID][polyFieldName].buildZProfile(clock)
-                        for pt in poly:
-                            if (not xyReverseFlag):
-                                pX.append(pt[0])
-                                pY.append(pt[1])
-                            else:
-                                pX.append(pt[1])
-                                pY.append(pt[0])
-                    else:
-                        for p in polygons[pID][polyFieldName]:
-                            pt = None
-                            if (polyAnchorFieldName in polygons[pID] and polyTimedPtFieldName in polygons[pID]):
-                                # 如果还没开始动，在原点不动
-                                if (clock < polygons[pID][polyTimedPtFieldName][0][1]):
-                                    pt = p
-                                # 如果到达终点了，在终点不动
-                                elif (clock > polygons[pID][polyTimedPtFieldName][-1][1]):
-                                    dx = (polygons[pID][polyTimedPtFieldName][-1][0][0] - polygons[pID][polyAnchorFieldName][0])
-                                    dy = (polygons[pID][polyTimedPtFieldName][-1][0][1] - polygons[pID][polyAnchorFieldName][1])
-                                    pt = (p[0] + dx, p[1] + dy)
-                                else: 
-                                    curSnap = snapInTimedPt(
-                                        timedPt = polygons[pID][polyTimedPtFieldName],
-                                        t = clock)
-                                    dx = (curSnap['pt'][0] - polygons[pID][polyAnchorFieldName][0])
-                                    dy = (curSnap['pt'][1] - polygons[pID][polyAnchorFieldName][1])
-                                    pt = (p[0] + dx, p[1] + dy)
-                            elif ('direction' in polygons[pID] and 'speed' in polygons[pID]):
-                                if (clock < polygons[pID][polyTimeWindowFieldName][0]):
-                                    pt = p
-                                elif (clock < polygons[pID][polyTimeWindowFieldName][1]):
-                                    pt = ptInDistXY(p, polygons[pID]['direction'], polygons[pID]['speed'] * clock)
-                                else:
-                                    pt = ptInDistXY(p, polygons[pID]['direction'], polygons[pID]['speed'] * (polygons[pID]['timeRange'][1] - polygons[pID]['timeRange'][0]))
-                            else:
-                                pt = p
 
-                            if (not xyReverseFlag):
-                                pX.append(pt[0])
-                                pY.append(pt[1])
-                            else:
-                                pX.append(pt[1])
-                                pY.append(pt[0])
+                plotPolyFlag = True
+                poly = None
+                fixedPoly = polygons[pID].get(polyFieldName)
+                timedPoly = polygons[pID].get(polyTimedPolyFieldName) if polyTimedPolyFieldName != None else None
+                if (isinstance(fixedPoly, list) and len(fixedPoly) > 0):
+                    poly = fixedPoly
+                elif (isinstance(timedPoly, list) and len(timedPoly) > 0):
+                    poly = snapInTimedPoly(
+                        timedPoly = timedPoly,
+                        t = clock)
+                if (poly == None or len(poly) == 0):
+                    plotPolyFlag = False
+                else:
+                    for pt in poly:
+                        if (not xyReverseFlag):
+                            pX.append(pt[0])
+                            pY.append(pt[1])
+                        else:
+                            pX.append(pt[1])
+                            pY.append(pt[0])
 
                 # Plot polygons with styling
                 if (plotPolyFlag):

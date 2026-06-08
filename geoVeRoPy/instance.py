@@ -1424,7 +1424,7 @@ def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape
                 newNeighborPoly = circleByCenterXY(
                     center = nodes[n][ptFieldName],
                     radius = R)
-                timedPoly.append([newNeighborPoly, k * interval])
+                timedPoly.append([newNeighborPoly, startTime + k * interval])
 
             nodes[n]['timedPoly'] = timedPoly
             nodes[n][neighborFieldName] = TriGridSurface(timedPoly)

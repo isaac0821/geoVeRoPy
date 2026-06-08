@@ -3360,6 +3360,101 @@ def _visPtAmongPolys(v:int|str|tuple, polys:polys, standalonePts:dict|None=None,
     return W
 
 # Time seq related ============================================================
+def snapInTimedPoly(timedPoly: timedPoly, t: float) -> poly | None:
+    """
+    Return the polygon represented by a timed polygon at time `t`.
+
+    Adjacent polygons are synchronized along their perimeters before their
+    vertices are linearly interpolated. If `t` is outside the time range,
+    return None.
+    """
+    if (len(timedPoly) == 0):
+        return None
+
+    for i in range(len(timedPoly) - 1):
+        if (timedPoly[i][1] > timedPoly[i + 1][1]):
+            raise UnsupportedInputError("ERROR: `timedPoly` should be a non-descending sequence.")
+
+    if (t < timedPoly[0][1] or t > timedPoly[-1][1]):
+        return None
+
+    for timedShape in timedPoly:
+        if (t == timedShape[1]):
+            return timedShape[0]
+
+    for i in range(len(timedPoly) - 1):
+        t0 = timedPoly[i][1]
+        t1 = timedPoly[i + 1][1]
+        if (t0 < t < t1):
+            lowerPoly = [list(pt) for pt in timedPoly[i][0]]
+            upperPoly = [list(pt) for pt in timedPoly[i + 1][0]]
+            if (len(lowerPoly) < 3 or len(upperPoly) < 3):
+                return []
+
+            lowerArea = sum(
+                lowerPoly[k][0] * lowerPoly[(k + 1) % len(lowerPoly)][1]
+                - lowerPoly[(k + 1) % len(lowerPoly)][0] * lowerPoly[k][1]
+                for k in range(len(lowerPoly)))
+            upperArea = sum(
+                upperPoly[k][0] * upperPoly[(k + 1) % len(upperPoly)][1]
+                - upperPoly[(k + 1) % len(upperPoly)][0] * upperPoly[k][1]
+                for k in range(len(upperPoly)))
+            if (lowerArea * upperArea < 0):
+                upperPoly.reverse()
+
+            nearestID = min(
+                range(len(upperPoly)),
+                key=lambda k: distEuclideanXY(lowerPoly[0], upperPoly[k]))
+            upperPoly = [upperPoly[(nearestID + k) % len(upperPoly)] for k in range(len(upperPoly))]
+
+            lowerPerim = sum(
+                distEuclideanXY(lowerPoly[k], lowerPoly[(k + 1) % len(lowerPoly)])
+                for k in range(len(lowerPoly)))
+            upperPerim = sum(
+                distEuclideanXY(upperPoly[k], upperPoly[(k + 1) % len(upperPoly)])
+                for k in range(len(upperPoly)))
+            if (lowerPerim <= ERRTOL['distPt2Pt'] or upperPerim <= ERRTOL['distPt2Pt']):
+                return []
+
+            lowerParams = [0]
+            accDist = 0
+            for k in range(1, len(lowerPoly)):
+                accDist += distEuclideanXY(lowerPoly[k - 1], lowerPoly[k])
+                lowerParams.append(accDist / lowerPerim)
+
+            upperParams = [0]
+            accDist = 0
+            for k in range(1, len(upperPoly)):
+                accDist += distEuclideanXY(upperPoly[k - 1], upperPoly[k])
+                upperParams.append(accDist / upperPerim)
+
+            params = []
+            for tau in lowerParams + upperParams:
+                if (tau < 1 - ERRTOL['vertical']
+                    and all(abs(tau - existTau) > ERRTOL['vertical'] for existTau in params)):
+                    params.append(tau)
+            params.sort()
+
+            syncPolys = []
+            for curPoly, curParams in [(lowerPoly, lowerParams), (upperPoly, upperParams)]:
+                syncPoly = []
+                for tau in params:
+                    for k in range(len(curPoly)):
+                        tau0 = curParams[k]
+                        tau1 = curParams[k + 1] if k < len(curPoly) - 1 else 1
+                        if (tau0 - ERRTOL['vertical'] <= tau <= tau1 + ERRTOL['vertical']):
+                            ratio = 0 if abs(tau1 - tau0) <= ERRTOL['vertical'] else (tau - tau0) / (tau1 - tau0)
+                            syncPoly.append(interpolatePt(curPoly[k], curPoly[(k + 1) % len(curPoly)], ratio))
+                            break
+                syncPolys.append(syncPoly)
+
+            ratio = (t - t0) / (t1 - t0)
+            return [
+                list(interpolatePt(syncPolys[0][k], syncPolys[1][k], ratio))
+                for k in range(len(params))]
+
+    return None
+
 def snapInTimedPt(timedPt: list[tuple[pt, float]], t: float) -> dict:
     """
     Given a timedPt, return the location, speed, and trajectory at time t
@@ -3430,37 +3525,6 @@ def snapInTimedPt(timedPt: list[tuple[pt, float]], t: float) -> dict:
         'pt': [curPtX, curPtY],
         'speed': curSpeed,
         'trajectory': curTrajectory
-    }
-
-def snapInTimedPoly(timedPoly, t) -> list:
-    if (t <= timedPoly[0][1]):
-        return {
-            'poly': timedPoly[0][0],
-        }
-    if (t >= timedPoly[-1][1]):
-        return {
-            'poly': timedPoly[-1][0],
-        }
-
-    poly = []
-    for i in range(len(timedPoly) - 1):
-        if (timedPoly[i][1] <= t < timedPoly[i + 1][1]):
-            for k in range(len(timedPoly[i][0])):
-                pt = []
-                dist = distEuclideanXY(timedPoly[i][0][k], timedPoly[i + 1][0][k])
-                if (dist > 0):
-                    dt = (t - timedPoly[i][1]) / (timedPt[i + 1][1] - timedPoly[i][1])
-                    curPtX = timedPoly[i][0][k][0] + (timedPt[i + 1][0][k][0] - timedPoly[i][0][k][0]) * dt
-                    curPtY = timedPoly[i][0][k][1] + (timedPt[i + 1][0][k][1] - timedPoly[i][0][k][1]) * dt
-                    pt = [curPtX, curPtY]
-                else:
-                    curPtX = timedPoly[i][0][k][0]
-                    curPtY = timedPoly[i][0][k][1]
-                    pt = [curPtX, curPtY]
-                poly.append(pt)
-            break
-    return {
-        'poly': poly
     }
 
 def traceInTimedPt(timedPt: list[tuple[pt, float]], ts: float, te: float) -> list[pt]:
