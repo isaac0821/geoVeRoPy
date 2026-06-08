@@ -85,6 +85,9 @@ def is3PtsClockWise(pt1: pt, pt2: pt, pt3: pt) -> bool | None:
         return False
 
 # Relation between line segments ==============================================
+def _isDegenerateSeg(seg: line) -> bool:
+    return is2PtsSame(seg[0], seg[1])
+
 def is2SegsSame(seg1: line, seg2: line) -> bool:
     """
     Given two segments, return True if these two segments are the same.
@@ -101,6 +104,12 @@ def is2SegsSame(seg1: line, seg2: line) -> bool:
     bool
         True if two segments are the same
     """
+
+    seg1Degenerate = _isDegenerateSeg(seg1)
+    seg2Degenerate = _isDegenerateSeg(seg2)
+    if (seg1Degenerate or seg2Degenerate):
+        return (seg1Degenerate and seg2Degenerate
+                and is2PtsSame(seg1[0], seg2[0]))
 
     if (is2PtsSame(seg1[0], seg2[0]) and is2PtsSame(seg1[1], seg2[1])):
         return True
@@ -126,6 +135,9 @@ def is2SegsParallel(seg1: line, seg2: line):
         True if two segments are parallel
     """
     # 计算一堆 dy, dx
+    if (_isDegenerateSeg(seg1) or _isDegenerateSeg(seg2)):
+        return False
+
     dy1 = seg1[1][1] - seg1[0][1]
     dx1 = seg1[1][0] - seg1[0][0]
     dy2 = seg2[1][1] - seg2[0][1]
@@ -162,7 +174,7 @@ def is2SegsParallel(seg1: line, seg2: line):
     slope1 = dy1 / dx1
     slope2 = dy2 / dx2
 
-    if (abs(slop1 - slope2) <= ERRTOL['slope2Slope']):
+    if (abs(slope1 - slope2) <= ERRTOL['slope2Slope']):
         return True
     else:
         return False
@@ -183,6 +195,15 @@ def is2SegsAffine(seg1: line, seg2: line):
     bool
         True if two segments are affine
     """
+
+    seg1Degenerate = _isDegenerateSeg(seg1)
+    seg2Degenerate = _isDegenerateSeg(seg2)
+    if (seg1Degenerate and seg2Degenerate):
+        return is2PtsSame(seg1[0], seg2[0])
+    if (seg1Degenerate):
+        return isPtOnLine(seg1[0], seg2)
+    if (seg2Degenerate):
+        return isPtOnLine(seg2[0], seg1)
 
     if (is2SegsParallel(seg1, seg2) and isPtOnLine(seg1[0], seg2)):
         return True
@@ -206,6 +227,15 @@ def is2SegsOverlap(seg1: line, seg2: line):
         True if two segments are overlapped
     """
 
+    seg1Degenerate = _isDegenerateSeg(seg1)
+    seg2Degenerate = _isDegenerateSeg(seg2)
+    if (seg1Degenerate and seg2Degenerate):
+        return is2PtsSame(seg1[0], seg2[0])
+    if (seg1Degenerate):
+        return isPtOnSeg(seg1[0], seg2)
+    if (seg2Degenerate):
+        return isPtOnSeg(seg2[0], seg1)
+
     if (is2SegsParallel(seg1, seg2) and (isPtOnSeg(seg1[0], seg2) or isPtOnSeg(seg1[1], seg2))):
         return True
     else:
@@ -217,9 +247,28 @@ def subSegFromPoly(seg: line, poly: poly=None, polyShapely: shapely.Polygon=None
         raise MissingParameterError("ERROR: `poly` and `polyShapely` cannot be None at the same time.")
 
     # get shapely objects =====================================================
-    segShapely = shapely.LineString([seg[0], seg[1]])
     if (polyShapely == None):
         polyShapely = shapely.Polygon(poly)
+    if (_isDegenerateSeg(seg)):
+        ptShapely = shapely.Point(seg[0])
+        intShape = shapely.difference(ptShapely, polyShapely)
+        if (returnShaplelyObj):
+            return intShape
+        if (intShape.is_empty):
+            return {
+                'status': 'NoCross',
+                'intersect': None,
+                'intersectType': None,
+                'interiorFlag': None
+            }
+        return {
+            'status': 'Cross',
+            'intersect': tuple(seg[0]),
+            'intersectType': 'Point',
+            'interiorFlag': False
+        }
+
+    segShapely = shapely.LineString([seg[0], seg[1]])
     intShape = shapely.difference(segShapely, polyShapely)
 
     # If return shapely objects no processing needed ==========================
@@ -307,6 +356,9 @@ def isPtOnSeg(pt: pt, seg: line, interiorOnly: bool=False) -> bool:
         True if the point is on the line segment, False else-wise
 
     """
+    if (_isDegenerateSeg(seg)):
+        return is2PtsSame(pt, seg[0]) and not interiorOnly
+
     onLine = isPtOnLine(pt, seg)
     if (onLine == False):
         return False
@@ -556,6 +608,21 @@ def intLine2Seg(line: line, seg: line) -> dict:
         ... }
     """
 
+    if (_isDegenerateSeg(seg)):
+        if (isPtOnLine(seg[0], line)):
+            return {
+                'status': 'Cross',
+                'intersect': tuple(seg[0]),
+                'intersectType': 'Point',
+                'interiorFlag': True
+            }
+        return {
+            'status': 'NoCross',
+            'intersect': None,
+            'intersectType': None,
+            'interiorFlag': None
+        }
+
     intPt = intLine2Line(line, seg)
 
     # 如果直线不相交，返回不相交
@@ -687,7 +754,7 @@ def intSeg2Line(seg: line, line: line) -> dict:
     """
     return intLine2Seg(line, seg)
 
-def intSeg2Seg(seg1: line, seg2: line) -> dict:
+def intSeg2Seg(seg1: line, seg2: line, interiorOnly: bool=False) -> dict:
     """
     The intersection of a line segment to another line segment
 
@@ -708,10 +775,40 @@ def intSeg2Seg(seg1: line, seg2: line) -> dict:
         ...     'interiorFlag': False, # True if the intersection is at the boundary
         ... }
     """
-    if (is2PtsSame(seg1[0], seg1[1])):
-        raise ZeroVectorError(seg1)
-    if (is2PtsSame(seg2[0], seg2[1])):
-        raise ZeroVectorError(seg2)
+    seg1Degenerate = _isDegenerateSeg(seg1)
+    seg2Degenerate = _isDegenerateSeg(seg2)
+    if (seg1Degenerate and seg2Degenerate):
+        if (is2PtsSame(seg1[0], seg2[0]) and not interiorOnly):
+            return {
+                'status': 'Cross',
+                'intersect': tuple(seg1[0]),
+                'intersectType': 'Point',
+                'interiorFlag': False
+            }
+        return {
+            'status': 'NoCross',
+            'intersect': None,
+            'intersectType': None,
+            'interiorFlag': None
+        }
+    if (seg1Degenerate or seg2Degenerate):
+        point = seg1[0] if seg1Degenerate else seg2[0]
+        otherSeg = seg2 if seg1Degenerate else seg1
+        pointOnSeg = isPtOnSeg(point, otherSeg, interiorOnly=False)
+        pointInInterior = isPtOnSeg(point, otherSeg, interiorOnly=True)
+        if (pointOnSeg and not (interiorOnly and not pointInInterior)):
+            return {
+                'status': 'Cross',
+                'intersect': tuple(point),
+                'intersectType': 'Point',
+                'interiorFlag': pointInInterior
+            }
+        return {
+            'status': 'NoCross',
+            'intersect': None,
+            'intersectType': None,
+            'interiorFlag': None
+        }
 
     A, B, C, D = seg1[0], seg1[1], seg2[0], seg2[1]
     if (max(C[0], D[0]) < min(A[0], B[0]) 
@@ -897,6 +994,22 @@ def intSeg2Ray(seg: line, ray: line) -> dict:
         ...     'interiorFlag': False, # True if the intersection is at the boundary
         ... }
     """
+
+    if (_isDegenerateSeg(seg)):
+        pointOnRay = isPtOnRay(seg[0], ray, interiorOnly=False)
+        if (pointOnRay):
+            return {
+                'status': 'Cross',
+                'intersect': tuple(seg[0]),
+                'intersectType': 'Point',
+                'interiorFlag': isPtOnRay(seg[0], ray, interiorOnly=True)
+            }
+        return {
+            'status': 'NoCross',
+            'intersect': None,
+            'intersectType': None,
+            'interiorFlag': None
+        }
 
     intPt = intLine2Line(seg, ray)
 
@@ -1264,10 +1377,14 @@ def isSegIntSeg(seg1: line, seg2: line, interiorOnly: bool=False) -> bool:
     bool
         True if intersects
     """ 
-    if (is2PtsSame(seg1[0], seg1[1])):
-        raise ZeroVectorError(seg1)
-    if (is2PtsSame(seg2[0], seg2[1])):
-        raise ZeroVectorError(seg2)
+    seg1Degenerate = _isDegenerateSeg(seg1)
+    seg2Degenerate = _isDegenerateSeg(seg2)
+    if (seg1Degenerate and seg2Degenerate):
+        return is2PtsSame(seg1[0], seg2[0]) and not interiorOnly
+    if (seg1Degenerate):
+        return isPtOnSeg(seg1[0], seg2, interiorOnly)
+    if (seg2Degenerate):
+        return isPtOnSeg(seg2[0], seg1, interiorOnly)
 
     A, B, C, D = seg1[0], seg1[1], seg2[0], seg2[1]
     if (max(C[0], D[0]) < min(A[0], B[0]) 
@@ -1345,6 +1462,10 @@ def isSegIntBoundingbox(seg: line, boundingBox: list) -> bool:
     bool
         True if intersects
     """ 
+    if (_isDegenerateSeg(seg)):
+        return (boundingBox[0] <= seg[0][0] <= boundingBox[2]
+                and boundingBox[1] <= seg[0][1] <= boundingBox[3])
+
     if (boundingBox[0] <= seg[0][0] <= boundingBox[2] and boundingBox[1] <= seg[0][1] <= boundingBox[3]):
         return True
     if (boundingBox[0] <= seg[1][0] <= boundingBox[2] and boundingBox[1] <= seg[1][1] <= boundingBox[3]):
@@ -1738,9 +1859,35 @@ def intSeg2Poly(seg: line, poly: poly=None, polyShapely: shapely.Polygon=None, r
         raise MissingParameterError("ERROR: `poly` and `polyShapely` cannot be None at the same time.")
 
     # get shapely objects =====================================================
-    segShapely = shapely.LineString([seg[0], seg[1]])
     if (polyShapely == None):
         polyShapely = shapely.Polygon(poly)
+    if (_isDegenerateSeg(seg)):
+        ptShapely = shapely.Point(seg[0])
+        intShape = shapely.intersection(ptShapely, polyShapely)
+        if (returnShaplelyObj):
+            return intShape
+        if (shapely.contains(polyShapely, ptShapely)):
+            return {
+                'status': 'Cross',
+                'intersect': tuple(seg[0]),
+                'intersectType': 'Point',
+                'interiorFlag': True
+            }
+        if (shapely.distance(ptShapely, polyShapely) <= ERRTOL['distPt2Poly']):
+            return {
+                'status': 'Cross',
+                'intersect': tuple(seg[0]),
+                'intersectType': 'Point',
+                'interiorFlag': False
+            }
+        return {
+            'status': 'NoCross',
+            'intersect': None,
+            'intersectType': None,
+            'interiorFlag': None
+        }
+
+    segShapely = shapely.LineString([seg[0], seg[1]])
     intShape = shapely.intersection(segShapely, polyShapely)
 
     # If return shapely objects no processing needed ==========================
@@ -1909,6 +2056,29 @@ def intRay2Poly(ray: line, poly: poly=None, polyShapely: shapely.Polygon=None, r
         return intSeg2Poly(seg, poly, polyShapely, returnShaplelyObj)
 
 def intSeg2Circle(seg: line, circle: dict, detailFlag: bool = True):
+    if (_isDegenerateSeg(seg)):
+        pointDist = distEuclideanXY(seg[0], circle['center'])
+        if (pointDist > circle['radius'] + ERRTOL['distPt2Seg']):
+            if (detailFlag):
+                return {
+                    'status': 'NoCross',
+                    'intersect': None,
+                    'intersectType': None,
+                    'interiorFlag': None,
+                    'mileage': None
+                }
+            return None
+
+        point = tuple(seg[0])
+        if (detailFlag):
+            return {
+                'status': 'Cross',
+                'intersect': point,
+                'intersectType': 'Point',
+                'interiorFlag': pointDist < circle['radius'] - ERRTOL['distPt2Seg'],
+                'mileage': 0
+            }
+        return point
     # 先判断会不会相交
     distCenter2Seg = distPt2Seg(pt = circle['center'], seg = seg, detailFlag = True)
 
@@ -2066,6 +2236,11 @@ def isSegIntPoly(seg: line, poly: poly, interiorOnly: bool=False) -> bool:
     # WARNING: results may not be reliable if `interiorFlag` == False.
     
     """Is a segment intersect with a polygon"""
+
+    if (_isDegenerateSeg(seg)):
+        if (interiorOnly):
+            return isPtInPoly(seg[0], poly, interiorOnly=True)
+        return isPtInPoly(seg[0], poly) or isPtOnPolyEdge(seg[0], poly)
 
     # Step 1: Check if the segment is intersect with any edge of polygon
     for i in range(-1, len(poly) - 1):
@@ -2327,6 +2502,16 @@ def distPt2Line(pt: pt, line: line) -> float:
     return h
 
 def distPt2Seg(pt: pt, seg: line, detailFlag: bool = False) -> float:
+    if (_isDegenerateSeg(seg)):
+        dist = distEuclideanXY(pt, seg[0])
+        if (detailFlag):
+            return {
+                'dist': dist,
+                'proj': tuple(seg[0]),
+                'location': 'point'
+            }
+        return dist
+
     # r = (A->P A->B) / (|AB|^2)
     AP = [pt[0] - seg[0][0], pt[1] - seg[0][1]]
     AB = [seg[1][0] - seg[0][0], seg[1][1] - seg[0][1]]
@@ -2668,6 +2853,9 @@ def vecDocProduct(vec1, vec2):
     return vec1[0] * vec2[0] + vec1[1] * vec2[1]
 
 def vecFromSeg(seg, normalizeFlag: bool = False):
+    if (_isDegenerateSeg(seg)):
+        return (0, 0)
+
     if (normalizeFlag == True):
         L = distEuclideanXY(seg[0], seg[1])
         vec = ((seg[1][0] - seg[0][0]) / L, (seg[1][1] - seg[0][1]) / L)
@@ -2830,6 +3018,9 @@ def mileageInPath(pt: pt, path: list[pt]):
     return acc
 
 def ptMid(seg) -> pt:
+    if (_isDegenerateSeg(seg)):
+        return [seg[0][0], seg[0][1]]
+
     return [
         (seg[0][0] + (seg[1][0] - seg[0][0]) / 2), 
         (seg[0][1] + (seg[1][1] - seg[0][1]) / 2)
@@ -2936,8 +3127,8 @@ def minBoundingRect(poly):
     return corner_points
     
 def ptLerpTimedSeg(timedSeg, t: float) -> pt:
-    (p1, z1), (p2, z2) = sTimedPt, eTimedPt
-    if abs(z2 - z1) <= EPS:
+    (p1, z1), (p2, z2) = timedSeg
+    if (is2PtsSame(p1, p2) or abs(z2 - z1) <= 1e-12):
         return (float(p1[0]), float(p1[1]))
     alpha = max(0.0, min(1.0, (t - z1) / (z2 - z1)))
     return (
