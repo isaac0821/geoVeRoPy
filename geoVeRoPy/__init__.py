@@ -28,6 +28,7 @@ from .tsp import *
 from .dtsp import *
 from .op import *
 from .cetsp import *
+from .mttsp import *
 
 # Visualization
 from .plot import *

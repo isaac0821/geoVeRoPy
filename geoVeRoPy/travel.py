@@ -93,7 +93,8 @@ def matrixDist(nodes: dict, ptFieldName: str = 'pt', nodeIDs: list|str = 'All', 
             ptFieldName = ptFieldName,
             detailFlag = detailFlag)
     elif (edges == 'Dictionary'):
-        if ('tau' not in kwargs or kwargs['tau'] == None):
+        checkRequiredKeys(kwargs, 'tau')
+        if (kwargs['tau'] == None):
             raise MissingParameterError("ERROR: 'tau' is not specified")
         for p in kwargs['tau']:
             tau[p] = kwargs['tau'][p]
@@ -106,10 +107,10 @@ def matrixDist(nodes: dict, ptFieldName: str = 'pt', nodeIDs: list|str = 'All', 
         else:
             res = tau
     elif (edges == 'Grid'):
-        if ('grid' not in kwargs or kwargs['grid'] == None):
+        checkRequiredKeys(kwargs, 'grid')
+        if (kwargs['grid'] == None):
             raise MissingParameterError("ERROR: 'grid' is not specified")
-        if ('column' not in kwargs['grid'] or 'row' not in kwargs['grid']):
-            raise MissingParameterError("'column' and 'row' need to be specified in 'grid'")
+        checkRequiredKeys(kwargs['grid'], ['column', 'row'], 'grid')
         res = _matrixDistGrid(
             nodes = nodes, 
             nodeIDs = nodeIDs, 
@@ -117,9 +118,11 @@ def matrixDist(nodes: dict, ptFieldName: str = 'pt', nodeIDs: list|str = 'All', 
             ptFieldName = ptFieldName,
             detailFlag = detailFlag)
     elif (edges == 'RoadNetwork'):
-        if ('source' not in kwargs or kwargs['source'] == None):
+        checkRequiredKeys(kwargs, 'source')
+        if (kwargs['source'] == None):
             raise MissingParameterError("ERROR: 'source' is not specified")
-        if ('APIKey' not in kwargs or kwargs['APIKey'] == None):
+        checkRequiredKeys(kwargs, 'APIKey')
+        if (kwargs['APIKey'] == None):
             raise MissingParameterError("ERROR: 'APIkey' is not specified")
         if (kwargs['source'] == 'Baidu'):
             if (detailFlag):
@@ -479,10 +482,10 @@ def vectorDist(pt: pt, nodes: dict, ptFieldName: str = 'pt', nodeIDs: list|str =
             ptFieldName = ptFieldName,
             detailFlag = detailFlag)
     elif (edges == 'Grid'):
-        if ('grid' not in kwargs or kwargs['grid'] == None):
+        checkRequiredKeys(kwargs, 'grid')
+        if (kwargs['grid'] == None):
             raise MissingParameterError("'grid' is not specified")
-        if ('column' not in kwargs['grid'] or 'row' not in kwargs['grid']):
-            raise MissingParameterError("'column' and 'row' need to be specified in 'grid'")
+        checkRequiredKeys(kwargs['grid'], ['column', 'row'], 'grid')
         res = _vectorDistGrid(
             pt = pt,
             nodes = nodes, 
@@ -686,10 +689,10 @@ def scaleDist(pt1: pt, pt2: pt, edges: str = 'Euclidean', detailFlag: bool = Fal
             pathPt = [pt1, (pt1[0], pt2[1]), pt2]
             revPathPt = [pt2, (pt1[0], pt2[1]), pt1]
     elif (edges == 'Grid'):
-        if ('grid' not in kwargs or kwargs['grid'] == None):
+        checkRequiredKeys(kwargs, 'grid')
+        if (kwargs['grid'] == None):
             raise MissingParameterError("'grid' is not specified")
-        if ('column' not in kwargs['grid'] or 'row' not in kwargs['grid']):
-            raise MissingParameterError("'column' and 'row' need to be specified in 'grid'")
+        checkRequiredKeys(kwargs['grid'], ['column', 'row'], 'grid')
         res = distOnGrid(pt1, pt2, kwargs['grid'])
         dist = res['dist']
         if (detailFlag):

@@ -5,6 +5,7 @@ import shapely
 
 from .common import *
 from .geometry import *
+from .gridSurface import TriGridSurface
 from .road import *
 
 def rndPts(N: int, distr = 'UniformSquareXY', seed = None, **kwargs) -> list:
@@ -323,8 +324,7 @@ def rndPts(N: int, distr = 'UniformSquareXY', seed = None, **kwargs) -> list:
 
     # Uniformly sample from a polygon/a list of polygons on the Euclidean space
     elif (distr == 'UniformPolyXY'):
-        if ('polyXY' not in kwargs and 'polyXYs' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required args 'polyXY' or 'polyXYs', which indicates a polygon / a list of polygons in the Euclidean space")
+        checkRequiredKeys(kwargs, [('polyXY', 'polyXYs')])
         if ('polyXY' in kwargs):
             for n in range(N):
                 nodePts.append(_rndPtUniformPolyXY(kwargs['polyXY']))
@@ -334,8 +334,7 @@ def rndPts(N: int, distr = 'UniformSquareXY', seed = None, **kwargs) -> list:
 
     # Uniformly sample from the Euclidean space avoiding polygons
     elif (distr == 'UniformAvoidPolyXY'):
-        if ('polyXY' not in kwargs and 'polyXYs' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required args 'polyXY' or 'polyXYs', which indicates a polygon / a list of polygons in the Euclidean space")
+        checkRequiredKeys(kwargs, [('polyXY', 'polyXYs')])
         xRange = None
         yRange = None
         if ('xRange' not in kwargs or 'yRange' not in kwargs):
@@ -368,25 +367,20 @@ def rndPts(N: int, distr = 'UniformSquareXY', seed = None, **kwargs) -> list:
 
     # Uniformly sample from a polygon by lat/lon
     elif (distr == 'UniformPolyLatLon'):
-        if ('polyLatLon' not in kwargs and 'polyLatLons' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required args 'polyXY' or 'polyXYs', which indicates a polygon / a list of polygons in the Euclidean space")
+        checkRequiredKeys(kwargs, [('polyLatLon', 'polyLatLons')])
         # TODO: Mercator projection
         raise UnsupportedInputError("ERROR: 'UniformPolyLatLon' is not available yet, please stay tune.")
 
     # Uniformly sample from a circle by lat/lon
     elif (distr == 'UniformCircleLatLon'):
-        if ('centerLatLon' not in kwargs or 'radiusInMeters' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required args 'centerLatLon' or 'radiusInMeters'.")
+        checkRequiredKeys(kwargs, ['centerLatLon', 'radiusInMeters'])
         for n in range(N):
             nodePts.append(_rndPtUniformCircleLatLon(kwargs['radiusInMeters'], kwargs['centerLatLon']))
 
     # Uniformly sample from the roads/streets within a polygon/a list of polygons from given road networks
     elif (distr == 'RoadNetworkPolyLatLon'):
-        if ('polyLatLon' not in kwargs and 'polyLatLons' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required args 'polyLatLon' or 'polyLatLons', which indicates a polygon / a list of polygons in the Euclidean space")
-        elif ('roads' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required args 'RoadNetwork'. Need to provide the road network where the nodes are generated.")
-        elif ('roadClass' not in kwargs):
+        checkRequiredKeys(kwargs, [('polyLatLon', 'polyLatLons'), 'roads'])
+        if ('roadClass' not in kwargs):
             warnings.warn("WARNING: Set 'roadClass' to be default as ['residential']")
         if ('polyLatLon' in kwargs):
             nodePts = _rndPtRoadNetworkPolyLatLon(
@@ -403,11 +397,8 @@ def rndPts(N: int, distr = 'UniformSquareXY', seed = None, **kwargs) -> list:
 
     # Uniformly sample from the roads/streets within a circle from given road network
     elif (distr == 'RoadNetworkCircleLatLon'):
-        if ('centerLatLon' not in kwargs or 'radiusInMeters' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required args 'centerLatLon' or 'radiusInMeters'.")
-        elif ('roads' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required args 'RoadNetwork'. Need to provide the road network where the nodes are generated.")
-        elif ('roadClass' not in kwargs):
+        checkRequiredKeys(kwargs, ['centerLatLon', 'radiusInMeters', 'roads'])
+        if ('roadClass' not in kwargs):
             warnings.warn("WARNING: Set 'roadClass' to be default as ['residential']")
         nodePts = _rndPtRoadNetworkCircleLatLon(
             N if N != None else len(nodeIDs),
@@ -508,11 +499,8 @@ def rndNodeFeature(nodes: dict, nodeIDs: list[int|str]|str = 'All', feature = 'M
             nodes[n]['feature'] = [nodes[n]['feature'], feature]
 
     if (feature == 'Moving'):
-        if ('dirRange' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'dirRange'.")
+        checkRequiredKeys(kwargs, ['dirRange', 'spdRange'])
         dirRange = kwargs['dirRange']
-        if ('spdRange' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'spdRange'.")
         spdRange = kwargs['spdRange']
 
         for n in nodeIDs:
@@ -528,10 +516,7 @@ def rndNodeFeature(nodes: dict, nodeIDs: list[int|str]|str = 'All', feature = 'M
             nodes[n]['vy'] = vy
 
     elif (feature == 'Floating'):
-        if ('maxSpeed' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'maxSpeed'.")
-        if ('maxRadius' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'maxRadius'.")
+        checkRequiredKeys(kwargs, ['maxSpeed', 'maxRadius'])
 
         for n in nodeIDs:
             maxSpeed = random.uniform(0, kwargs['maxSpeed'])
@@ -540,11 +525,8 @@ def rndNodeFeature(nodes: dict, nodeIDs: list[int|str]|str = 'All', feature = 'M
             nodes[n]['maxRadius'] = maxRadius
 
     elif (feature == 'TimeWindow'):
-        if ('earliest' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'earliest'.")
+        checkRequiredKeys(kwargs, ['earliest', 'latest'])
         earliest = kwargs['earliest']
-        if ('latest' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'latest'.")
         latest = kwargs['latest']
 
         for n in nodeIDs:
@@ -629,10 +611,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
     for n in nodeIDs:
         nodes[n]['neiShape'] = shape
     if (shape == 'Poly'):
+        checkRequiredKeys(kwargs, 'poly')
         for n in nodeIDs:
-            if ('poly' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'poly'")
-            
             poly = [[i[0] + nodes[n][ptFieldName][0], i[1] + nodes[n][ptFieldName][1]] for i in kwargs['poly']]
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
 
@@ -644,9 +624,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                     nodes[n][neighborFieldName][i][1] = round(nodes[n][neighborFieldName][i][1], kwargs['precision'])
             
     elif (shape == 'Circle'):
+        checkRequiredKeys(kwargs, 'radius')
         for n in nodeIDs:
-            if ('radius' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'radius'")
             # By default, a circle is plotted by a 30-gon
             lod = 30
             if ('lod' in kwargs and type(kwargs['lod']) == int):
@@ -661,11 +640,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
 
     elif (shape == 'RndCircle'):
+        checkRequiredKeys(kwargs, ['minRadius', 'maxRadius'])
         for n in nodeIDs:
-            if ('minRadius' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'minRadius'")
-            if ('maxRadius' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxRadius'")
             # By default, a circle is plotted by a 30-gon
             lod = 30
             if ('lod' in kwargs and type(kwargs['lod']) == int):
@@ -682,9 +658,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
 
     elif (shape == 'Egg'):
+        checkRequiredKeys(kwargs, ['a', 'b', 'c'])
         for n in nodeIDs:
-            if ('a' not in kwargs or 'b' not in kwargs or 'c' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'a', 'b', and/or 'c'.")
             direction = 0
             if ('direction' in kwargs):
                 direction = kwargs['direction']
@@ -742,11 +717,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
             
     elif (shape == 'RndSquare'):
+        checkRequiredKeys(kwargs, ['maxLen', 'minLen'])
         for n in nodeIDs:
-            if ('maxLen' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxLen'")
-            if ('minLen' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'minLen'")
             if (kwargs['minLen'] > kwargs['maxLen']):
                 warnings.warn("WARNING: 'minLen' is greater than 'maxLen', will be swapped")
                 kwargs['maxLen'], kwargs['minLen'] = kwargs['minLen'], kwargs['maxLen']
@@ -763,15 +735,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             ]
 
     elif (shape == 'RndRectangle'):
+        checkRequiredKeys(kwargs, ['minWidth', 'maxWidth', 'minLength', 'maxLength'])
         for n in nodeIDs:
-            if ('minWidth' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'minWidth'")
-            if ('maxWidth' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxWidth'")
-            if ('minLength' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'minLength'")
-            if ('maxLength' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxLength'")
             if (kwargs['minWidth'] > kwargs['maxWidth']):
                 warnings.warn("WARNING: 'minWidth' is greater than 'maxWidth', will be swapped")
                 kwargs['maxWidth'], kwargs['minWidth'] = kwargs['minWidth'], kwargs['maxWidth']
@@ -793,15 +758,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             ]
 
     elif (shape == 'RndRectangleBounded'):
+        checkRequiredKeys(kwargs, ['minWidth', 'maxWidth', 'minLength', 'maxLength'])
         for n in nodeIDs:
-            if ('minWidth' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'minWidth'")
-            if ('maxWidth' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxWidth'")
-            if ('minLength' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'minLength'")
-            if ('maxLength' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxLength'")
             if (kwargs['minWidth'] > kwargs['maxWidth']):
                 warnings.warn("WARNING: 'minWidth' is greater than 'maxWidth', will be swapped")
                 kwargs['maxWidth'], kwargs['minWidth'] = kwargs['minWidth'], kwargs['maxWidth']
@@ -855,9 +813,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
 
     elif (shape == 'RndCurvy'):
+        checkRequiredKeys(kwargs, ['maxRadius', 'minRadius'])
         for n in nodeIDs:
-            if ('maxRadius' not in kwargs or 'minRadius' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxRadius' or 'minRadius'")
             lod = 30
             if ('lod' in kwargs and type(kwargs['lod']) == int):
                 lod = kwargs['lod']
@@ -892,14 +849,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
             nodes[n][neighborFieldName] = [poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']]
     
     elif (shape == 'RndConvexPoly'):
+        checkRequiredKeys(kwargs, ['maxNumSide', 'maxDiag', 'minDiag'])
         for n in nodeIDs:
-            if ('maxNumSide' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxNumSide'")
-            if ('maxDiag' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxDiag'")
-            if ('minDiag' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'minDiag'")
-            
             polyPts = []
             for i in range(kwargs['maxNumSide']):
                 deg = random.uniform(0, 1) * 360
@@ -923,14 +874,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                     nodes[n][neighborFieldName][i][1] = round(nodes[n][neighborFieldName][i][1], kwargs['precision'])
             
     elif (shape == 'RndStar'):
+        checkRequiredKeys(kwargs, ['maxNumSide', 'maxDiag', 'minDiag'])
         for n in nodeIDs:
-            if ('maxNumSide' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxNumSide'")
-            if ('maxDiag' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxDiag'")
-            if ('minDiag' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'minDiag'")
-
             degs = []
             for i in range(kwargs['maxNumSide']):
                 degs.append(random.uniform(0, 1) * 360)
@@ -955,13 +900,12 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                     nodes[n][neighborFieldName][i][1] = round(nodes[n][neighborFieldName][i][1], kwargs['precision'])
             
     elif (shape == 'IsoCircle'):
+        checkRequiredKeys(kwargs, 'radiusList')
         for n in nodeIDs:
             # By default, a circle is plotted by a 30-gon
             lod = 30
             if ('lod' in kwargs and type(kwargs['lod']) == int):
                 lod = kwargs['lod']
-            if ('radiusList' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'radiusList'")
 
             nodes[n][neighborFieldName] = []
             nodes[n]['radiusList'] = kwargs['radiusList']
@@ -973,16 +917,8 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                 nodes[n][neighborFieldName].append([poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']])
     
     elif (shape == 'IsoConvexPoly'):
+        checkRequiredKeys(kwargs, ['maxNumSide', 'maxDiag', 'minDiag', 'radiusList'])
         for n in nodeIDs:
-            if ('maxNumSide' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxNumSide'")
-            if ('maxDiag' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'maxDiag'")
-            if ('minDiag' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'minDiag'")
-            if ('radiusList' not in kwargs):
-                raise MissingParameterError("ERROR: Missing required args 'radiusList'")
-            
             polyPts = []
             for c in range(len(kwargs['radiusList'])):
                 polyPts.append([])
@@ -1004,10 +940,7 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
                 nodes[n][neighborFieldName].append([poly[i] for i in range(len(poly)) if distEuclideanXY(poly[i], poly[i - 1]) > ERRTOL['distPt2Pt']])
 
     elif (shape == 'Ring'):
-        if ('innerRadius' not in kwargs):
-            raise MissingParameterError("ERROR: Missing `innerRadius`")
-        if ('outerRadius' not in kwargs):
-            raise MissingParameterError("ERROR: Missing `outerRadius`")
+        checkRequiredKeys(kwargs, ['innerRadius', 'outerRadius'])
         innerRadius = kwargs['innerRadius']
         outerRadius = kwargs['outerRadius']
         if (innerRadius >= outerRadius):
@@ -1246,7 +1179,7 @@ def rndNodeNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str
 
     return nodes
 
-def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str = 'Egg', seed = None, **kwargs) -> dict:
+def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape: str = 'Egg', triGridSurfaceFlag: bool = True, seed = None, **kwargs) -> dict:
 
     # Sanity check ============================================================
     if (type(nodeIDs) is not list):
@@ -1267,23 +1200,18 @@ def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape
     for n in nodeIDs:
         nodes[n]['neiShape'] = shape
     if (shape == 'Egg'):
-        if ('T' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'T'.")
+        checkRequiredKeys(kwargs, ['T', 'dirT'])
         T = kwargs['T']
-        if ('dirT' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'dirT'.")
         dirT = kwargs['dirT']
 
         aT = None
         bT = None
         cT = None
+        checkRequiredKeys(kwargs, [(['aT', 'bT', 'cT'], ['a', 'b', 'c'])])
         if ('aT' not in kwargs or 'bT' not in kwargs or 'cT' not in kwargs):
-            if ('a' in kwargs and 'b' in kwargs and 'c' in kwargs):
-                aT = [kwargs['a'] for k in range(len(T))]
-                bT = [kwargs['b'] for k in range(len(T))]
-                cT = [kwargs['c'] for k in range(len(T))]
-            else:
-                raise MissingParameterError("ERROR: Missing required args 'a', 'b', and/or 'c'.")
+            aT = [kwargs['a'] for k in range(len(T))]
+            bT = [kwargs['b'] for k in range(len(T))]
+            cT = [kwargs['c'] for k in range(len(T))]
         else:        
             # 先给出不同时刻的各个参数
             aT = kwargs['aT']
@@ -1346,23 +1274,13 @@ def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape
                 timedPoly.append([[poly[i] for i in range(len(poly)) if not is2PtsSame(poly[i], poly[i - 1])], T[k]])
 
             nodes[n]['timedPoly'] = timedPoly
-            nodes[n][neighborFieldName] = TriGridSurface(timedPoly)
 
     elif (shape == 'MovingCircle'):
-        if ('duration' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'duration'.")
+        checkRequiredKeys(kwargs, ['duration', 'interval', 'R', 'dirRange', 'spdRange'])
         duration = kwargs['duration']
-        if ('interval' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'interval'.")
         interval = kwargs['interval']
-        if ('R' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'R'.")
         R = kwargs['R']
-        if ('dirRange' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'dirRange'.")
         dirRange = kwargs['dirRange']
-        if ('spdRange' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'spdRange'.")
         spdRange = kwargs['spdRange']
 
         for n in nodeIDs:
@@ -1387,7 +1305,6 @@ def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape
                 timedPoly.append([newNeighborPoly, k * interval])
 
             nodes[n]['timedPoly'] = timedPoly
-            nodes[n][neighborFieldName] = TriGridSurface(timedPoly)
             nodes[n]['duration'] = duration
             nodes[n]['interval'] = interval
             nodes[n]['radius'] = R
@@ -1397,20 +1314,11 @@ def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape
             nodes[n]['vy'] = vy
 
     elif (shape == 'TimeWindowCircle'):
-        if ('R' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'R'.")
+        checkRequiredKeys(kwargs, ['R', 'minDuration', 'maxDuration', 'makespan', 'interval'])
         R = kwargs['R']
-        if ('minDuration' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'minDuration'.")
         minDuration = kwargs['minDuration']
-        if ('maxDuration' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'maxDuration'.")
         maxDuration = kwargs['maxDuration']
-        if ('makespan' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'makespan'.")
         makespan = kwargs['makespan']
-        if ('interval' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'interval'.")
         interval = kwargs['interval']
 
         for n in nodeIDs:
@@ -1427,21 +1335,15 @@ def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape
                 timedPoly.append([newNeighborPoly, startTime + k * interval])
 
             nodes[n]['timedPoly'] = timedPoly
-            nodes[n][neighborFieldName] = TriGridSurface(timedPoly)
             nodes[n]['interval'] = interval
             nodes[n]['radius'] = R
             nodes[n]['startTime'] = startTime
             nodes[n]['endTime'] = startTime + dur
 
     elif (shape == 'FloatingTarget'):
-        if ('maxSpeed' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'maxSpeed'.")
+        checkRequiredKeys(kwargs, ['maxSpeed', 'duration', 'interval'])
         maxSpeed = kwargs['maxSpeed']
-        if ('duration' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'duration'.")
         duration = kwargs['duration']
-        if ('interval' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required arg 'interval'.")
         interval = kwargs['interval']
 
         for n in nodeIDs:
@@ -1455,13 +1357,16 @@ def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape
                 timedPoly.append([newNeighborPoly, k * interval])
 
             nodes[n]['timedPoly'] = timedPoly
-            nodes[n][neighborFieldName] = TriGridSurface(timedPoly)
             nodes[n]['duration'] = duration
             nodes[n]['interval'] = interval
             nodes[n]['maxSpeed'] = maxSpeed
 
     else:
         raise UnsupportedInputError("ERROR: Unsupported option for `shape`.")
+
+    if (triGridSurfaceFlag == True):
+        for n in nodeIDs:
+            nodes[n][neighborFieldName] = TriGridSurface(nodes[n]['timedPoly'])
 
     return nodes
     
@@ -1508,8 +1413,7 @@ def rndArcs(A: int|None = None, arcIDs: list[int|str] = [], distr = 'UniformLeng
 
     # Generate instance =======================================================
     if (distr == 'UniformLengthInSquareXY'):
-        if ('minLen' not in kwargs or 'maxLen' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required field 'minLen' and/or 'maxLen'")
+        checkRequiredKeys(kwargs, ['minLen', 'maxLen'])
         if ('minDeg' not in kwargs):
             kwargs['minDeg'] = 0
         if ('maxDeg' not in kwargs):
@@ -1588,8 +1492,7 @@ def rndArcNeighbors(arcs: dict, arcIDs: list[int|str]|str = 'All', shape: str = 
 
     # Add neighborhood ========================================================    
     if (shape == 'FixedRadius'):
-        if ('radius' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required key 'radius' in `kwargs`")
+        checkRequiredKeys(kwargs, 'radius')
 
         for i in arcIDs:            
             # By default, a circle is plotted by a 30-gon

@@ -56,9 +56,8 @@ def solveOP(
             raise MissingParameterError("ERROR: Cannot find `vehicleID` in `vehicles`.")
 
     if (algo == 'IP'):
-        if ('solver' not in kwargs):
-            raise MissingParameterError("ERROR: Missing required field `solver`.")
-        elif (kwargs['solver'] == 'Gurobi' and kwargs['fml'] not in ['MTZ', 'DFJ_Lazy']):
+        checkRequiredKeys(kwargs, 'solver')
+        if (kwargs['solver'] == 'Gurobi' and kwargs['fml'] not in ['MTZ', 'DFJ_Lazy']):
             raise OutOfRangeError("ERROR: Formulation is not supported.", )
 
     # Field names =============================================================

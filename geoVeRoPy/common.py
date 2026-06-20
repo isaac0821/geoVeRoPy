@@ -92,6 +92,49 @@ class OutOfRangeError(Exception):
 class NotAvailableError(Exception):
     pass
 
+def checkRequiredKeys(kwargs: dict, requiredKeys: str | list, dictName: str = 'kwargs') -> None:
+    if (kwargs == None or type(kwargs) is not dict):
+        raise MissingParameterError("ERROR: `%s` should be a dictionary." % dictName)
+    if (type(requiredKeys) is str):
+        requiredKeys = [requiredKeys]
+    missingReq = []
+    for keyReq in requiredKeys:
+        if (type(keyReq) is str):
+            if (keyReq not in kwargs):
+                missingReq.append("'%s'" % keyReq)
+        elif (type(keyReq) is tuple):
+            if (len(keyReq) == 0):
+                raise UnsupportedInputError("ERROR: Empty alternative key group.")
+            foundFlag = False
+            alternativeKeys = []
+            for key in keyReq:
+                if (type(key) is str):
+                    alternativeKeys.append(key)
+                    if (key in kwargs):
+                        foundFlag = True
+                        break
+                elif (type(key) is list or type(key) is tuple):
+                    alternativeKeys.append(list(key))
+                    groupFoundFlag = True
+                    for subKey in key:
+                        if (subKey not in kwargs):
+                            groupFoundFlag = False
+                            break
+                    if (groupFoundFlag == True):
+                        foundFlag = True
+                        break
+                else:
+                    raise UnsupportedInputError("ERROR: Required key alternative is not supported.")
+            if (foundFlag == False):
+                missingReq.append("one of %s" % str(alternativeKeys))
+        else:
+            raise UnsupportedInputError("ERROR: Required key specification is not supported.")
+    if (len(missingReq) == 1):
+        raise MissingParameterError("ERROR: Missing required key %s in `%s`." % (missingReq[0], dictName))
+    if (len(missingReq) > 1):
+        raise MissingParameterError("ERROR: Missing required keys %s in `%s`." % (missingReq, dictName))
+    return
+
 def defaultBoundingBox(
     boundingBox = (None, None, None, None),
     pts: list[pt] = None,

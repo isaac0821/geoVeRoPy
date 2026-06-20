@@ -695,9 +695,8 @@ def solveTSP(
         cons = kwargs['cons']
         # An initial solution is given
         if (cons == 'Initial'):
-            if ('initSeq' not in kwargs):
-                raise MissingParameterError("ERROR: Need 'initSeq' for local improvement")
-            elif (len(kwargs['initSeq']) != len(nodeIDs) + 1):
+            checkRequiredKeys(kwargs, 'initSeq')
+            if (len(kwargs['initSeq']) != len(nodeIDs) + 1):
                 raise UnsupportedInputError("ERROR: Length of 'initSeq' is incorrect, check if the sequence starts and ends with `depotID`")
             else:
                 notInNodeIDs = [v for v in kwargs['initSeq'] if v not in nodeIDs]

@@ -83,8 +83,7 @@ def solveCETSP(nodes: dict, depotPt: pt = None, startPt: pt = None, endPt: pt = 
 
     # Check required fields for neighbor options ==============================
     if (neighbor == 'Circle'):
-        if ('radius' not in kwargs and 'radiusFieldName' not in kwargs):
-            raise MissingParameterError("ERROR: Must provide an uniform radius as `radius` or the field name of radius as `radiusFieldName`.")
+        checkRequiredKeys(kwargs, [('radius', 'radiusFieldName')])
     elif (neighbor == 'Poly'):
         if ('polyFieldName' not in kwargs):
             warnings.warn("WARNING: `polyFieldName` is not provided, set to be default as `neighbor`.")
