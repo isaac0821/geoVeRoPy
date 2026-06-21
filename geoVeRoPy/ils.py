@@ -35,8 +35,6 @@ class RawSolnNode(SolnNode):
 
         self.funcCheck = funcCheck # Function to check if feasible
         self.funcFix = funcFix # Function to fix (by one step) towards feasibility
-        if ('repairRandomness' not in self.__dict__):
-            self.repairRandomness = 0.25
         self.ofv = None
 
         self.solvedFlag = False
@@ -58,32 +56,7 @@ class RawSolnNode(SolnNode):
         return
 
     def fix(self):
-        fixResult = self.funcFix(self)
-        if (fixResult == None):
-            return
-        if (type(fixResult) is not dict or 'repairOptions' not in fixResult):
-            return
-
-        repairOptions = fixResult['repairOptions']
-        if (len(repairOptions) == 0):
-            return
-
-        if (self.repairRandomness <= 0):
-            repairOption = min(repairOptions, key = lambda i: i['delta'])
-        else:
-            minDelta = min([i['delta'] for i in repairOptions])
-            maxDelta = max([i['delta'] for i in repairOptions])
-            if (abs(maxDelta - minDelta) <= 1e-12):
-                repairWeight = [1 for i in repairOptions]
-            else:
-                repairScale = self.repairRandomness * (maxDelta - minDelta)
-                repairWeight = [float(np.exp(-(i['delta'] - minDelta) / repairScale)) for i in repairOptions]
-            repairOption = repairOptions[rndPick(repairWeight)]
-
-        if (repairOption['type'] == 'insert'):
-            self.curRep.insert(repairOption['pos'], repairOption['node'])
-        else:
-            raise UnsupportedInputError("ERROR: RawSolnNode repair option is not supported.")
+        self.funcFix(self)
         return
 
 class ILS:
@@ -133,7 +106,7 @@ class ILS:
         self.convergence = []
 
         printLog("ILS initialization completed")
-        printLog(f"Initial obj: {self.currOFV:.4f}")
+        printLog(f"Initial objective value: {self.currOFV:.4f}")
         for fieldName in self.printFieldNames:
             printLog(f"Initial {fieldName}: {getattr(self.currNode, fieldName, None)}")
         return
@@ -196,8 +169,8 @@ class ILS:
             printLog(hyphenStr())
             printLog(f"Iter {iteration:5d}")
             printLog(f"Runtime [s]: {runtime:.2f}")
-            printLog(f"bestObj: {self.bestOFV:.6f}")
-            printLog(f"currObj: {self.currOFV:.6f}")
+            printLog(f"bestOFV: {self.bestOFV:.6f}")
+            printLog(f"currOFV: {self.currOFV:.6f}")
             for fieldName in self.printFieldNames:
                 if (len(fieldName) == 0):
                     continue
@@ -219,10 +192,9 @@ class ILS:
             iteration += 1
 
         totalRuntime = (datetime.datetime.now() - startTime).total_seconds()
-        printLog(f"\nILS finished. Best obj: {self.bestOFV:.6f}, total time: {totalRuntime:.2f}s")
+        printLog(f"\nILS finished. Best objective: {self.bestOFV:.6f}, total time: {totalRuntime:.2f}s")
 
         self.runtime = totalRuntime
         self.convergence = convergence
 
         return
-

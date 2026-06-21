@@ -280,14 +280,14 @@ def aniRouting(timeRange: tuple[int, int], nodes: dict|None = None, vehicles: di
 
                 plotPolyFlag = True
                 poly = None
-                fixedPoly = polygons[pID].get(polyFieldName)
                 timedPoly = polygons[pID].get(polyTimedPolyFieldName) if polyTimedPolyFieldName != None else None
-                if (isinstance(fixedPoly, list) and len(fixedPoly) > 0):
-                    poly = fixedPoly
-                elif (isinstance(timedPoly, list) and len(timedPoly) > 0):
+                fixedPoly = polygons[pID].get(polyFieldName)
+                if (isinstance(timedPoly, list) and len(timedPoly) > 0):
                     poly = snapInTimedPoly(
                         timedPoly = timedPoly,
                         t = clock)
+                elif (isinstance(fixedPoly, list) and len(fixedPoly) > 0):
+                    poly = fixedPoly
                 if (poly == None or len(poly) == 0):
                     plotPolyFlag = False
                 else:

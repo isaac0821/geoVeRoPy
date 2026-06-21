@@ -20,6 +20,7 @@ from .gridSurface import *
 # Solution frameworks
 from .bnbTree import *
 from .ils import *
+from .alns import *
 
 # Problems
 from .instance import *
