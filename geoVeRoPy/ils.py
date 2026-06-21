@@ -35,6 +35,8 @@ class RawSolnNode(SolnNode):
 
         self.funcCheck = funcCheck # Function to check if feasible
         self.funcFix = funcFix # Function to fix (by one step) towards feasibility
+        if ('repairRandomness' not in self.__dict__):
+            self.repairRandomness = 0.25
         self.ofv = None
 
         self.solvedFlag = False
@@ -56,7 +58,32 @@ class RawSolnNode(SolnNode):
         return
 
     def fix(self):
-        self.funcFix(self)
+        fixResult = self.funcFix(self)
+        if (fixResult == None):
+            return
+        if (type(fixResult) is not dict or 'repairOptions' not in fixResult):
+            return
+
+        repairOptions = fixResult['repairOptions']
+        if (len(repairOptions) == 0):
+            return
+
+        if (self.repairRandomness <= 0):
+            repairOption = min(repairOptions, key = lambda i: i['delta'])
+        else:
+            minDelta = min([i['delta'] for i in repairOptions])
+            maxDelta = max([i['delta'] for i in repairOptions])
+            if (abs(maxDelta - minDelta) <= 1e-12):
+                repairWeight = [1 for i in repairOptions]
+            else:
+                repairScale = self.repairRandomness * (maxDelta - minDelta)
+                repairWeight = [float(np.exp(-(i['delta'] - minDelta) / repairScale)) for i in repairOptions]
+            repairOption = repairOptions[rndPick(repairWeight)]
+
+        if (repairOption['type'] == 'insert'):
+            self.curRep.insert(repairOption['pos'], repairOption['node'])
+        else:
+            raise UnsupportedInputError("ERROR: RawSolnNode repair option is not supported.")
         return
 
 class ILS:
@@ -77,11 +104,18 @@ class ILS:
             'stopCriteria': {
                 'numIter': 100
             },
-            'seed': None
+            'seed': None,
+            'objSense': 'Min',
+            'objFieldName': 'ofv',
+            'printFieldNames': []
         }
         for key, val in defaultParam.items():
             setattr(self, key, val)
         self.__dict__.update(kwargs)
+        if (self.objSense not in ['Min', 'Max']):
+            raise UnsupportedInputError("ERROR: `objSense` should be 'Min' or 'Max'.")
+        if (type(self.printFieldNames) is str):
+            self.printFieldNames = [self.printFieldNames]
         if (self.seed is not None):
             random.seed(self.seed)
 
@@ -91,7 +125,7 @@ class ILS:
 
         # 获得初始解
         self.currNode = self.initNode
-        self.currOFV = self.currNode.ofv
+        self.currOFV = getattr(self.currNode, self.objFieldName)
         self.bestNode = self.currNode
         self.bestOFV = self.currOFV
 
@@ -99,7 +133,10 @@ class ILS:
         self.convergence = []
 
         printLog("ILS initialization completed")
-        printLog(f"Initial objective value: {self.currOFV:.4f}")
+        printLog(f"Initial obj: {self.currOFV:.4f}")
+        for fieldName in self.printFieldNames:
+            printLog(f"Initial {fieldName}: {getattr(self.currNode, fieldName, None)}")
+        return
 
     def solve(self):
         startTime = datetime.datetime.now()
@@ -114,15 +151,18 @@ class ILS:
             opFunc = rndPickFromDict(self.roulette)
             newNode = opFunc(self.currNode)
             newNode.solve()
-            newObj = newNode.ofv
+            newObj = getattr(newNode, self.objFieldName)
             printLog(f"Operator selected: {opFunc.__name__}")
 
             accept = False
-            if (newObj < self.currOFV):
+            if ((self.objSense == 'Min' and newObj < self.currOFV) or (self.objSense == 'Max' and newObj > self.currOFV)):
                 accept = True
                 self.roulette[opFunc] += 2
             else:
-                delta = newObj - self.currOFV
+                if (self.objSense == 'Min'):
+                    delta = newObj - self.currOFV
+                else:
+                    delta = self.currOFV - newObj
                 prob = np.exp(-delta / temp) if (temp > 0) else 0.0
                 if (random.random() < prob):
                     accept = True
@@ -132,7 +172,7 @@ class ILS:
                 self.currNode = newNode
                 self.currOFV = newObj
 
-            if (newObj < self.bestOFV - 1e-8):
+            if ((self.objSense == 'Min' and newObj < self.bestOFV - 1e-8) or (self.objSense == 'Max' and newObj > self.bestOFV + 1e-8)):
                 self.bestNode = newNode
                 self.bestOFV = newObj
                 noImproveIter = 0
@@ -143,18 +183,27 @@ class ILS:
             temp *= self.coolRate
 
             runtime = (datetime.datetime.now() - startTime).total_seconds()
-            convergence.append({
+            convergenceItem = {
                 'iter': iteration,
                 'obj': self.bestOFV,
                 'runtime': runtime
-            })
+            }
+            for fieldName in self.printFieldNames:
+                convergenceItem[fieldName] = getattr(self.bestNode, fieldName, None)
+            convergence.append(convergenceItem)
 
             # printLog("\n")
             printLog(hyphenStr())
             printLog(f"Iter {iteration:5d}")
             printLog(f"Runtime [s]: {runtime:.2f}")
-            printLog(f"bestOFV: {self.bestOFV:.6f}")
-            printLog(f"currOFV: {self.currOFV:.6f}")
+            printLog(f"bestObj: {self.bestOFV:.6f}")
+            printLog(f"currObj: {self.currOFV:.6f}")
+            for fieldName in self.printFieldNames:
+                if (len(fieldName) == 0):
+                    continue
+                fieldLabel = fieldName[0].upper() + fieldName[1:]
+                printLog(f"best{fieldLabel}: {getattr(self.bestNode, fieldName, None)}")
+                printLog(f"curr{fieldLabel}: {getattr(self.currNode, fieldName, None)}")
             printLog(f"Temperature: {temp:.3f}")
 
             if (('numIter' in self.stopCriteria) and (iteration >= self.stopCriteria['numIter'])):
@@ -170,7 +219,7 @@ class ILS:
             iteration += 1
 
         totalRuntime = (datetime.datetime.now() - startTime).total_seconds()
-        printLog(f"\nILS finished. Best objective: {self.bestOFV:.6f}, total time: {totalRuntime:.2f}s")
+        printLog(f"\nILS finished. Best obj: {self.bestOFV:.6f}, total time: {totalRuntime:.2f}s")
 
         self.runtime = totalRuntime
         self.convergence = convergence

@@ -1275,6 +1275,83 @@ def rndNodeTimedNeighbors(nodes: dict, nodeIDs: list[int|str]|str = 'All', shape
 
             nodes[n]['timedPoly'] = timedPoly
 
+    elif (shape == 'RndPoly'):
+        checkRequiredKeys(kwargs, ['maxNumSide', 'maxDiag', 'minDiag', 'duration', 'interval', 'deformRatio'])
+        maxNumSide = kwargs['maxNumSide']
+        maxDiag = kwargs['maxDiag']
+        minDiag = kwargs['minDiag']
+        duration = kwargs['duration']
+        interval = kwargs['interval']
+        deformRatio = kwargs['deformRatio']
+
+        if (maxNumSide < 3):
+            raise UnsupportedInputError("ERROR: maxNumSide must be at least 3.")
+        if (interval <= 0):
+            raise UnsupportedInputError("ERROR: interval must be positive.")
+        if (duration < 0):
+            raise UnsupportedInputError("ERROR: duration must be nonnegative.")
+        if (minDiag <= 0 or maxDiag <= 0):
+            raise UnsupportedInputError("ERROR: minDiag and maxDiag must be positive.")
+        if (minDiag > maxDiag):
+            warnings.warn("WARNING: 'minDiag' is greater than 'maxDiag', will be swapped")
+            minDiag, maxDiag = maxDiag, minDiag
+        if (deformRatio < 0):
+            raise UnsupportedInputError("ERROR: deformRatio must be nonnegative.")
+
+        numT = (int)(duration / interval) + 1
+        for n in nodeIDs:
+            sideCnt = random.randint(3, maxNumSide)
+            targetDiag = random.uniform(minDiag, maxDiag)
+            angles = []
+            for i in range(sideCnt):
+                angles.append(random.uniform((360 / sideCnt) * i, (360 / sideCnt) * (i + 1)))
+
+            relPts = []
+            for i in range(sideCnt):
+                radius = random.uniform(0.45 * targetDiag, targetDiag) / 2
+                relPts.append(ptInDistXY(
+                    pt = (0, 0),
+                    direction = angles[i],
+                    dist = radius))
+
+            curDiag = 0
+            for i in range(sideCnt):
+                for j in range(i + 1, sideCnt):
+                    curDiag = max(curDiag, distEuclideanXY(relPts[i], relPts[j]))
+            if (curDiag <= ERRTOL['distPt2Pt']):
+                curDiag = 1
+            relPts = [[pt[0] * targetDiag / curDiag, pt[1] * targetDiag / curDiag] for pt in relPts]
+
+            globalPhase = random.uniform(0, 2 * math.pi)
+            vertexPhases = [random.uniform(0, 2 * math.pi) for _ in range(sideCnt)]
+            timedPoly = []
+            for k in range(numT):
+                timeVal = k * interval
+                timeRatio = 0 if (numT <= 1) else k / (numT - 1)
+                globalMove = (math.sin(2 * math.pi * timeRatio + globalPhase) - math.sin(globalPhase)) / 2
+                poly = []
+                for i in range(sideCnt):
+                    localMove = (math.sin(2 * math.pi * timeRatio + vertexPhases[i]) - math.sin(vertexPhases[i])) / 2
+                    scale = 1 + deformRatio * (0.6 * globalMove + 0.4 * localMove)
+                    scale = max(0.05, scale)
+                    poly.append([
+                        nodes[n][ptFieldName][0] + relPts[i][0] * scale,
+                        nodes[n][ptFieldName][1] + relPts[i][1] * scale])
+
+                poly = [poly[i] for i in range(len(poly)) if not is2PtsSame(poly[i], poly[i - 1])]
+                if ('precision' in kwargs):
+                    poly = [[round(pt[0], kwargs['precision']), round(pt[1], kwargs['precision'])] for pt in poly]
+                timedPoly.append([poly, timeVal])
+
+            nodes[n]['timedPoly'] = timedPoly
+            nodes[n]['duration'] = duration
+            nodes[n]['interval'] = interval
+            nodes[n]['numSide'] = sideCnt
+            nodes[n]['minDiag'] = minDiag
+            nodes[n]['maxDiag'] = maxDiag
+            nodes[n]['diag'] = targetDiag
+            nodes[n]['deformRatio'] = deformRatio
+
     elif (shape == 'MovingCircle'):
         checkRequiredKeys(kwargs, ['duration', 'interval', 'R', 'dirRange', 'spdRange'])
         duration = kwargs['duration']
