@@ -127,6 +127,14 @@ class ILS:
             newObj = getattr(newNode, self.objFieldName)
             printLog(f"Operator selected: {opFunc.__name__}")
 
+            newBestCandidateFlag = ((self.objSense == 'Min' and newObj < self.bestOFV - 1e-8) or (self.objSense == 'Max' and newObj > self.bestOFV + 1e-8))
+            if (newBestCandidateFlag and 'localSearchMode' in newNode.__dict__ and newNode.localSearchMode != 'Full'):
+                newNode.localSearchMode = 'Full'
+                newNode.localSearchDone = False
+                newNode.feasibleFlag = None
+                newNode.solve()
+                newObj = getattr(newNode, self.objFieldName)
+
             accept = False
             if ((self.objSense == 'Min' and newObj < self.currOFV) or (self.objSense == 'Max' and newObj > self.currOFV)):
                 accept = True
@@ -169,13 +177,19 @@ class ILS:
             printLog(hyphenStr())
             printLog(f"Iter {iteration:5d}")
             printLog(f"Runtime [s]: {runtime:.2f}")
+            printLog("Best solution:")
             printLog(f"bestOFV: {self.bestOFV:.6f}")
-            printLog(f"currOFV: {self.currOFV:.6f}")
             for fieldName in self.printFieldNames:
                 if (len(fieldName) == 0):
                     continue
                 fieldLabel = fieldName[0].upper() + fieldName[1:]
                 printLog(f"best{fieldLabel}: {getattr(self.bestNode, fieldName, None)}")
+            printLog("Current solution:")
+            printLog(f"currOFV: {self.currOFV:.6f}")
+            for fieldName in self.printFieldNames:
+                if (len(fieldName) == 0):
+                    continue
+                fieldLabel = fieldName[0].upper() + fieldName[1:]
                 printLog(f"curr{fieldLabel}: {getattr(self.currNode, fieldName, None)}")
             printLog(f"Temperature: {temp:.3f}")
 
