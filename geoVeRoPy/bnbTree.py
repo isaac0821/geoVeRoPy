@@ -30,6 +30,9 @@ class BnBTreeNode(TreeNode):
         self.soln = None # 该节点的解
 
         # 以下属性在自身或者其他node定界时补充
+        self.delayFlag = False
+        self.deferCnt = 0
+        self.deferUntil = 0
         self.bnbUB = bnbUB
         self.funcBranch = funcBranch
         self.prunFlag = False
@@ -57,7 +60,12 @@ class BnBTreeNode(TreeNode):
     # NOTE: 真值
     # @tellRuntime('bnbTree.py.solve', indentLevel = 1)
     def solve(self):
+        self.delayFlag = False
         self.funcSolve(self)
+        if (self.delayFlag == True):
+            self.deferCnt += 1
+            self.solvedFlag = False
+            return
         self.solvedFlag = True
         if (self.feasibleFlag == False):
             self.prunFlag = True
@@ -137,6 +145,7 @@ class BnBTree(Tree):
         self.convergence = []
         self.best = None
         self.tabu = {}
+        self.terminationStatus = None
 
         return
 
@@ -149,20 +158,24 @@ class BnBTree(Tree):
         numIter = 0
         while(True):
             numIter += 1
+            self.iteration = numIter
 
             printLog(hyphenStr(s="Iter: " + str(numIter)))
 
             # Step 1: 选择一个unsolved node，如果找不到unsolved，结束
             curNode = self.choose()
             if (self.gapTol != None and abs(self.upperBound) > ERRTOL['vertical'] and not math.isinf(self.upperBound) and abs(self.upperBound - self.lowerBound) / abs(self.upperBound) <= self.gapTol):
+                self.terminationStatus = 'Gap'
                 printLog(f"Iteration ends by gap: {abs(self.upperBound - self.lowerBound) * 100 / abs(self.upperBound)}%")
                 break
             if (curNode == None):
+                self.terminationStatus = 'Enumeration'
                 if (not math.isinf(self.upperBound)):
                     self.lowerBound = self.upperBound
                 printLog("Iteration ends by enumeration.")
                 break
             if (self.timeLimit != None and (datetime.datetime.now() - startTime).total_seconds() > self.timeLimit):
+                self.terminationStatus = 'Time_Limit'
                 printLog(f"Reach time limit: {(datetime.datetime.now() - startTime).total_seconds()} seconds")
                 break
 
@@ -171,6 +184,18 @@ class BnBTree(Tree):
             # Step 2: 求解
             curNode.bnbUB = self.upperBound
             curNode.solve()
+            if (curNode.delayFlag == True):
+                curNode.deferUntil = numIter + min(20, 2 + curNode.deferCnt)
+                if (curNode.lowerBound > self.upperBound):
+                    curNode.prunFlag = True
+                self.updateBounds()
+                printLog("Delay node: ", curNode.rep)
+                printLog("Node LB: ", curNode.lowerBound)
+                printLog("Global LB: ", self.lowerBound)
+                printLog("Global UB: ", self.upperBound)
+                self.convergence.append((self.upperBound, self.lowerBound, (datetime.datetime.now() - startTime).total_seconds()))
+                self.pruning(self.upperBound)
+                continue
 
             # Step 2.1: 如果没有上界，启发式的给一个上界，注意，必须保证该上界至少大于一个incumbent
             if (self.upperBound == float('inf') and curNode.funcUBEstimate != None):
@@ -221,6 +246,9 @@ class BnBTree(Tree):
         # FIXME: Test
         children = self.traverseChildren()
         children = [i for i in children if i.solvedFlag == False]
+        eligibleChildren = [i for i in children if getattr(i, 'deferUntil', 0) <= getattr(self, 'iteration', 0)]
+        if (len(eligibleChildren) > 0):
+            children = eligibleChildren
 
         printLog("Candidate #: ", len(children))
         if (len(children) == 0):
@@ -245,8 +273,13 @@ class BnBTree(Tree):
         # 否则递归
         else:
             # Case 1: 如果自己是unsolved，则继承父节点的bound
-            if (n.solvedFlag == False and not n.parent.isNil):
-                n.lowerBound = n.parent.lowerBound
+            if (n.solvedFlag == False):
+                if (not n.parent.isNil):
+                    if (n.lowerBound != None and math.isfinite(n.lowerBound)):
+                        n.lowerBound = max(n.parent.lowerBound, n.lowerBound)
+                    else:
+                        n.lowerBound = n.parent.lowerBound
+                return
             # Case 2: 如果自己是solved，则看自己有没有子节点
             else:
                 # Case 2.1: 如果自己没有子节点
@@ -257,16 +290,12 @@ class BnBTree(Tree):
                     # Case 2.2.1: 如果所有的子节点都是solved，则更新自己，如果有一个以上是unsolved，则不更新
                     for child in n.treeNodes:
                         self.updateBoundsByNode(child)
-                    allSolvedFlag = True
                     newLB = float('inf')
                     for child in n.treeNodes:
-                        if (child.solvedFlag == False):
-                            allSolvedFlag = False
-                            break
                         if (child.prunFlag == False):
                             if (child.lowerBound < newLB):
                                 newLB = child.lowerBound                    
-                    if (allSolvedFlag):                        
+                    if (newLB < float('inf')):                        
                         n.lowerBound = newLB
                     return
 
