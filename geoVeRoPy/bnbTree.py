@@ -207,7 +207,15 @@ class BnBTree(Tree):
             curNode.bnbUB = self.upperBound            
             curNode.bounding()
             if (curNode.prunFlag):
-                printLog("Current node pruned by upper bound.")  
+                pruneReason = getattr(curNode, 'pruneReason', None)
+                if (pruneReason == 'infeasibility'):
+                    printLog("Current node pruned by infeasibility.")
+                elif (pruneReason == 'infeasibility_or_unbounded'):
+                    printLog("Current node pruned by infeasibility or unbounded status.")
+                elif (pruneReason != None):
+                    printLog("Current node pruned by " + str(pruneReason) + ".")
+                else:
+                    printLog("Current node pruned by upper bound.")  
             printLog("OFV: ", curNode.ofv)
             printLog("Node LB: ", curNode.lowerBound)
             printLog("Node UB: ", curNode.upperBound)

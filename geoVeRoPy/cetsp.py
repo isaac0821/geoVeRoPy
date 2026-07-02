@@ -172,8 +172,18 @@ def _solveCETSPILSCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | No
             return
         toInsert = random.choice(n.missing)
         distPt2Seg = cetspSortInsertion(n.startPt, n.endPt, n.nodes, n.repPt, n.turning, toInsert, algo = "SOCP")
-        n.curRep.insert(heapq.heappop(distPt2Seg)[1], toInsert)
-        return
+        repairOptions = []
+        while (len(distPt2Seg) > 0):
+            delta, pos = heapq.heappop(distPt2Seg)
+            repairOptions.append({
+                'type': 'insert',
+                'delta': delta,
+                'pos': pos,
+                'node': toInsert
+            })
+        return {
+            'repairOptions': repairOptions
+        }
 
     def cetspCheck(n):
         # 给定一个RawSolnNode，确定是否访问了所有的点

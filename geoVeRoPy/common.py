@@ -428,15 +428,26 @@ def rndPick(coefficients: list[int|float]) -> int:
 
     """
 
-    totalSum = sum(coefficients)
-    tmpSum = 0
-    rnd = random.uniform(0, totalSum)
-    idx = 0
-    for i in range(len(coefficients)):
-        tmpSum += coefficients[i]
-        if rnd <= tmpSum:
-            idx = i
-            break
+    if (len(coefficients) == 0):
+        raise EmptyError("ERROR: `coefficients` should not be empty.")
+    for coefficient in coefficients:
+        if (coefficient < 0):
+            raise UnsupportedInputError("ERROR: `coefficients` should be nonnegative.")
+
+    if (len(coefficients) == 1):
+        idx = 0
+    elif (sum(coefficients) == 0):
+        idx = random.randint(0, len(coefficients) - 1)
+    else:
+        totalSum = sum(coefficients)
+        tmpSum = 0
+        rnd = random.random() * totalSum
+        idx = len(coefficients) - 1
+        for i in range(len(coefficients)):
+            tmpSum += coefficients[i]
+            if (rnd < tmpSum):
+                idx = i
+                break
     return idx
 
 def rndPickFromDict(coefficients: dict) -> int|str:

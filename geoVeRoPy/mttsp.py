@@ -234,9 +234,18 @@ def _solveMTTSPILS(startPt: pt, endPt: pt, nodes: dict, nodeIDs: list[int | str]
 
         toInsert = random.choice(n.missing)
         insertion = mttspSortInsertion(n, toInsert)
-        insertPos = heapq.heappop(insertion)[1]
-        n.curRep.insert(insertPos, toInsert)
-        return
+        repairOptions = []
+        while (len(insertion) > 0):
+            delta, pos = heapq.heappop(insertion)
+            repairOptions.append({
+                'type': 'insert',
+                'delta': delta,
+                'pos': pos,
+                'node': toInsert
+            })
+        return {
+            'repairOptions': repairOptions
+        }
 
     def mttspRawNode(seq, n = None):
         if (n != None):
