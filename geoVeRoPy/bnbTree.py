@@ -89,14 +89,14 @@ class BnBTreeNode(TreeNode):
         if (self.relaxFlag == True):
             # 松弛解
             self.lowerBound = self.ofv
-            if (self.lowerBound > self.bnbUB):
+            if (self.lowerBound != None and self.lowerBound > self.bnbUB):
                 self.prunFlag = True
 
         else:
             # 非松弛解
             self.upperBound = self.ofv
             self.lowerBound = self.ofv
-            if (self.lowerBound > self.bnbUB):
+            if (self.lowerBound != None and self.lowerBound > self.bnbUB):
                 self.prunFlag = True
         return
         
@@ -186,7 +186,7 @@ class BnBTree(Tree):
             curNode.solve()
             if (curNode.delayFlag == True):
                 curNode.deferUntil = numIter + min(20, 2 + curNode.deferCnt)
-                if (curNode.lowerBound > self.upperBound):
+                if (curNode.lowerBound != None and curNode.lowerBound > self.upperBound):
                     curNode.prunFlag = True
                 self.updateBounds()
                 printLog("Delay node: ", curNode.rep)
@@ -195,6 +195,7 @@ class BnBTree(Tree):
                 printLog("Global UB: ", self.upperBound)
                 self.convergence.append((self.upperBound, self.lowerBound, (datetime.datetime.now() - startTime).total_seconds()))
                 self.pruning(self.upperBound)
+                self.updateBounds()
                 continue
 
             # Step 2.1: 如果没有上界，启发式的给一个上界，注意，必须保证该上界至少大于一个incumbent
@@ -235,6 +236,7 @@ class BnBTree(Tree):
             # Step 6: 如果curNode没有被prun，分支
             if (not curNode.prunFlag):
                 self.branch(curNode)
+            self.updateBounds()
 
         if (self.best == None):
             self.ofv = None
@@ -253,7 +255,7 @@ class BnBTree(Tree):
         # ret = chooseByNode(self.root)
         # FIXME: Test
         children = self.traverseChildren()
-        children = [i for i in children if i.solvedFlag == False]
+        children = [i for i in children if i.solvedFlag == False and i.prunFlag == False]
         eligibleChildren = [i for i in children if getattr(i, 'deferUntil', 0) <= getattr(self, 'iteration', 0)]
         if (len(eligibleChildren) > 0):
             children = eligibleChildren
@@ -270,7 +272,18 @@ class BnBTree(Tree):
     def updateBounds(self):
         # traverse整棵树，返回树的最低的下界和上界
         self.updateBoundsByNode(self.root)
-        self.lowerBound = self.root.lowerBound
+        activeLowerBound = float('inf')
+        activeChildren = self.traverseChildren()
+        for child in activeChildren:
+            if (child.prunFlag == False and child.solvedFlag == False and child.lowerBound != None):
+                if (child.lowerBound < activeLowerBound):
+                    activeLowerBound = child.lowerBound
+        if (activeLowerBound < float('inf')):
+            self.lowerBound = activeLowerBound
+        elif (not math.isinf(self.upperBound)):
+            self.lowerBound = self.upperBound
+        else:
+            self.lowerBound = self.root.lowerBound
         return
 
     # @tellRuntime('bnbTree.py.updateBoundsByNode', indentLevel = 1)
@@ -299,12 +312,23 @@ class BnBTree(Tree):
                     for child in n.treeNodes:
                         self.updateBoundsByNode(child)
                     newLB = float('inf')
+                    activeChildCnt = 0
                     for child in n.treeNodes:
-                        if (child.prunFlag == False):
+                        if (not child.isNil and child.prunFlag == False):
+                            activeChildCnt += 1
                             if (child.lowerBound < newLB):
                                 newLB = child.lowerBound                    
-                    if (newLB < float('inf')):                        
+                    if (activeChildCnt > 0 and newLB < float('inf')):                        
                         n.lowerBound = newLB
+                    elif (activeChildCnt == 0):
+                        # No active child means the subtree has been closed by earlier decisions.
+                        # This is not a mathematical pruning proof, so do not set prunFlag here.
+                        if (not math.isinf(n.upperBound)):
+                            n.lowerBound = n.upperBound
+                        elif (not math.isinf(self.upperBound)):
+                            n.lowerBound = self.upperBound
+                        else:
+                            n.lowerBound = float('inf')
                     return
 
     # 剪枝
@@ -319,7 +343,7 @@ class BnBTree(Tree):
         # 只有该node没有被prun才有必要
         if (n.prunFlag == False):
             # 如果n的lb比ub还要高，说明n没必要算下去了，prune掉吧
-            if (n.lowerBound > ub):
+            if (n.lowerBound != None and n.lowerBound > ub):
                 n.prunFlag = True
                 printLog("Prune: ", n.rep)
             # 否则的话递归地看n的每个子节点
@@ -337,7 +361,9 @@ class BnBTree(Tree):
                 child.addSelfToNode(n)
                 self.tabu[tuple(child.key)] = True
             else:
-                printLog("Prune by repetition - ", child.key)
+                printLog("Skip repeated node - ", child.key)
+        # Duplicate or empty branch output closes this expansion point only.
+        # It must not be recorded as pruning, because no bound or infeasibility proof was made.
         return
 
     # @tellRuntime('bnbTree.py.traverseChildren', indentLevel = 1)
@@ -355,9 +381,139 @@ class BnBTree(Tree):
         tra = []
         if (n.prunFlag == False):
             for treeNode in n.treeNodes:
-                if (treeNode.isChildren):
+                if (not treeNode.isNil and treeNode.prunFlag == False and treeNode.isChildren):
                     tra.append(treeNode)
             for treeNode in n.treeNodes:
-                if (not treeNode.isChildren):
+                if (not treeNode.isNil and treeNode.prunFlag == False and not treeNode.isChildren):
                     tra.extend(self._traverseChildren(treeNode))
         return tra
+
+    def plotTree(self, nodeShape = 'o', fig = None, ax = None, nodeSize = 80, levelGap = 1.0, siblingGap = 1.0, figWidth = None, figHeight = None, showLabel = False, labelFunc = None, fontSize = 6):
+        import matplotlib.pyplot as plt
+        from matplotlib.lines import Line2D
+
+        if (nodeShape not in ['o', 's']):
+            raise UnsupportedInputError("ERROR: nodeShape must be 'o' or 's'.")
+
+        if (self.root.isNil):
+            if (fig == None or ax == None):
+                fig, ax = plt.subplots(figsize = (4, 3))
+            ax.axis('off')
+            result = {
+                'fig': fig,
+                'ax': ax,
+                'pos': {}
+            }
+            return result
+
+        nodeDepth = {self.root: 0}
+        nodeList = []
+        nodeStack = [self.root]
+        while (len(nodeStack) > 0):
+            node = nodeStack.pop(0)
+            nodeList.append(node)
+            children = [child for child in node.treeNodes if (not child.isNil)]
+            for child in children:
+                nodeDepth[child] = nodeDepth[node] + 1
+                nodeStack.append(child)
+
+        nodeX = {}
+        leafCnt = 0
+        postStack = [(self.root, False)]
+        while (len(postStack) > 0):
+            node, visitedFlag = postStack.pop()
+            children = [child for child in node.treeNodes if (not child.isNil)]
+            if (visitedFlag == True):
+                if (len(children) == 0):
+                    nodeX[node] = leafCnt * siblingGap
+                    leafCnt += 1
+                else:
+                    childXSum = 0.0
+                    for child in children:
+                        childXSum += nodeX[child]
+                    nodeX[node] = childXSum / len(children)
+            else:
+                postStack.append((node, True))
+                for child in reversed(children):
+                    postStack.append((child, False))
+
+        maxDepth = max([nodeDepth[node] for node in nodeList])
+        if (fig == None or ax == None):
+            if (figWidth == None):
+                figWidth = max(6.0, max(1, leafCnt) * 0.35)
+            if (figHeight == None):
+                figHeight = max(4.0, (maxDepth + 1) * 0.75)
+            fig, ax = plt.subplots(figsize = (figWidth, figHeight))
+
+        nodePos = {}
+        for node in nodeList:
+            nodePos[node] = (nodeX[node], -nodeDepth[node] * levelGap)
+
+        for node in nodeList:
+            children = [child for child in node.treeNodes if (not child.isNil)]
+            for child in children:
+                x1, y1 = nodePos[node]
+                x2, y2 = nodePos[child]
+                ax.plot([x1, x2], [y1, y2], color = '#777777', linewidth = 0.8, zorder = 1)
+
+        statusStyle = {
+            'optimal': {'color': '#d62728', 'label': 'optimal'},
+            'feasible': {'color': '#2ca02c', 'label': 'feasible'},
+            'infeasible': {'color': '#1f77b4', 'label': 'infeasible'},
+            'unknown': {'color': '#8c8c8c', 'label': 'unknown'}
+        }
+        statusPts = {
+            'optimal': {'x': [], 'y': []},
+            'feasible': {'x': [], 'y': []},
+            'infeasible': {'x': [], 'y': []},
+            'unknown': {'x': [], 'y': []}
+        }
+        for node in nodeList:
+            if (self.best != None and node == self.best):
+                status = 'optimal'
+            elif (getattr(node, 'feasibleFlag', None) == False):
+                status = 'infeasible'
+            elif (getattr(node, 'feasibleFlag', None) == True):
+                status = 'feasible'
+            else:
+                status = 'unknown'
+            statusPts[status]['x'].append(nodePos[node][0])
+            statusPts[status]['y'].append(nodePos[node][1])
+
+        for status in statusPts:
+            if (len(statusPts[status]['x']) > 0):
+                ax.scatter(
+                    statusPts[status]['x'],
+                    statusPts[status]['y'],
+                    s = nodeSize,
+                    marker = nodeShape,
+                    c = statusStyle[status]['color'],
+                    edgecolors = 'none',
+                    zorder = 2)
+
+        if (showLabel == True):
+            for node in nodeList:
+                if (labelFunc != None):
+                    label = labelFunc(node)
+                else:
+                    label = str(node.rep)
+                ax.text(nodePos[node][0], nodePos[node][1], label, fontsize = fontSize, ha = 'center', va = 'center', zorder = 3)
+
+        legendHandles = []
+        for status in ['optimal', 'feasible', 'infeasible', 'unknown']:
+            if (len(statusPts[status]['x']) > 0):
+                legendHandles.append(Line2D([0], [0], marker = nodeShape, color = 'none', label = statusStyle[status]['label'], markerfacecolor = statusStyle[status]['color'], markeredgecolor = 'none', markersize = 8))
+        if (len(legendHandles) > 0):
+            ax.legend(handles = legendHandles, loc = 'upper right')
+
+        xValues = [nodePos[node][0] for node in nodeList]
+        yValues = [nodePos[node][1] for node in nodeList]
+        xMargin = max(1.0, siblingGap)
+        yMargin = max(0.5, levelGap * 0.5)
+        ax.set_xlim(min(xValues) - xMargin, max(xValues) + xMargin)
+        ax.set_ylim(min(yValues) - yMargin, max(yValues) + yMargin)
+        ax.set_aspect('equal', adjustable = 'box')
+        ax.axis('off')
+        fig.tight_layout()
+        
+        return fig, ax
