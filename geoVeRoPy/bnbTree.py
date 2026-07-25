@@ -86,16 +86,21 @@ class BnBTreeNode(TreeNode):
             self.prunFlag = True
             return
 
+        inheritedLowerBound = self.lowerBound
+        solvedLowerBound = self.ofv
+        if (self.relaxFlag == True and inheritedLowerBound != None and solvedLowerBound != None and solvedLowerBound >= inheritedLowerBound - ERRTOL['vertical']):
+            solvedLowerBound = max(inheritedLowerBound, solvedLowerBound)
+
         if (self.relaxFlag == True):
             # 松弛解
-            self.lowerBound = self.ofv
+            self.lowerBound = solvedLowerBound
             if (self.lowerBound != None and self.lowerBound > self.bnbUB):
                 self.prunFlag = True
 
         else:
             # 非松弛解
             self.upperBound = self.ofv
-            self.lowerBound = self.ofv
+            self.lowerBound = solvedLowerBound
             if (self.lowerBound != None and self.lowerBound > self.bnbUB):
                 self.prunFlag = True
         return
@@ -191,11 +196,11 @@ class BnBTree(Tree):
                 self.updateBounds()
                 printLog("Delay node: ", curNode.rep)
                 printLog("Node LB: ", curNode.lowerBound)
+                self.pruning(self.upperBound)
+                self.updateBounds()
                 printLog("Global LB: ", self.lowerBound)
                 printLog("Global UB: ", self.upperBound)
                 self.convergence.append((self.upperBound, self.lowerBound, (datetime.datetime.now() - startTime).total_seconds()))
-                self.pruning(self.upperBound)
-                self.updateBounds()
                 continue
 
             # Step 2.1: 如果没有上界，启发式的给一个上界，注意，必须保证该上界至少大于一个incumbent
@@ -226,9 +231,6 @@ class BnBTree(Tree):
             if (curNode.prunFlag == False and curNode.upperBound < self.upperBound):
                 self.upperBound = curNode.upperBound
                 self.best = curNode
-            printLog("Global LB: ", self.lowerBound)
-            printLog("Global UB: ", self.upperBound)
-            self.convergence.append((self.upperBound, self.lowerBound, (datetime.datetime.now() - startTime).total_seconds()))
 
             # Step 5: 剪枝
             self.pruning(self.upperBound)
@@ -237,6 +239,9 @@ class BnBTree(Tree):
             if (not curNode.prunFlag):
                 self.branch(curNode)
             self.updateBounds()
+            printLog("Global LB: ", self.lowerBound)
+            printLog("Global UB: ", self.upperBound)
+            self.convergence.append((self.upperBound, self.lowerBound, (datetime.datetime.now() - startTime).total_seconds()))
 
         if (self.best == None):
             self.ofv = None
