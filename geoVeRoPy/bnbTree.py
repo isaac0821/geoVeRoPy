@@ -513,12 +513,16 @@ class BnBTree(Tree):
 
         xValues = [nodePos[node][0] for node in nodeList]
         yValues = [nodePos[node][1] for node in nodeList]
-        xMargin = max(1.0, siblingGap)
-        yMargin = max(0.5, levelGap * 0.5)
-        ax.set_xlim(min(xValues) - xMargin, max(xValues) + xMargin)
-        ax.set_ylim(min(yValues) - yMargin, max(yValues) + yMargin)
-        ax.set_aspect('equal', adjustable = 'box')
+        xMin = min(xValues)
+        xMax = max(xValues)
+        yMin = min(yValues)
+        yMax = max(yValues)
+        xMargin = max(abs(siblingGap) * 0.25, (xMax - xMin) * 0.02)
+        yMargin = max(abs(levelGap) * 0.25, (yMax - yMin) * 0.02)
+        ax.set_xlim(xMin - xMargin, xMax + xMargin)
+        ax.set_ylim(yMin - yMargin, yMax + yMargin)
+        ax.set_aspect('auto')
         ax.axis('off')
-        fig.tight_layout()
+        fig.tight_layout(pad = 0.2)
         
         return fig, ax

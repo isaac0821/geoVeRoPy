@@ -1,4 +1,5 @@
 import math
+import heapq
 import networkx as nx
 import shapely
 from shapely.geometry import mapping
@@ -91,11 +92,7 @@ def solveCETSP(nodes: dict, depotPt: pt = None, startPt: pt = None, endPt: pt = 
     else:
         raise UnsupportedInputError("ERROR: Neighborhood type is not supported")
 
-    cetsp = None
     # CETSP by different approach =============================================
-    # NOTE: Available options
-    # - "Euclidean" + "Circle" + "Exact" + "BnB"
-    # - "Euclidean" + "Circle" + "Metaheuristic" + "ILS"
     if (dimension == 'Euclidean' and neighbor == "Circle" and algo == "Exact" and method == "BnB"):
         cetsp = _solveCETSPBnBCircle(
             startPt = startPt,
@@ -103,42 +100,64 @@ def solveCETSP(nodes: dict, depotPt: pt = None, startPt: pt = None, endPt: pt = 
             nodes = nodes,
             radius = kwargs['radius'] if 'radius' in kwargs else None,
             radiusFieldName = kwargs['radiusFieldName'] if 'radiusFieldName' in kwargs else None,
-            timeLimit = kwargs['timeLimit'] if 'timeLimit' in kwargs else None)
+            timeLimit = kwargs['timeLimit'] if 'timeLimit' in kwargs else None,
+            gapTol = kwargs['gapTol'] if 'gapTol' in kwargs else None,
+            subproblemAlgo = kwargs['subproblemAlgo'] if 'subproblemAlgo' in kwargs else 'SOCP')
 
-    elif (dimension == 'Euclidean' and neighbor == "Circle" and algo == "Metaheuristic" and method == "ILS"):
-        if ('initTemp' not in kwargs):
-            kwargs['initTemp'] = 100
-        if ('coolRate' not in kwargs):
-            kwargs['coolRate'] = 0.95
-        if ('neighRatio' not in kwargs):
-            warnings.warn("WARNING: Missing ratios of each local search operator, set to be default.")
-            kwargs['neighRatio'] = {
-                'Swap': 0.1,
-                'Exchange': 0.1,
-                'Rotate': 0.3,
-                'rndDestroy': 0.4
-            }
-        if ('stop' not in kwargs):
-            warnings.warn("WARNING: Missing stopping criteria, set to be default.")
-            kwargs['stop'] = {
-                'numNoImproveIter': 200
-            }
-        cetsp = _solveCETSPILSCircle(
+    elif (dimension == 'Euclidean' and neighbor == "Poly" and algo == "Exact" and method == "BnB"):
+        cetsp = _solveCETSPBnBPoly(
             startPt = startPt,
             endPt = endPt,
             nodes = nodes,
+            polyFieldName = kwargs['polyFieldName'],
+            timeLimit = kwargs['timeLimit'] if 'timeLimit' in kwargs else None,
+            gapTol = kwargs['gapTol'] if 'gapTol' in kwargs else None,
+            subproblemAlgo = kwargs['subproblemAlgo'] if 'subproblemAlgo' in kwargs else 'SOCP')
+
+    elif (dimension == 'Euclidean' and neighbor == "Circle" and algo == "Metaheuristic" and method == "ILS"):
+        cetsp = _solveCETSPILS(
+            startPt = startPt,
+            endPt = endPt,
+            nodes = nodes,
+            neighbor = neighbor,
             radius = kwargs['radius'] if 'radius' in kwargs else None,
             radiusFieldName = kwargs['radiusFieldName'] if 'radiusFieldName' in kwargs else None,
-            initTemp = kwargs['initTemp'],
-            coolRate = kwargs['coolRate'],
-            neighRatio = kwargs['neighRatio'],
-            stop = kwargs['stop'])
+            initTemp = kwargs['initTemp'] if 'initTemp' in kwargs else None,
+            coolRate = kwargs['coolRate'] if 'coolRate' in kwargs else None,
+            neighRatio = kwargs['neighRatio'] if 'neighRatio' in kwargs else None,
+            stop = kwargs['stop'] if 'stop' in kwargs else None,
+            subproblemAlgo = kwargs['subproblemAlgo'] if 'subproblemAlgo' in kwargs else 'SOCP')
 
     else:
         raise UnsupportedInputError("ERROR: Combination of `dimension`, `neighbor`, `algo`, and `method` is not supported yet.")
     return cetsp
 
-def _solveCETSPILSCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | None = None, radiusFieldName: str = 'radius', initTemp: float = 100, coolRate: float = 0.95, neighRatio: dict = { 'Swap': 0.1, 'Exchange': 0.1, 'Rotate': 0.3, 'rndDestroy': 0.4 }, stop: dict = {}, **kwargs) -> dict | None:
+def _solveCETSPILS(startPt: pt, endPt: pt, nodes: dict, neighbor: str = 'Circle', radius: float | None = None, radiusFieldName: str = 'radius', polyFieldName: str = 'neighbor', initTemp: float | None = None, coolRate: float | None = None, neighRatio: dict | None = None, stop: dict | None = None, subproblemAlgo: str = 'SOCP', **kwargs) -> dict | None:
+    if (neighbor != 'Circle'):
+        raise UnsupportedInputError("ERROR: CETSP ILS currently only supports circle neighborhoods.")
+    if (initTemp == None):
+        initTemp = 100
+    if (coolRate == None):
+        coolRate = 0.95
+    if (neighRatio == None):
+        warnings.warn("WARNING: Missing ratios of each local search operator, set to be default.")
+        neighRatio = {
+            'Swap': 0.1,
+            'Exchange': 0.1,
+            'Rotate': 0.3,
+            'rndDestroy': 0.4
+        }
+    if (stop == None):
+        warnings.warn("WARNING: Missing stopping criteria, set to be default.")
+        stop = {
+            'numNoImprove': 200
+        }
+    if ('numNoImproveIter' in stop and 'numNoImprove' not in stop):
+        stop['numNoImprove'] = stop['numNoImproveIter']
+    cetsp = _solveCETSPILSCircle(startPt = startPt, endPt = endPt, nodes = nodes, radius = radius, radiusFieldName = radiusFieldName, initTemp = initTemp, coolRate = coolRate, neighRatio = neighRatio, stop = stop, subproblemAlgo = subproblemAlgo)
+    return cetsp
+
+def _solveCETSPILSCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | None = None, radiusFieldName: str = 'radius', initTemp: float = 100, coolRate: float = 0.95, neighRatio: dict = { 'Swap': 0.1, 'Exchange': 0.1, 'Rotate': 0.3, 'rndDestroy': 0.4 }, stop: dict = {}, subproblemAlgo: str = 'SOCP', **kwargs) -> dict | None:
 
     def cetspNew(startPt, endPt, nodes, funcCheck, funcFix):
         # 找到两个customer，让startPt => cus1 => cus2 => endPt的距离最长
@@ -171,7 +190,7 @@ def _solveCETSPILSCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | No
             n.feasibleFlag = True
             return
         toInsert = random.choice(n.missing)
-        distPt2Seg = cetspSortInsertion(n.startPt, n.endPt, n.nodes, n.repPt, n.turning, toInsert, algo = "SOCP")
+        distPt2Seg = cetspSortInsertion(n.startPt, n.endPt, n.nodes, n.repPt, n.turning, toInsert, neighbor = 'Circle', algo = subproblemAlgo, radius = radius, radiusFieldName = radiusFieldName)
         repairOptions = []
         while (len(distPt2Seg) > 0):
             delta, pos = heapq.heappop(distPt2Seg)
@@ -188,7 +207,7 @@ def _solveCETSPILSCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | No
     def cetspCheck(n):
         # 给定一个RawSolnNode，确定是否访问了所有的点
         seq = n.curRep
-        checkVisit = cetspCheckVisit(n.startPt, n.endPt, n.nodes, seq, algo = 'SOCP')
+        checkVisit = cetspCheckVisit(n.startPt, n.endPt, n.nodes, seq, neighbor = 'Circle', algo = subproblemAlgo, radius = radius, radiusFieldName = radiusFieldName)
 
         n.ofv = checkVisit['ofv']
         n.dist = checkVisit['ofv']
@@ -304,7 +323,18 @@ def _solveCETSPILSCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | No
             swap,
             exchange,
             rotate,
-            rndDestroy])
+            rndDestroy],
+        initTemp = initTemp,
+        coolRate = coolRate,
+        stopCriteria = stop)
+    ratioByFunc = {
+        swap: neighRatio['Swap'] if 'Swap' in neighRatio else 1,
+        exchange: neighRatio['Exchange'] if 'Exchange' in neighRatio else 1,
+        rotate: neighRatio['Rotate'] if 'Rotate' in neighRatio else 1,
+        rndDestroy: neighRatio['rndDestroy'] if 'rndDestroy' in neighRatio else 1
+    }
+    for func in ratioByFunc:
+        ils.roulette[func] = ratioByFunc[func]
     ils.solve()
 
     return {
@@ -318,249 +348,282 @@ def _solveCETSPILSCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | No
         'convergence': ils.convergence,
     }
 
-def _solveCETSPBnBCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | None = None, radiusFieldName: str = 'radius', timeLimit: int | None = None) -> dict | None:
+def _solveCETSPBnBCircle(startPt: pt, endPt: pt, nodes: dict, radius: float | None = None, radiusFieldName: str = 'radius', timeLimit: int | None = None, gapTol: float | None = None, subproblemAlgo: str = 'SOCP') -> dict | None:
+    if (nodes == None or type(nodes) != dict):
+        raise MissingParameterError(ERROR_MISSING_NODES)
+    if (radius == None and radiusFieldName == None):
+        raise MissingParameterError("ERROR: Circle neighborhood requires `radius` or `radiusFieldName`.")
+    bnbParam = {
+        'neighbor': 'Circle',
+        'radius': radius,
+        'radiusFieldName': radiusFieldName,
+        'timeLimit': timeLimit,
+        'gapTol': gapTol,
+        'subproblemAlgo': subproblemAlgo
+    }
+    cetsp = _solveCETSPBnB(startPt = startPt, endPt = endPt, nodes = nodes, **bnbParam)
+    return cetsp
 
+def _solveCETSPBnBPoly(startPt: pt, endPt: pt, nodes: dict, polyFieldName: str = 'neighbor', timeLimit: int | None = None, gapTol: float | None = None, subproblemAlgo: str = 'SOCP') -> dict | None:
+    if (nodes == None or type(nodes) != dict):
+        raise MissingParameterError(ERROR_MISSING_NODES)
+    if (polyFieldName == None):
+        raise MissingParameterError("ERROR: Poly neighborhood requires `polyFieldName`.")
+    bnbParam = {
+        'neighbor': 'Poly',
+        'polyFieldName': polyFieldName,
+        'timeLimit': timeLimit,
+        'gapTol': gapTol,
+        'subproblemAlgo': subproblemAlgo
+    }
+    cetsp = _solveCETSPBnB(startPt = startPt, endPt = endPt, nodes = nodes, **bnbParam)
+    return cetsp
+
+def _solveCETSPBnB(startPt: pt, endPt: pt, nodes: dict, neighbor: str = 'Circle', radius: float | None = None, radiusFieldName: str = 'radius', polyFieldName: str = 'neighbor', timeLimit: int | None = None, gapTol: float | None = None, subproblemAlgo: str = 'SOCP') -> dict | None:
     def cetspNew(startPt, endPt, nodes, funcSolve, funcBranch, funcUBEstimate):
-        seq = []
-        # 找到两个customer，让startPt => cus1 => cus2 => endPt的距离最长
-        distFarest = 0
-        for i in nodes:
-            for j in nodes:
-                if (i != j):
-                    d = distEuclideanXY(startPt, nodes[i]['pt'])
-                    d += distEuclideanXY(nodes[i]['pt'], nodes[j]['pt'])
-                    d += distEuclideanXY(nodes[j]['pt'], endPt)
-                    if (d > distFarest):
-                        distFarest = d
-                        seq = [i, j]
-        n = BnBTreeNode(
-            key = seq,
-            rep = seq,
-            startPt = startPt,
-            endPt = endPt,
-            nodes = nodes,
-            funcSolve = funcSolve,
-            funcBranch = funcBranch,
-            funcUBEstimate = funcUBEstimate,
-            turning = [],
-            trespass = [],
-            missing = [],
-            path = [],
-            repPt = {})
+        seq = _cetspBuildInitialSeq(startPt = startPt, endPt = endPt, nodes = nodes, neighbor = neighbor, radius = radius, radiusFieldName = radiusFieldName, polyFieldName = polyFieldName)
+        n = BnBTreeNode(key = seq, rep = seq, startPt = startPt, endPt = endPt, nodes = nodes, neighbor = neighbor, radius = radius, radiusFieldName = radiusFieldName, polyFieldName = polyFieldName, subproblemAlgo = subproblemAlgo, funcSolve = funcSolve, funcBranch = funcBranch, funcUBEstimate = funcUBEstimate, turning = [], trespass = [], missing = [], path = [], repPt = {}, branchInfo = None)
         return n
 
     def cetspSolve(n: BnBTreeNode):
-        '''Given ordering of nodes, returns the path of CETSP'''
         seq = n.rep
-        checkVisit = cetspCheckVisit(n.startPt, n.endPt, n.nodes, seq)
-
+        checkVisit = cetspCheckVisit(n.startPt, n.endPt, n.nodes, seq, neighbor = n.neighbor, algo = n.subproblemAlgo, radius = n.radius, radiusFieldName = n.radiusFieldName, polyFieldName = n.polyFieldName)
         n.ofv = checkVisit['ofv']
         n.path = checkVisit['path']
         n.turning = checkVisit['turning']
         n.trespass = checkVisit['trespass']
         n.missing = checkVisit['missing']
         n.repPt = checkVisit['repPt']
-        if (len(n.missing) > 0):
-            n.relaxFlag = True
-        else:
-            n.relaxFlag = False
-
+        n.feasibleFlag = checkVisit['reachable']
+        n.relaxFlag = True if (n.feasibleFlag == True and len(n.missing) > 0) else False
+        if (n.feasibleFlag == False):
+            n.pruneReason = 'subproblem_infeasible'
         printLog("Turning: ", n.turning)
         printLog("Trespass: ", n.trespass)
         printLog("Missing: ", n.missing)
         return
 
     def cetspBranch(n: BnBTreeNode):
-        # 防错
-        if (len(n.missing) == 0):
-            return []
-
         children = []
-        # FIXME 先按简单的来，随机选一个未被分配的，然后按照可能的顺序进行分配
+        if (len(n.missing) == 0):
+            return children
         toInsert = random.choice(n.missing)
-        distPt2Seg = cetspSortInsertion(n.startPt, n.endPt, n.nodes, n.repPt, n.turning, toInsert)
-
-        while(len(distPt2Seg) > 0):
+        distPt2Seg = cetspSortInsertion(n.startPt, n.endPt, n.nodes, n.repPt, n.turning, toInsert, neighbor = n.neighbor, algo = n.subproblemAlgo, radius = n.radius, radiusFieldName = n.radiusFieldName, polyFieldName = n.polyFieldName)
+        while (len(distPt2Seg) > 0):
+            closest = heapq.heappop(distPt2Seg)
             newSeq = [k for k in n.turning]
-            newSeq.insert(heapq.heappop(distPt2Seg)[1], toInsert)
-
-            children.append(BnBTreeNode(
-                key = newSeq,
-                rep = newSeq,
-                startPt = n.startPt,
-                endPt = n.endPt,
-                nodes = n.nodes,
-                funcSolve = n.funcSolve,
-                funcBranch = n.funcBranch,
-                bnbUB = n.bnbUB,
-                turning = [],
-                trespass = [],
-                missing = [],
-                path = []))
-
+            newSeq.insert(closest[1], toInsert)
+            child = BnBTreeNode(key = newSeq, rep = newSeq, startPt = n.startPt, endPt = n.endPt, nodes = n.nodes, neighbor = n.neighbor, radius = n.radius, radiusFieldName = n.radiusFieldName, polyFieldName = n.polyFieldName, subproblemAlgo = n.subproblemAlgo, funcSolve = n.funcSolve, funcBranch = n.funcBranch, funcUBEstimate = n.funcUBEstimate, bnbUB = n.bnbUB, turning = [], trespass = [], missing = [], path = [], repPt = {}, branchInfo = {'toInsert': toInsert, 'pos': closest[1], 'delta': closest[0], 'parentLowerBound': n.lowerBound})
+            children.append(child)
         return children
 
     def cetspUBEstimate(n: BnBTreeNode):
-
-        if (len(n.missing) == 0):
-            return
-
-        seq = n.turning
-        missing = n.missing
-        repPt = n.repPt
-        path = n.path
+        seq = [i for i in n.turning]
+        missing = [i for i in n.missing]
+        repPt = dict(n.repPt)
         ofv = n.ofv
-
         while (len(missing) > 0):
-
-            toInsert = random.choice(missing)
-            d2s = cetspSortInsertion(n.startPt, n.endPt, n.nodes, repPt, seq, toInsert)
-            closest = heapq.heappop(d2s)
-
+            bestMove = None
+            for toInsert in missing:
+                d2s = cetspSortInsertion(n.startPt, n.endPt, n.nodes, repPt, seq, toInsert, neighbor = n.neighbor, algo = n.subproblemAlgo, radius = n.radius, radiusFieldName = n.radiusFieldName, polyFieldName = n.polyFieldName)
+                if (len(d2s) > 0):
+                    candidate = heapq.heappop(d2s)
+                    if (bestMove == None or candidate[0] < bestMove['delta']):
+                        bestMove = {'node': toInsert, 'delta': candidate[0], 'pos': candidate[1]}
+            if (bestMove == None):
+                n.upperBound = float('inf')
+                return
             seq = [k for k in seq]
-            seq.insert(closest[1], toInsert)
-
-            update = cetspCheckVisit(n.startPt, n.endPt, n.nodes, seq)
-
+            seq.insert(bestMove['pos'], bestMove['node'])
+            update = cetspCheckVisit(n.startPt, n.endPt, n.nodes, seq, neighbor = n.neighbor, algo = n.subproblemAlgo, radius = n.radius, radiusFieldName = n.radiusFieldName, polyFieldName = n.polyFieldName)
+            if (update['reachable'] == False):
+                n.upperBound = float('inf')
+                return
             seq = update['turning']
             missing = update['missing']
             repPt = update['repPt']
-            path = update['path']
             ofv = update['ofv']
-
-        n.upperBound = ofv + 1
-
+        n.upperBound = ofv
         return
 
-    bnbNode = cetspNew(
-        startPt = startPt,
-        endPt = endPt,
-        nodes = nodes,
-        funcSolve = cetspSolve,
-        funcBranch = cetspBranch,
-        funcUBEstimate = cetspUBEstimate)
-    bnbTree = BnBTree(root = bnbNode)
-    bnbTree.bnb(timeLimit)
+    def cetspChoose(children: list[BnBTreeNode]):
+        bestChild = None
+        bestKey = None
+        for child in children:
+            lowerBound = child.lowerBound
+            if (lowerBound == None or math.isinf(lowerBound)):
+                lowerBound = -float('inf')
+            missingList = getattr(child, 'missing', [])
+            missingCnt = len(missingList) if (type(missingList) is list) else len(nodes)
+            childKey = (lowerBound, missingCnt, len(child.rep))
+            if (bestKey == None or childKey < bestKey):
+                bestKey = childKey
+                bestChild = child
+        return bestChild
 
-    return {
-        'ofv': bnbTree.ofv,
-        'dist': bnbTree.ofv,
-        'seq': bnbTree.best.rep,
-        'path': bnbTree.best.path,
-        'gap': (bnbTree.upperBound - bnbTree.lowerBound) / bnbTree.lowerBound,
-        'solType': 'Optimal' if (abs(bnbTree.lowerBound - bnbTree.upperBound) < 0.001) else 'Sub_Optimal',
-        'lowerBound': bnbTree.lowerBound,
-        'upperBound': bnbTree.upperBound,
-        'runtime': bnbTree.convergence[-1][2],
-        'convergence': bnbTree.convergence,
-    }
+    bnbNode = cetspNew(startPt = startPt, endPt = endPt, nodes = nodes, funcSolve = cetspSolve, funcBranch = cetspBranch, funcUBEstimate = cetspUBEstimate)
+    bnbTree = BnBTree(root = bnbNode, funcChoose = cetspChoose, timeLimit = timeLimit, gapTol = gapTol)
+    bnbTree.bnb()
+    if (bnbTree.best == None):
+        result = {'ofv': None, 'dist': None, 'seq': None, 'path': None, 'gap': None, 'solType': 'Time_Limit' if (getattr(bnbTree, 'terminationStatus', None) == 'Time_Limit') else 'Infeasible', 'lowerBound': bnbTree.lowerBound, 'upperBound': bnbTree.upperBound, 'runtime': bnbTree.runtime, 'convergence': bnbTree.convergence, 'nodeCnt': bnbTree.count}
+        return result
+    if (bnbTree.lowerBound == None or abs(bnbTree.lowerBound) <= ERRTOL['vertical'] or math.isinf(bnbTree.lowerBound)):
+        gap = None
+    else:
+        gap = (bnbTree.upperBound - bnbTree.lowerBound) / abs(bnbTree.lowerBound)
+    result = {'ofv': bnbTree.ofv, 'dist': bnbTree.ofv, 'seq': bnbTree.best.rep, 'path': bnbTree.best.path, 'gap': gap, 'solType': 'Optimal' if (abs(bnbTree.lowerBound - bnbTree.upperBound) < 0.001) else 'Sub_Optimal', 'lowerBound': bnbTree.lowerBound, 'upperBound': bnbTree.upperBound, 'runtime': bnbTree.runtime, 'convergence': bnbTree.convergence, 'nodeCnt': bnbTree.count, 'bnbTree': bnbTree}
+    return result
 
-def cetspCheckVisit(startPt, endPt, nodes, seq, algo = 'SOCP'):
+def _cetspBuildInitialSeq(startPt, endPt, nodes, neighbor = 'Circle', radius = None, radiusFieldName = 'radius', polyFieldName = 'neighbor'):
+    nodeIDs = [i for i in nodes]
+    if (len(nodeIDs) <= 1):
+        result = [i for i in nodeIDs]
+        return result
+    seq = [nodeIDs[0], nodeIDs[1]]
+    distFarest = -float('inf')
+    for i in nodeIDs:
+        for j in nodeIDs:
+            if (i != j):
+                ptI = _cetspNodeReferencePt(nodes, i, neighbor, radius, radiusFieldName, polyFieldName)
+                ptJ = _cetspNodeReferencePt(nodes, j, neighbor, radius, radiusFieldName, polyFieldName)
+                dist = distEuclideanXY(startPt, ptI) + distEuclideanXY(ptI, ptJ) + distEuclideanXY(ptJ, endPt)
+                if (dist > distFarest):
+                    distFarest = dist
+                    seq = [i, j]
+    result = seq
+    return result
+
+def _cetspNodeReferencePt(nodes, nodeID, neighbor = 'Circle', radius = None, radiusFieldName = 'radius', polyFieldName = 'neighbor'):
+    if (neighbor == 'Circle'):
+        if ('pt' not in nodes[nodeID]):
+            raise MissingParameterError("ERROR: Circle neighborhood requires `pt` in nodes.")
+        result = nodes[nodeID]['pt']
+    elif (neighbor == 'Poly'):
+        poly = _cetspNodePoly(nodes, nodeID, polyFieldName)
+        try:
+            result = ptPolyCenter(poly = poly)
+        except Exception:
+            polyShape = shapely.Polygon(poly)
+            center = shapely.centroid(polyShape)
+            result = (center.x, center.y)
+    else:
+        raise UnsupportedInputError("ERROR: Neighborhood type is not supported")
+    return result
+
+def _cetspNodeRadius(nodes, nodeID, radius = None, radiusFieldName = 'radius'):
+    if (radiusFieldName != None and radiusFieldName in nodes[nodeID]):
+        result = nodes[nodeID][radiusFieldName]
+    elif ('radius' in nodes[nodeID]):
+        result = nodes[nodeID]['radius']
+    elif (radius != None):
+        result = radius
+    else:
+        raise MissingParameterError("ERROR: Circle neighborhood requires `radius` or `radiusFieldName`.")
+    if (result < 0):
+        raise OutOfRangeError("ERROR: Circle radius should be nonnegative.")
+    return result
+
+def _cetspNodePoly(nodes, nodeID, polyFieldName = 'neighbor'):
+    if (polyFieldName != None and polyFieldName in nodes[nodeID]):
+        result = nodes[nodeID][polyFieldName]
+    elif ('poly' in nodes[nodeID]):
+        result = nodes[nodeID]['poly']
+    elif ('neighbor' in nodes[nodeID]):
+        result = nodes[nodeID]['neighbor']
+    else:
+        raise MissingParameterError("ERROR: Poly neighborhood requires polygon information in nodes.")
+    if (result == None or len(result) < 3):
+        raise InvalidPolygonError("ERROR: Poly neighborhood should include at least three points.")
+    return result
+
+def _cetspSolveSubproblem(startPt, endPt, nodes, seq, neighbor = 'Circle', algo = 'SOCP', radius = None, radiusFieldName = 'radius', polyFieldName = 'neighbor', **kwargs):
+    if (len(seq) == 0):
+        result = {
+            'path': [startPt, endPt],
+            'dist': distEuclideanXY(startPt, endPt)
+        }
+    elif (neighbor == 'Circle'):
+        circles = []
+        for i in seq:
+            circles.append({'center': nodes[i]['pt'], 'radius': _cetspNodeRadius(nodes, i, radius, radiusFieldName)})
+        result = solveCTP(startPt = startPt, endPt = endPt, circles = circles, algo = algo, **kwargs)
+    elif (neighbor == 'Poly'):
+        polys = []
+        for i in seq:
+            polys.append(_cetspNodePoly(nodes, i, polyFieldName))
+        result = solvePTP(startPt = startPt, endPt = endPt, polys = polys, algo = algo, **kwargs)
+    else:
+        raise UnsupportedInputError("ERROR: Neighborhood type is not supported")
+    return result
+
+def _cetspSegTrespassNode(seg, nodes, nodeID, neighbor = 'Circle', radius = None, radiusFieldName = 'radius', polyFieldName = 'neighbor'):
+    if (neighbor == 'Circle'):
+        dist2Seg = distPt2Seg(pt = nodes[nodeID]['pt'], seg = seg)
+        result = dist2Seg <= _cetspNodeRadius(nodes, nodeID, radius, radiusFieldName) + ERRTOL['distPt2Seg']
+    elif (neighbor == 'Poly'):
+        poly = _cetspNodePoly(nodes, nodeID, polyFieldName)
+        segShape = shapely.LineString([seg[0], seg[1]])
+        polyShape = shapely.Polygon(poly)
+        if (polyShape.is_valid == False):
+            polyShape = polyShape.buffer(0)
+        result = segShape.intersects(polyShape) or segShape.distance(polyShape) <= ERRTOL['distPt2Poly']
+    else:
+        raise UnsupportedInputError("ERROR: Neighborhood type is not supported")
+    return result
+
+def cetspCheckVisit(startPt, endPt, nodes, seq, neighbor = 'Circle', algo = 'SOCP', radius = None, radiusFieldName = 'radius', polyFieldName = 'neighbor', **kwargs):
     turning = []
     trespass = []
     missing = []
-
-    # 需要先得到一组turn point
-    # 当前的序列
-    circles = []
-    for i in seq:
-        circles.append({
-            'center': nodes[i]['pt'],
-            'radius': nodes[i]['radius']
-        })
-
-    # 计算SOCP
-    c2c = solveCTP(
-        startPt = startPt,
-        endPt = endPt,
-        circles = circles,
-        algo = algo
-    )
+    subproblem = _cetspSolveSubproblem(startPt = startPt, endPt = endPt, nodes = nodes, seq = seq, neighbor = neighbor, algo = algo, radius = radius, radiusFieldName = radiusFieldName, polyFieldName = polyFieldName, **kwargs)
+    if (subproblem['dist'] == None):
+        result = {'reachable': False, 'ofv': None, 'path': None, 'turning': None, 'trespass': None, 'missing': None, 'repPt': None}
+        return result
     repPt = {}
-    for i in range(1, len(c2c['path']) - 1):
-        repPt[seq[i - 1]] = c2c['path'][i]
-
-    degen = pathRemoveDegen(path = c2c['path'])
-
+    for i in range(1, len(subproblem['path']) - 1):
+        repPt[seq[i - 1]] = subproblem['path'][i]
+    degen = pathRemoveDegen(path = subproblem['path'])
     seqTra = [-1]
     seqTra.extend(seq)
     seqTra.append(-1)
     for i in range(len(degen['aggNodeList'])):
         if (degen['removedFlag'][i] == False):
             turning.extend([seqTra[k] for k in degen['aggNodeList'][i]])
-
     path = degen['newPath']
-    ofv = c2c['dist']
-
+    ofv = subproblem['dist']
     for i in range(len(path) - 1):
-        # 分段的线段
-        seg = [path[i], path[i + 1]]    
-        # 对于每个线段，测试哪些圆是经过了的
+        seg = [path[i], path[i + 1]]
         for j in nodes:
             if (j not in turning and j not in trespass):
                 if (j not in seq):
-                    dist2Seg = distPt2Seg(
-                        pt = nodes[j]['pt'],
-                        seg = seg)
-                    if (dist2Seg <= nodes[j]['radius']):
+                    if (_cetspSegTrespassNode(seg, nodes, j, neighbor, radius, radiusFieldName, polyFieldName) == True):
                         trespass.append(j)
                 else:
                     trespass.append(j)
-
-    # 注意，turning中不包括startPt和endPt
     turning = turning[1:-1]
     for j in nodes:
         if (j not in turning and j not in trespass):
             missing.append(j)
+    result = {'reachable': True, 'ofv': ofv, 'path': path, 'turning': turning, 'trespass': trespass, 'missing': missing, 'repPt': repPt}
+    return result
 
-    return {
-        'ofv': ofv,
-        'path': path,
-        'turning': turning,
-        'trespass': trespass,
-        'missing': missing,
-        'repPt': repPt
-    }
-
-def cetspSortInsertion(startPt, endPt, nodes, repPt, turning, toInsert, algo = "SOCP"):
-    # 计算toInsert到turning上的每一段的距离
-    distPt2Seg = []
-    heapq.heapify(distPt2Seg)
-
-    # 第一段
-    seg = [startPt, repPt[turning[0]]]
-    delta = solveCTP(
-        startPt = startPt,
-        endPt = repPt[turning[0]],
-        circles = [{
-            'center': nodes[toInsert]['pt'],
-            'radius': nodes[toInsert]['radius']
-        }],
-        algo = algo)['dist'] - distEuclideanXY(seg[0], seg[1])
-    heapq.heappush(distPt2Seg, (delta, 0))
-
-    # 中间部分
+def cetspSortInsertion(startPt, endPt, nodes, repPt, turning, toInsert, neighbor = 'Circle', algo = 'SOCP', radius = None, radiusFieldName = 'radius', polyFieldName = 'neighbor', **kwargs):
+    distPt2SegHeap = []
+    heapq.heapify(distPt2SegHeap)
+    if (len(turning) == 0):
+        subproblem = _cetspSolveSubproblem(startPt = startPt, endPt = endPt, nodes = nodes, seq = [toInsert], neighbor = neighbor, algo = algo, radius = radius, radiusFieldName = radiusFieldName, polyFieldName = polyFieldName, **kwargs)
+        if (subproblem['dist'] != None):
+            delta = subproblem['dist'] - distEuclideanXY(startPt, endPt)
+            heapq.heappush(distPt2SegHeap, (delta, 0))
+        return distPt2SegHeap
+    endpointPairs = [(startPt, repPt[turning[0]], 0)]
     for i in range(len(turning) - 1):
-        seg = [repPt[turning[i]], repPt[turning[i + 1]]]
-        delta = solveCTP(
-            startPt = repPt[turning[i]],
-            endPt = repPt[turning[i + 1]],
-            circles = [{
-                'center': nodes[toInsert]['pt'],
-                'radius': nodes[toInsert]['radius']
-            }],
-            algo = algo)['dist'] - distEuclideanXY(seg[0], seg[1])
-        heapq.heappush(distPt2Seg, (delta, i + 1))
-
-    # 最后一段
-    seg = [repPt[turning[-1]], endPt]
-    delta = solveCTP(
-        startPt = repPt[turning[-1]],
-        endPt = endPt,
-        circles = [{
-            'center': nodes[toInsert]['pt'],
-            'radius': nodes[toInsert]['radius']
-        }],
-        algo = algo)['dist'] - distEuclideanXY(seg[0], seg[1])
-    heapq.heappush(distPt2Seg, (delta, len(turning)))
-    return distPt2Seg 
+        endpointPairs.append((repPt[turning[i]], repPt[turning[i + 1]], i + 1))
+    endpointPairs.append((repPt[turning[-1]], endPt, len(turning)))
+    for endpointPair in endpointPairs:
+        pt1, pt2, pos = endpointPair
+        subproblem = _cetspSolveSubproblem(startPt = pt1, endPt = pt2, nodes = nodes, seq = [toInsert], neighbor = neighbor, algo = algo, radius = radius, radiusFieldName = radiusFieldName, polyFieldName = polyFieldName, **kwargs)
+        if (subproblem['dist'] != None):
+            delta = subproblem['dist'] - distEuclideanXY(pt1, pt2)
+            heapq.heappush(distPt2SegHeap, (delta, pos))
+    return distPt2SegHeap
